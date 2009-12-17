@@ -17,7 +17,7 @@ end
 
 % check which platform we are running (Unix, Intel Mac, Power Mac)
 % MAC, MACI, PCWIN, GLNX86
-plat_form = computer;
+[platform maxsize endian] = computer;
 
 % set filename
 d.filename = filename;
@@ -33,7 +33,7 @@ end
 % read the data
 %[raw, n] = fread(fid,inf,'unsigned short');
 %[raw, n] = fread(fid,inf,'ushort');
-if strcmp(plat_form, 'MACI')
+if strcmp(endian, 'L')
     [raw, n] = fread(fid,inf,'ushort','ieee-be');
 else
     [raw, n] = fread(fid,inf,'ushort');
@@ -52,7 +52,7 @@ if (numchannels == -1)
   end
 else
   if (numchannels ~= topfourbits)
-    disp('UHOH: Number of channels in file is %i, not %i',topfourbits,numchannels);
+    disp(sprintf('UHOH: Number of channels in file is %i, not %i',topfourbits,numchannels));
   end
 end
 d.numchannels = numchannels;

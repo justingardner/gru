@@ -14,7 +14,7 @@ end
 
 % check which platform we are running (Unix, Intel Mac, Power Mac)
 % MAC, MACI, PCWIN, GLNX86
-plat_form = computer;
+[platform maxsize endian] = computer;
 
 % set filename
 d.filename = filename;
@@ -27,7 +27,7 @@ if (fid == -1)
 end
 
 % read the data
-if strcmp(plat_form, 'MACI')
+if strcmp(endian, 'L')
     [raw, n] = fread(fid,inf,'uint32=>uint32','ieee-be');
 else
     [raw, n] = fread(fid,inf,'uint32=>uint32');
