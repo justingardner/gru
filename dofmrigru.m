@@ -139,10 +139,6 @@ function processFiles(justDisplay,fidList,maskList,noiseList,refList,epiNumsWith
 global postproc;
 global sense;
 
-disp(sprintf('=============================================='));
-disp(sprintf('Making directories'));
-disp(sprintf('=============================================='));
-
 command = sprintf('cd Pre');
 if justDisplay,disp(command),else,eval(command),end
 
@@ -172,9 +168,11 @@ end
 
 % and delete headers
 disp(sprintf('=============================================='));
-disp(sprintf('Remove temporary headers'));
+disp(sprintf('Remove temporary nifti files'));
 disp(sprintf('=============================================='));
 command = 'system(''rm -f ../Raw/TSeries/*.hdr'')';
+if justDisplay,disp(command),else,eval(command);end
+command = 'system(''rm -f ../Raw/TSeries/*.img'')';
 if justDisplay,disp(command),else,eval(command);end
 
 disp(sprintf('=============================================='));
@@ -225,7 +223,7 @@ disp(sprintf('=============================================='));
 if ~justDisplay
   load motionCompParams;
   v = newView;
-  motionComp(v,params);
+  v = motionComp(v,params);
   deleteView(v);
 end
 
