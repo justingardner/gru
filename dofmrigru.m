@@ -424,7 +424,7 @@ end
 command = sprintf('cd ..;'); eval(command);
 
 % now run mrInit
-disp(sprintf('(dofmrigru1) Setup mrInit for your directory));
+disp(sprintf('(dofmrigru1) Setup mrInit for your directory'));
 mrInit;
 
 %%%%%%%%%%%%%%%%%%%%%
