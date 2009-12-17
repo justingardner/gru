@@ -81,8 +81,20 @@ fidList = sortFidList(fidList);
 %the mask is made manually before dofmrigru1 from noise/ref in maskdir.
 %copy the correct maskfile into Pre MANUALLY
 maskList = getFileList(fiddir,'hdr','img','mask'); 
+if isempty(maskList)
+  disp(sprintf('(dofrmigru2) Could not find any mask files'));
+  return
+end
 noiseList = getFileList(fiddir,'edt','epr','noise');
+if isempty(noiseList)
+  disp(sprintf('(dofrmigru2) Could not find any noise files'));
+  return
+end
 refList = getFileList(fiddir,'edt','epr','ref');
+if isempty(refList)
+  disp(sprintf('(dofrmigru2) Could not find any ref files'));
+  return
+end
 % get list of epi scans
 epiNums = getEpiScanNums(fidList);
 senseScanNums = getSenseScanNums(fidList,epiNums);
@@ -158,6 +170,13 @@ for i = 1:length(maskNums)
   if justDisplay,disp(command),else,eval(command),end
 end
 
+% and delete headers
+disp(sprintf('=============================================='));
+disp(sprintf('Remove temporary headers'));
+disp(sprintf('=============================================='));
+command = 'system(''rm -f ../Raw/TSeries/*.hdr'')';
+if justDisplay,disp(command),else,eval(command);end
+
 disp(sprintf('=============================================='));
 disp(sprintf('Physiofix, sense process and convert to nifti epi files'));
 disp(sprintf('=============================================='));
@@ -199,6 +218,16 @@ end
 
 command = sprintf('cd ..');
 if justDisplay,disp(command),else,eval(command),end
+
+disp(sprintf('=============================================='));
+disp(sprintf('Run motion comp'));
+disp(sprintf('=============================================='));
+if ~justDisplay
+  load motionCompParams;
+  v = newView;
+  motionComp(v,params);
+  deleteView(v);
+end
 
 disp(sprintf('=============================================='));
 disp(sprintf('DONE'));
@@ -426,6 +455,12 @@ command = sprintf('cd ..;'); eval(command);
 % now run mrInit
 disp(sprintf('(dofmrigru1) Setup mrInit for your directory'));
 mrInit;
+
+% set up motion comp parameters
+v = newView;
+[v params] = motionComp(v,[],'justGetParams=1');
+deleteView(v);
+save motionCompParams.m params
 
 %%%%%%%%%%%%%%%%%%%%%
 %%   doMoveFiles   %%
@@ -737,7 +772,7 @@ function senseNums = getSenseScanNums(fidList,epiNums)
 senseNums = [];
 for i = 1:length(epiNums)
   if ~isempty(fidList{epiNums(i)}.info)
-    if ~isempty(fidList{epiNums(i)}.info.senseFactor)
+    if ~isempty(fidList{epiNums(i)}.info.accFactor)
       senseNums(end+1) = i;
     end
   end
