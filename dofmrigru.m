@@ -42,7 +42,7 @@
 %             all of these files in the correct directories on your local
 %             computer. All of the initial  
 %
-function retval = dofmrigru_yukoedits(varargin)
+function retval = dofmrigru(varargin)
 
 % check arguments
 if ~any(nargin == [0 1 2 3 4 5 6 7 8])
@@ -130,17 +130,6 @@ global sense;
 disp(sprintf('=============================================='));
 disp(sprintf('Making directories'));
 disp(sprintf('=============================================='));
-
-% list of directories to make
-dirList = {'Anatomy','Raw','Raw/Tseries','Anal'};
-
-% make them
-for i = 1:length(dirList)
-  if ~isdir(dirList{i})
-    command = sprintf('mkdir(''%s'');',dirList{i});
-    if justDisplay,disp(command),else,eval(command),end
-  end
-end
 
 command = sprintf('cd Pre');
 if justDisplay,disp(command),else,eval(command),end
@@ -434,6 +423,9 @@ end
 % move out of Pre
 command = sprintf('cd ..;'); eval(command);
 
+% now run mrInit
+disp(sprintf('(dofmrigru1) Setup mrInit for your directory));
+mrInit;
 
 %%%%%%%%%%%%%%%%%%%%%
 %%   doMoveFiles   %%
@@ -449,13 +441,13 @@ disp(sprintf('Making directories'));
 disp(sprintf('=============================================='));
 
 % list of directories to make
-dirList = {'Etc','Pre','Doc','Pre/Aux'};
+dirList = {'Etc','Pre','Doc','Pre/Aux','Raw','Raw/TSeries','Anatomy','Anal'};
 
 % make them
 for i = 1:length(dirList)
   if ~isdir(dirList{i})
     command = sprintf('mkdir(''%s'');',dirList{i});
-    if justDisplay,disp(command),else,eval(command),end
+    if justDisplay,disp(command),else,disp(command);eval(command);,end
   end
 end
 
@@ -466,7 +458,7 @@ disp(sprintf('=============================================='));
 % move all the pdf files into the directory
 for i = 1:length(pdfList)
   command = sprintf('copyfile %s %s',pdfList{i}.fullfile,fullfile('Doc',pdfList{i}.filename));
-  if justDisplay,disp(command),else,eval(command),end
+  if justDisplay,disp(command),else,disp(command);eval(command);,end
 end
 
 disp(sprintf('=============================================='));
@@ -476,7 +468,7 @@ disp(sprintf('=============================================='));
 % move stimfiles
 for i = 1:length(stimfileList)
   command = sprintf('copyfile %s %s',stimfileList{i}.fullfile,fullfile('Etc',stimfileList{i}.filename));
-  if justDisplay,disp(command),else,eval(command),end
+  if justDisplay,disp(command),else,eval(command);disp(command);,end
 end
 
 if justDisplay,disp(sprintf('+++++++'));end
@@ -491,11 +483,11 @@ for i = 1:length(fidList)
   % not a useful scan, put it in Pre/Aux
   if ~any(i==allUsefulFids)
     command = sprintf('copyfile %s %s',fidList{i}.fullfile,fullfile('Pre/Aux',setext(fixBadChars(stripext(fidList{i}.filename),{'.','_'}),'fid')));
-    if justDisplay,disp(command),else,eval(command),end
+    if justDisplay,disp(command);else,disp(command);eval(command);,end
   %otherwise put it in Pre
   else
     command = sprintf('copyfile %s %s',fidList{i}.fullfile,fullfile('Pre',setext(fixBadChars(stripext(fidList{i}.filename),{'.','_'}),'fid')));
-    if justDisplay,disp(command),else,eval(command),end
+    if justDisplay,disp(command),else,disp(command);eval(command);,end
   end
 end
 
@@ -508,10 +500,8 @@ for i = 1:length(carMatchNum)
   command = sprintf('copyfile %s %s',carList{carMatchNum(i)}.fullfile,fullfile('Pre',setext(fixBadChars(stripext(fidList{epiNums(i)}.filename),{'.','_'}),'fid')));
   if justDisplay,disp(command),else,eval(command),end
   command = sprintf('copyfile %s %s',fullfile(carList{carMatchNum(i)}.path,carList{carMatchNum(i)}.extfilename),fullfile('Pre',setext(fixBadChars(stripext(fidList{epiNums(i)}.filename),{'.','_'}),'fid')));
-  if justDisplay,disp(command),else,eval(command),end
+  if justDisplay,disp(command),else,disp(command);eval(command);,end
 end
-
-
 
 disp(sprintf('=============================================='));
 disp(sprintf('Processing epi files'));
@@ -524,7 +514,7 @@ if justDisplay,disp(command),else,eval(command),end
 allScanNums = [epiNums senseNoiseNums senseRefNums];
 for i = 1:length(allScanNums)
   command = sprintf('system(''%s %s 1 1 2 0 1 0'')',epirri,setext(fixBadChars(stripext(fidList{allScanNums(i)}.filename),{'.','_'}),'fid'));
-  if justDisplay,disp(command),else,eval(command),end
+  if justDisplay,disp(command),else,disp(command);eval(command);,end
 end
 
 % convert sense noise/ref into edt files
@@ -532,16 +522,31 @@ senseNums = [senseNoiseNums senseRefNums];
 for i = 1:length(senseNums)
   %make fid to edt
   command = sprintf('system(''%s -intype 0 -outtype 1 %s %s'')',postproc,setext(fixBadChars(stripext(fidList{senseNums(i)}.filename),{'.','_'}),'fid'),setext(fixBadChars(stripext(fidList{senseNums(i)}.filename),{'.','_'}),'edt'));
-  if justDisplay,disp(command),else,eval(command),end
+  if justDisplay,disp(command),else,disp(command);eval(command);,end
 end
 
 command = sprintf('cd ..');
-if justDisplay,disp(command),else,eval(command),end
+if justDisplay,disp(command),else,disp(command);eval(command);,end
 
 %fix bad chars of names
 for i = 1:length(fidList)
     fidList{i}.filename = setext(fixBadChars(stripext(fidList{i}.filename),{'.','_'}),'fid');
 end
+
+disp(sprintf('=============================================='));
+disp(sprintf('Making temporary (empty) nifti files for running mrInit'));
+disp(sprintf('=============================================='));
+for i = 1:length(epiNums)
+  srcName = fidList{epiNums(i)}.fullfile;
+  destName = fullfile('Raw/TSeries',setext(fixBadChars(stripext(fidList{epiNums(i)}.filename),{'.','_'}),'hdr'));
+  if ~justDisplay
+    h = fid2niftihdr(srcName);
+    cbiWriteNiftiHeader(h,destName);
+  else
+    disp(sprintf('Make header for %s in %s',srcName,destName));
+  end
+end
+
 disp(sprintf('=============================================='));
 disp(sprintf('DONE moving files. Now make emptyMLRDir -> call it ''Mask'''));
 disp(sprintf('=============================================='));
