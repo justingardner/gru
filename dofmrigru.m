@@ -1,4 +1,4 @@
-% dofmrigru1.m
+% dofmrigru.m
 %
 %        $Id:$ 
 %      usage: dofmrigru
@@ -46,7 +46,7 @@ function retval = dofmrigru(varargin)
 
 % check arguments
 if ~any(nargin == [0 1 2 3 4 5 6 7 8])
-  help dofmrigru1
+  help dofmrigru
   return
 end
 
@@ -205,14 +205,14 @@ for i = 1:length(epiNumsWithPeaks)
     % %s'')',sense,maskname,covarname,edtname); this is for super old sense!
     if justDisplay,disp(command),else,eval(command),end
     % then convert the sdt file into a nifti
-    command = sprintf('[trashdata hdr] = fid2nifti(''%s'');',fidname);
+    command = sprintf('[hdr] = fid2niftihdr(''%s'');',fidname);
     if justDisplay,disp(command),else,eval(command),end
     command = sprintf('data = readsdt(''%s_%s.sdt'');',stripext(sdtname),stripext(maskname));
     if justDisplay,disp(command),else,eval(command),end
     command = sprintf('cbiWriteNifti(''%s_%s.hdr'',data.data,hdr);',stripext(fullfile('..','Raw','TSeries',hdrname)),stripext(maskname));
     if justDisplay,disp(command),else,eval(command),end
   else
-    disp(sprintf('UHOH!!!!! plain processing (not sense is not implemented yet!!! FIX FIX FIX!!!)'));
+    disp(sprintf('(dofmrigru) UHOH!!!!! plain processing (not sense is not implemented yet!!! FIX FIX FIX!!!)'));
   end
 end
 
@@ -416,7 +416,7 @@ command = sprintf('cd Pre;'); eval(command);% move into Pre
 global maskdir;
 % location of masks
 % make new empty mask directory in Pre
-makeEmptyMLRDir('Mask');
+makeEmptyMLRDir('Mask','description=Empty session for making a mask','defaultParams=1');
 maskdir = fullfile(pwd,'Mask');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -575,15 +575,28 @@ for i = 1:length(epiNums)
   srcName = fidList{epiNums(i)}.fullfile;
   destName = fullfile('Raw/TSeries',setext(fixBadChars(stripext(fidList{epiNums(i)}.filename),{'.','_'}),'hdr'));
   if ~justDisplay
-    h = fid2niftihdr(srcName);
-    cbiWriteNiftiHeader(h,destName);
+    % make a nifti header
+    [h info] = fid2niftihdr(srcName);
+    % now, grab the data
+    if info.accFactor == 1
+      d = fid2nifti(srcName);
+    % for a sense file we are going to have to grab the reference scan data
+    else
+      d = fid2nifti(fidList{senseRefNums(1)}.filename);
+      % now make the data info a single volume
+      d = mean(d(:,:,:,2:end),4);
+      % and replicate for the correct number of frames
+      d = repmat(d,[1 1 1 h.dim(5)]);
+    end
+    % write as a nifti file
+    cbiWriteNifti(destName,d,h);
   else
-    disp(sprintf('Make header for %s in %s',srcName,destName));
+    disp(sprintf('Make temporaty nifti file for %s in %s',srcName,destName));
   end
 end
 
 disp(sprintf('=============================================='));
-disp(sprintf('DONE moving files. Now make emptyMLRDir -> call it ''Mask'''));
+disp(sprintf('DONE moving files.'));
 disp(sprintf('=============================================='));
 
 %%%%%%%%%%%%%%%%%%%%%
