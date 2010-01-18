@@ -417,7 +417,7 @@ anatNums = getAnatScanNums(fidList);
 [senseNoiseNums senseRefNums] = getSenseNums(fidList);
 
 % find car/ext files
-carList = getFileList(carextdir,'car','ext');
+carList = getFileList(carextDir,'car','ext');
 carList = getCarInfo(carList);
 if isempty(carList)
   disp(sprintf('(dofmrigru1) Could not find any car/ext files in %s',carextDir));
@@ -425,10 +425,10 @@ if isempty(carList)
 end
 
 % find pdf files
-pdfList = getFileList(pdfdir,'pdf');
+pdfList = getFileList(pdfDir,'pdf');
 
 % get stimfile list
-stimfileList = getFileList(stimfiledir,'mat');
+stimfileList = getFileList(stimfileDir,'mat');
 
 % display what we found
 dispList(fidList,epiNums,sprintf('Epi scans: %s',fidDir));
@@ -866,9 +866,6 @@ function anatNums = getAnatScanNums(fidList)
 anatNums = [];
 % look for 3D scans
 for i = 1:length(fidList)
-    if i == 21
-        keyboard
-    end
   if ~isempty(fidList{i}.info)
     % check for 3d scan
     if fidList{i}.info.acq3d
