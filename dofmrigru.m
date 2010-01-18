@@ -866,6 +866,9 @@ function anatNums = getAnatScanNums(fidList)
 anatNums = [];
 % look for 3D scans
 for i = 1:length(fidList)
+    if i == 21
+        keyboard
+    end
   if ~isempty(fidList{i}.info)
     % check for 3d scan
     if fidList{i}.info.acq3d
@@ -876,7 +879,7 @@ for i = 1:length(fidList)
     else
       % check for an anatomy sounding name (i.e. has the word "anat" in it
       if ~isempty(strfind(lower(fidList{i}.filename),'anat'))
-	anatNums(end+1) = i;
+        anatNums(end+1) = i;
       end
     end
   end
