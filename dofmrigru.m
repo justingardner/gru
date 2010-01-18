@@ -37,6 +37,8 @@
 %                'epirri=eprri5': set which epirri processing function to use
 %                'postproc=pp': set which postproc program to use
 %                'sense=sense_mac_intel': set which sense reconstruction to use
+%                'expdir=/usr1/yuko/data/s00620101001/Pre': Set this if you want the processing to 
+%                start from a specific directory (it will look in this directory for all the fid files)
 %
 %             First pass will sort through the specified fiddir and copy
 %             all of these files in the correct directories on your local
@@ -52,15 +54,16 @@ end
 
 % Default arguments
 global fiddir;
+expdir = [];
 global epirri;
 global postproc;
 global sense;
-getArgs(varargin,{'fiddir=/usr1/yuko/data','epirri=epirri5','postproc=pp','sense=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel'});
+getArgs(varargin,{'fiddir=/usr1/yuko/data','expdir=[]','epirri=epirri5','postproc=pp','sense=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel'});
 
 % see if this is the first preprocessing or the second one
 if ~isdir('Pre')
   disp(sprintf('Running Initial dofmrigru process'));
-  dofmrigru1
+  dofmrigru1(expdir);
 else
   disp(sprintf('Running Second dofmrigru process'));
   dofmrigru2
@@ -364,17 +367,23 @@ end
 %%%%%%%%%%%%%%%%%%%%
 %%   dofmrigru1   %%
 %%%%%%%%%%%%%%%%%%%%
-function dofmrigru1
+function dofmrigru1(expdir)
 
-% get the current directory
-expdir = getLastDir(pwd);
+if isempty(expdir)
+  % get the current directory
+  expdir = getLastDir(pwd);
 
-% location of car/ext and fid files. Should be a directory
-% in there that has the same name as the current directory
-% i.e. s00120090706 that contains the fid files and the
-% car/ext files
-global fiddir;
-fiddir = fullfile(fiddir,expdir);
+  % location of car/ext and fid files. Should be a directory
+  % in there that has the same name as the current directory
+  % i.e. s00120090706 that contains the fid files and the
+  % car/ext files
+  global fiddir;
+  fiddir = fullfile(fiddir,expdir);
+else
+  fiddir = expdir;
+end
+
+% check the fiddir
 if ~isdir(fiddir)
   disp(sprintf('(dofmrigru1) Could not find fid directory %s',fiddir));
   return
