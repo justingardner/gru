@@ -31,39 +31,48 @@
 % 
 %             Now you can run dofmrigru as follows:
 %
-%             dofmrigru('fiddir=/usr1/yuko/data')
+%             dofmrigru('dataDir=/usr1/yuko/data')
 %
 %             Other options:
 %                'epirri=eprri5': set which epirri processing function to use
 %                'postproc=pp': set which postproc program to use
 %                'sense=sense_mac_intel': set which sense reconstruction to use
-%                'expdir=/usr1/yuko/data/s00620101001/Pre': Set this if you want the processing to 
-%                start from a specific directory (it will look in this directory for all the fid files)
+%                'fidDir=/usr1/yuko/data/s00620101001/Pre': Set this if you want to load the first pass
+%                    fid files form a specific directory.
+%                'carextDir=/usr1/yuko/data/s00620101001/carext': Set this if you want to load the first pass
+%                    car/ext files form a specific directory.
+%                'stimfileDir=/usr1/yuko/data/s00620101001/stimfile': Set this if you want to load the first pass
+%                    stimfiles form a specific directory.
+%                'pdfDir=/usr1/yuko/data/s00620101001/stimfile': Set this if you want to load the first pass
+%                    pdf files form a specific directory.
 %
-%             First pass will sort through the specified fiddir and copy
+%             First pass will sort through the specified datadir and copy
 %             all of these files in the correct directories on your local
-%             computer. All of the initial  
+%             computer.
 %
 function retval = dofmrigru(varargin)
 
 % check arguments
-if ~any(nargin == [0 1 2 3 4 5 6 7 8])
+if ~any(nargin == [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14])
   help dofmrigru
   return
 end
 
 % Default arguments
-global fiddir;
-expdir = [];
+global dataDir;
+fidDir = [];
+carextDir = [];
+pdfDir = [];
+stimfileDir = [];
 global epirri;
 global postproc;
 global sense;
-getArgs(varargin,{'fiddir=/usr1/yuko/data','expdir=[]','epirri=epirri5','postproc=pp','sense=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel'});
+getArgs(varargin,{'dataDir=/usr1/yuko/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epirri=epirri5','postproc=pp','sense=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel'});
 
 % see if this is the first preprocessing or the second one
 if ~isdir('Pre')
   disp(sprintf('Running Initial dofmrigru process'));
-  dofmrigru1(expdir);
+  dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir);
 else
   disp(sprintf('Running Second dofmrigru process'));
   dofmrigru2
@@ -367,37 +376,37 @@ end
 %%%%%%%%%%%%%%%%%%%%
 %%   dofmrigru1   %%
 %%%%%%%%%%%%%%%%%%%%
-function dofmrigru1(expdir)
+function dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir)
 
-if isempty(expdir)
-  % get the current directory
-  expdir = getLastDir(pwd);
+global dataDir;
 
-  % location of car/ext and fid files. Should be a directory
-  % in there that has the same name as the current directory
-  % i.e. s00120090706 that contains the fid files and the
-  % car/ext files
-  global fiddir;
-  fiddir = fullfile(fiddir,expdir);
-else
-  fiddir = expdir;
-end
+% get the current directory
+expdir = getLastDir(pwd);
+
+% location of all directories. Should be a directory
+% in there that has the same name as the current directory
+% i.e. s00120090706 that contains the fid files and the
+% car/ext files
+if isempty(fidDir),fidDir = fullfile(dataDir,expdir);end
+if isempty(carextDir),carextDir = fullfile(dataDir,expdir);end
+if isempty(stimfileDir), stimfileDir = fullfile(dataDir,expdir);end
+if isempty(pdfDir),pdfDir = fullfile(dataDir,expdir);end
 
 % check the fiddir
-if ~isdir(fiddir)
-  disp(sprintf('(dofmrigru1) Could not find fid directory %s',fiddir));
+if ~isdir(fidDir)
+  disp(sprintf('(dofmrigru1) Could not find fid directory %s',fidDir));
   return
 end
 
 % now get info about fids
-[fidList fidListArray] = getFileList(fiddir,'fid');
+[fidList fidListArray] = getFileList(fidDir,'fid');
 fidList = getFidInfo(fidList);
 fidList = sortFidList(fidList);
 
 % get list of epi scans
 epiNums = getEpiScanNums(fidList);
 if isempty(epiNums)
-  disp(sprintf('(dofmrigru1) Could not find any epi files in %s',fiddir));
+  disp(sprintf('(dofmrigru1) Could not find any epi files in %s',fidDir));
   return
 end
 
@@ -408,27 +417,27 @@ anatNums = getAnatScanNums(fidList);
 [senseNoiseNums senseRefNums] = getSenseNums(fidList);
 
 % find car/ext files
-carList = getFileList(fiddir,'car','ext');
+carList = getFileList(carextdir,'car','ext');
 carList = getCarInfo(carList);
 if isempty(carList)
-  disp(sprintf('(dofmrigru1) Could not find any car/ext files in %s',fiddir));
+  disp(sprintf('(dofmrigru1) Could not find any car/ext files in %s',carextDir));
   return
 end
 
 % find pdf files
-pdfList = getFileList(fiddir,'pdf');
+pdfList = getFileList(pdfdir,'pdf');
 
 % get stimfile list
-stimfileList = getFileList(fiddir,'mat');
+stimfileList = getFileList(stimfiledir,'mat');
 
 % display what we found
-dispList(fidList,epiNums,sprintf('Epi scans: %s',fiddir));
-dispList(fidList,anatNums,sprintf('Anatomy scans: %s',fiddir));
-dispList(fidList,senseRefNums,sprintf('Sense reference scan: %s',fiddir));
-dispList(fidList,senseNoiseNums,sprintf('Sense noise scan: %s',fiddir));
-dispList(carList,[],sprintf('Car/Ext files: %s',fiddir));
-dispList(pdfList,[],sprintf('PDF files: %s',fiddir));
-dispList(stimfileList,[],sprintf('Stimfiles: %s',fiddir));
+dispList(fidList,epiNums,sprintf('Epi scans: %s',fidDir));
+dispList(fidList,anatNums,sprintf('Anatomy scans: %s',fidDir));
+dispList(fidList,senseRefNums,sprintf('Sense reference scan: %s',fidDir));
+dispList(fidList,senseNoiseNums,sprintf('Sense noise scan: %s',fidDir));
+dispList(carList,[],sprintf('Car/Ext files: %s',carextDir));
+dispList(pdfList,[],sprintf('PDF files: %s',pdfDir));
+dispList(stimfileList,[],sprintf('Stimfiles: %s',stimfileDir));
 
 % go find the matching car files for each scan
 carMatchNum = getCarMatch(carList,fidList,epiNums);
