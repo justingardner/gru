@@ -619,7 +619,7 @@ disp(sprintf('=============================================='));
 disp(sprintf('Making temporary (empty) nifti files for running mrInit'));
 disp(sprintf('=============================================='));
 for i = 1:length(epiNums)
-  srcName = fidList{epiNums(i)}.fullfile;
+  srcName = fullfile('Pre',fidList{epiNums(i)}.filename);
   destName = fullfile('Raw/TSeries',setext(fixBadChars(stripext(fidList{epiNums(i)}.filename),{'.','_'}),'hdr'));
   if ~justDisplay
     % make a nifti header
@@ -629,7 +629,7 @@ for i = 1:length(epiNums)
       d = fid2nifti(srcName);
     % for a sense file we are going to have to grab the reference scan data
     else
-      d = fid2nifti(fidList{senseRefNums(1)}.fullfile);
+      d = fid2nifti(fullfile('Pre',fidList{senseRefNums(1)}.filename));
       % now make the data info a single volume
       d = mean(d(:,:,:,2:end),4);
       % and replicate for the correct number of frames
@@ -866,7 +866,7 @@ function anatNums = getAnatScanNums(fidList)
 anatNums = [];
 % look for 3D scans
 for i = 1:length(fidList)
-  if ~isempty(fidList{i}.info)
+  if ~isempty(fidList{i}.info) && fidList{i}.info.processed
     % check for 3d scan
     if fidList{i}.info.acq3d
       % make sure it is not a raw scan
