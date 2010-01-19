@@ -1035,12 +1035,23 @@ retval = 1;
 
 % commands to check
 commandNames = {'epirri','postproc','sense'};
+helpFlag = {'','-help',''};
 for i = 1:length(commandNames)
   % suse which to tell if we have the command
   [commandStatus commandRetval] = system(sprintf('which %s',eval(commandNames{i})));
   % check for commandStatus error
   if commandStatus~=0
-    disp(sprintf('(dofmrigru) Could not run %s command: %s',commandNames{i},eval(commandNames{i})));
+    disp(sprintf('(dofmrigru) Could not find %s command: %s',commandNames{i},eval(commandNames{i})));
+    disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=gru:dataprocessing for help setting up your computer'));
+    retval = 0;
+    return
+  end
+  % run the command to see what happens
+  [commandStatus commandRetval] = system(sprintf('%s %s',eval(commandNames{i}),helpFlag{i}));
+  % check for commandStatus error
+  if commandStatus>1
+    disp(commandRetval);
+    disp(sprintf('(dofmrigru) Found %s command: %s, but could not run (possibly missing fink library?)',commandNames{i},eval(commandNames{i})));
     disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=gru:dataprocessing for help setting up your computer'));
     retval = 0;
     return
