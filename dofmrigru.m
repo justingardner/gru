@@ -9,9 +9,7 @@
 %             process this data. The first time files will get moved into
 %             your local computer. You then have to manually generate a
 %             mask and run peak. Then you run it a second time to do the
-%             sense reconstruction and run physiofix, etc. After the second
-%             pass you will be ready to run mrInit.
-%
+%             sense reconstruction and run physiofix, etc.
 %
 %             To use this, first make a directory where you want
 %             all the data saved on your local machine. Use the same directory name
@@ -69,12 +67,15 @@ global postproc;
 global sense;
 getArgs(varargin,{'dataDir=/usr1/yuko/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epirri=epirri5','postproc=pp','sense=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel'});
 
+% check to make sure we have the computer setup correctly to run epirri, postproc and sense
+if checkfMRISupportUnitCommands == 0,return,end
+
 % see if this is the first preprocessing or the second one
 if ~isdir('Pre')
-  disp(sprintf('Running Initial dofmrigru process'));
+  disp(sprintf('(dofmrigru) Running Initial dofmrigru process'));
   dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir);
 else
-  disp(sprintf('Running Second dofmrigru process'));
+  disp(sprintf('(dofmrigru) Running Second dofmrigru process'));
   dofmrigru2
 end
 
@@ -1019,4 +1020,29 @@ global gLogfile;
 
 if isfield(gLogfile,'fid') && (gLogfile.fid ~= -1)
   fprintf(gLogfile.fid,text);
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%    checkCommands    %
+%%%%%%%%%%%%%%%%%%%%%%%
+function retval = checkfMRISupportUnitCommands
+
+global epirri;
+global postproc;
+global sense;
+
+retval = 1;
+
+% commands to check
+commandNames = {'epirri','postproc','sense'};
+for i = 1:length(commandNames)
+  % suse which to tell if we have the command
+  [commandStatus commandRetval] = system(sprintf('which %s',eval(commandNames{i})));
+  % check for commandStatus error
+  if commandStatus~=0
+    disp(sprintf('(dofmrigru) Could not run %s command: %s',commandNames{i},eval(commandNames{i})));
+    disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=gru:dataprocessing for help setting up your computer'));
+    retval = 0;
+    return
+  end
 end
