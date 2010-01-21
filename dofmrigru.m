@@ -187,9 +187,9 @@ end
 disp(sprintf('=============================================='));
 disp(sprintf('Remove temporary nifti files'));
 disp(sprintf('=============================================='));
-command = 'mysystem(''rm -f ../Raw/TSeries/*.hdr'')';
+command = 'mysystem(''rm -f ../Raw/TSeries/*.hdr'');';
 if justDisplay,disp(command),else,eval(command);end
-command = 'mysystem(''rm -f ../Raw/TSeries/*.img'')';
+command = 'mysystem(''rm -f ../Raw/TSeries/*.img'');';
 if justDisplay,disp(command),else,eval(command);end
 
 disp(sprintf('=============================================='));
@@ -216,14 +216,14 @@ for i = 1:length(epiNumsWithCarExt)
     %check to see if this epi has peaks. if so run postproc with physiofix
     if any(epiNumsWithCarExt(i) == epiNumsWithPeaks)
         % convert to epis to edt file, doing physiofix and dc correction
-        command = sprintf('mysystem(''%s -outtype 1 -dc -physiofix %s %s'')',postproc,fidname,edtname);
+        command = sprintf('mysystem(''%s -outtype 1 -dc -physiofix %s %s'');',postproc,fidname,edtname);
     else
         % convert to epis to edt file, don't do physiofix but dc correction
-        command = sprintf('mysystem(''%s -outtype 1 -dc %s %s'')',postproc,fidname,edtname);
+        command = sprintf('mysystem(''%s -outtype 1 -dc %s %s'');',postproc,fidname,edtname);
     end
     if justDisplay,disp(command),else,eval(command),end
     % run the sense processing for this file
-    command = sprintf('mysystem(''%s -data %s -full %s -noise %s -mask %s -remove -recon %s'')',sense,stripext(fidname),stripext(refname),stripext(noisename),stripext(maskname),stripext(fidname));
+    command = sprintf('mysystem(''%s -data %s -full %s -noise %s -mask %s -remove -recon %s'');',sense,stripext(fidname),stripext(refname),stripext(noisename),stripext(maskname),stripext(fidname));
     % command = sprintf('mysystem(''%s -? -? %s %s
     % %s'')',sense,maskname,covarname,edtname); this is for super old sense!
     if justDisplay,disp(command),else,eval(command),end
@@ -413,9 +413,22 @@ end
 
 % get anatomy scan nums
 anatNums = getAnatScanNums(fidList);
+if isempty(anatNums)
+    disp(sprintf('(dofmrigru1) Could not find any non-raw anatomies in %s',fidDir));
+    return
+end
 
 % get sense noise/ref scans
 [senseNoiseNums senseRefNums] = getSenseNums(fidList);
+if isempty(senseRefNums)
+    disp(sprintf('(dofmrigru1) Could not find any sense ref files in %s',fidDir));
+    return
+end
+if isempty(senseNoiseNums)
+    disp(sprintf('(dofmrigru1) Could not find any sense noise files in %s',fidDir));
+    return
+end
+
 
 % find car/ext files
 carList = getFileList(carextDir,'car','ext');
@@ -563,13 +576,16 @@ disp(sprintf('=============================================='));
 % move fid directories
 allUsefulFids = [epiNums anatNums senseNoiseNums senseRefNums];
 for i = 1:length(fidList)
+  % fix name in our fidList as any . will be replaced by _ in our Pre
+  % directory but not in /usr1 or wherever the files were copied from,
+  fidList{i}.filename = setext(fixBadChars(stripext(fidList{i}.filename),{'.','_'}),'fid');
   % not a useful scan, put it in Pre/Aux
   if ~any(i==allUsefulFids)
-    command = sprintf('copyfile %s %s',fidList{i}.fullfile,fullfile('Pre/Aux',setext(fixBadChars(stripext(fidList{i}.filename),{'.','_'}),'fid')));
+    command = sprintf('copyfile %s %s',fidList{i}.fullfile,fullfile('Pre/Aux',fidList{i}.filename));
     if justDisplay,disp(command);else,eval(command);,end
   %otherwise put it in Pre
   else
-    command = sprintf('copyfile %s %s',fidList{i}.fullfile,fullfile('Pre',setext(fixBadChars(stripext(fidList{i}.filename),{'.','_'}),'fid')));
+    command = sprintf('copyfile %s %s',fidList{i}.fullfile,fullfile('Pre',fidList{i}.filename));
     if justDisplay,disp(command),else,eval(command);,end
   end
 end
@@ -580,9 +596,9 @@ disp(sprintf('=============================================='));
 
 % move car/ext files into fid directories
 for i = 1:length(carMatchNum)
-  command = sprintf('copyfile %s %s',carList{carMatchNum(i)}.fullfile,fullfile('Pre',setext(fixBadChars(stripext(fidList{epiNums(i)}.filename),{'.','_'}),'fid')));
+  command = sprintf('copyfile %s %s',carList{carMatchNum(i)}.fullfile,fullfile('Pre',fidList{epiNums(i)}.filename));
   if justDisplay,disp(command),else,eval(command),end
-  command = sprintf('copyfile %s %s',fullfile(carList{carMatchNum(i)}.path,carList{carMatchNum(i)}.extfilename),fullfile('Pre',setext(fixBadChars(stripext(fidList{epiNums(i)}.filename),{'.','_'}),'fid')));
+  command = sprintf('copyfile %s %s',fullfile(carList{carMatchNum(i)}.path,carList{carMatchNum(i)}.extfilename),fullfile('Pre',fidList{epiNums(i)}.filename));
   if justDisplay,disp(command),else,eval(command);,end
 end
 
@@ -596,32 +612,36 @@ if justDisplay,disp(command),else,eval(command),end
 % run epirri on all scans and sense noise/ref 
 allScanNums = [epiNums senseNoiseNums senseRefNums];
 for i = 1:length(allScanNums)
-  command = sprintf('mysystem(''%s %s 1 1 2 0 1 0'')',epirri,setext(fixBadChars(stripext(fidList{allScanNums(i)}.filename),{'.','_'}),'fid'));
-  if justDisplay,disp(command),else,eval(command);,end
+  command = sprintf('status = mysystem(''%s %s 1 1 2 0 1 0'');',epirri,fidList{allScanNums(i)}.filename);
+  if justDisplay
+    disp(command)
+  else
+    eval(command);
+    if status > 1
+        disp(sprintf('(dofmrigru) %s generated error %i when running',epirri,status));
+        keyboard
+    end    
+  end
 end
 
 % convert sense noise/ref into edt files
 senseNums = [senseNoiseNums senseRefNums];
 for i = 1:length(senseNums)
   %make fid to edt
-  command = sprintf('mysystem(''%s -intype 0 -outtype 1 %s %s'')',postproc,setext(fixBadChars(stripext(fidList{senseNums(i)}.filename),{'.','_'}),'fid'),setext(fixBadChars(stripext(fidList{senseNums(i)}.filename),{'.','_'}),'edt'));
+  command = sprintf('mysystem(''%s -intype 0 -outtype 1 %s %s'');',postproc,setext(fidList{senseNums(i)}.filename,'fid'),setext(fidList{senseNums(i)}.filename,'edt'));
   if justDisplay,disp(command),else,eval(command);,end
 end
 
 command = sprintf('cd ..');
 if justDisplay,disp(command),else,eval(command);,end
 
-%fix bad chars of names
-for i = 1:length(fidList)
-    fidList{i}.filename = setext(fixBadChars(stripext(fidList{i}.filename),{'.','_'}),'fid');
-end
 
 disp(sprintf('=============================================='));
 disp(sprintf('Making temporary (empty) nifti files for running mrInit'));
 disp(sprintf('=============================================='));
 for i = 1:length(epiNums)
   srcName = fullfile('Pre',fidList{epiNums(i)}.filename);
-  destName = fullfile('Raw/TSeries',setext(fixBadChars(stripext(fidList{epiNums(i)}.filename),{'.','_'}),'hdr'));
+  destName = fullfile('Raw/TSeries',setext(fidList{epiNums(i)}.filename,'hdr'));
   if ~justDisplay
     % make a nifti header
     [h info] = fid2niftihdr(srcName);
@@ -820,10 +840,13 @@ for i = 1:length(fidList)
   if ~isempty(fidList{i}.info)
     % make sure this is not a 3d acq or a sense
     if ~fidList{i}.info.acq3d && (fidList{i}.info.accFactor == 1)
-      if ~isempty(strfind(fidList{i}.filename,'noise'))
-	senseNoiseNums(end+1) = i;
-      elseif ~isempty(strfind(fidList{i}.filename,'ref'))
-	senseRefNums(end+1) = i;
+      % make sure it's not raw
+      if fidList{i}.info.dim(3) == length(fidList{i}.info.pss)
+        if ~isempty(strfind(fidList{i}.filename,'noise'))
+	  senseNoiseNums(end+1) = i;
+        elseif ~isempty(strfind(fidList{i}.filename,'ref'))
+	  senseRefNums(end+1) = i;
+        end
       end
     end
   end
@@ -877,7 +900,13 @@ for i = 1:length(fidList)
     else
       % check for an anatomy sounding name (i.e. has the word "anat" in it
       if ~isempty(strfind(lower(fidList{i}.filename),'anat'))
-        anatNums(end+1) = i;
+%          keyboard
+%          %make sure it is not a raw scan (has been epirri5 processed)
+%          command = sprintf('thisanatprocpar = readprocpar(''%s'')',fidList{i}.fullfile);
+%          eval(command);
+%          if thisanatprocpar.ni ~= 0
+            anatNums(end+1) = i;
+%         end
       end
     end
   end
@@ -963,7 +992,7 @@ end
 %%%%%%%%%%%%%%%%%%
 %%   mysystem   %%
 %%%%%%%%%%%%%%%%%%
-function mysystem(commandName)
+function status = mysystem(commandName)
 
 % display to buffer
 disp('=================================================================');
