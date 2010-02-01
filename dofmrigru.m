@@ -43,6 +43,9 @@
 %                    stimfiles form a specific directory.
 %                'pdfDir=/usr1/yuko/data/s00620101001/stimfile': Set this if you want to load the first pass
 %                    pdf files form a specific directory.
+%                'numMotionComp=1': Set to 0 if you don't want to run MLR motion comp. Set to > 1 if you want
+%                    to set multiple motionComp parameters (e.g. for motionComping two sets of scans taken at
+%                    different resolutions)
 %
 %             First pass will sort through the specified datadir and copy
 %             all of these files in the correct directories on your local
@@ -62,10 +65,11 @@ fidDir = [];
 carextDir = [];
 pdfDir = [];
 stimfileDir = [];
+numMotionComp = [];
 global epirri;
 global postproc;
 global sense;
-getArgs(varargin,{'dataDir=/usr1/yuko/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epirri=epirri5','postproc=pp','sense=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel'});
+getArgs(varargin,{'dataDir=/usr1/yuko/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epirri=epirri5','postproc=pp','sense=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1'});
 
 % check to make sure we have the computer setup correctly to run epirri, postproc and sense
 if checkfMRISupportUnitCommands == 0,return,end
@@ -73,7 +77,7 @@ if checkfMRISupportUnitCommands == 0,return,end
 % see if this is the first preprocessing or the second one
 if ~isdir('Pre')
   disp(sprintf('(dofmrigru) Running Initial dofmrigru process'));
-  dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir);
+  dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp);
 else
   disp(sprintf('(dofmrigru) Running Second dofmrigru process'));
   dofmrigru2
@@ -279,10 +283,19 @@ disp(sprintf('=============================================='));
 disp(sprintf('Run motion comp'));
 disp(sprintf('=============================================='));
 if ~justDisplay
-  load motionCompParams;
-  v = newView;
-  v = motionComp(v,params);
-  deleteView(v);
+  motionCompFilenameNum = 1;
+  motionCompFilename = sprintf('motionCompParams1.mat');
+  while isfile(motionCompFilename)
+    % load the params
+    eval(sprintf('load %s',motionCompFilename));
+    % run the motion comp
+    v = newView;
+    v = motionComp(v,params);
+    deleteView(v);
+    % get the next motionCompParams to run
+    motionCompFilenameNum = motionCompFilenameNum+1;
+    motionCompFilename = sprintf('motionCompParams%i.mat',motionCompFilenameNum);
+  end
 end
 
 disp(sprintf('=============================================='));
@@ -410,7 +423,7 @@ end
 %%%%%%%%%%%%%%%%%%%%
 %%   dofmrigru1   %%
 %%%%%%%%%%%%%%%%%%%%
-function dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir)
+function dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp)
 
 global dataDir;
 
@@ -498,67 +511,75 @@ if isempty(carMatchNum),return,end
 % setup directories etc.
 doMoveFiles(1,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums);
 
+% make mask dir
+if senseProcessing,makeMaskDir(1,fidList,anatNums,senseRefNums);end
+
 % now ask the user if they want to continue, because now we'll actually copy the files and set everything up.
 if ~askuser('OK to run above commands?'),return,end
+
 % now do it
 fidList = doMoveFiles(0,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums);
 
-% convert anatomy scans
-for i = 1:length(anatNums)
-  disp(sprintf('=========================='));
-  disp(sprintf('Convert anatomy to nifti  '));
-  disp(sprintf('=========================='));
-  % convert anatomy to nifti
-  command = sprintf('fid2nifti %s;',fullfile('Pre',fidList{anatNums(i)}.filename));
-  eval(command);
-end
-
-if senseProcessing
-  % process ref and anatomy fid to make the mask
-  command = sprintf('cd Pre;'); eval(command);% move into Pre
-  global maskdir;
-  % location of masks
-  % make new empty mask directory in Pre
-  makeEmptyMLRDir('Mask','description=Empty session for making a mask','defaultParams=1');
-  maskdir = fullfile(pwd,'Mask');
-
-  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  for i = 1:length(anatNums)
-    % move into emptyMLR directory
-    command = sprintf('copyfile %s %s;',setext(fidList{anatNums(i)}.filename,'hdr'),fullfile(maskdir,'Anatomy'));
-    eval(command);
-    command = sprintf('copyfile %s %s;',setext(fidList{anatNums(i)}.filename,'img'),fullfile(maskdir,'Anatomy'));
-    eval(command);
-  end
-  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-  for i = 1:length(senseRefNums)
-    disp(sprintf('=============================================='));
-    disp(sprintf('Convert ref to nifti and copy into maskdir'));
-    disp(sprintf('=============================================='));
-    % convert ref to nifti
-    fid2nifti(fidList{senseRefNums(i)}.filename);
-  
-    % move into emptyMLR directory for mask
-    command = sprintf('movefile %s %s;',setext(fidList{senseRefNums(i)}.filename,'hdr'),maskdir);
-    eval(command);
-    command = sprintf('movefile %s %s;',setext(fidList{senseRefNums(i)}.filename,'img'),maskdir);
-    eval(command);
-
-  end  
-  % move out of Pre
-  command = sprintf('cd ..;'); eval(command);
-end
+% make mask dir
+if senseProcessing,makeMaskDir(0,fidList,anatNums,senseRefNums);end
 
 % now run mrInit
 disp(sprintf('(dofmrigru1) Setup mrInit for your directory'));
 mrInit;
 
 % set up motion comp parameters
-v = newView;
-[v params] = motionComp(v,[],'justGetParams=1');
-deleteView(v);
-save motionCompParams params
+for i = 1:numMotionComp
+  v = newView;
+  [v params] = motionComp(v,[],'justGetParams=1');
+  deleteView(v);
+  eval(sprintf('save motionCompParams%i params',i));
+end
+
+%%%%%%%%%%%%%%%%%%%%%
+%    makeMaskDir    %
+%%%%%%%%%%%%%%%%%%%%%
+function makeMaskDir(justDisplay,fidList,anatNums,senseRefNums)
+
+disp(sprintf('=============================================='));
+disp(sprintf('Make empty MLR directory for mask creation    '));
+disp(sprintf('=============================================='));
+
+if justDisplay,return,end
+  
+% process ref and anatomy fid to make the mask
+command = sprintf('cd Pre;'); eval(command);% move into Pre
+global maskdir;
+% location of masks
+% make new empty mask directory in Pre
+makeEmptyMLRDir('Mask','description=Empty session for making a mask','defaultParams=1');
+maskdir = fullfile(pwd,'Mask');
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+for i = 1:length(anatNums)
+  % move into emptyMLR directory
+  command = sprintf('copyfile %s %s;',setext(fidList{anatNums(i)}.filename,'hdr'),fullfile(maskdir,'Anatomy'));
+  eval(command);
+  command = sprintf('copyfile %s %s;',setext(fidList{anatNums(i)}.filename,'img'),fullfile(maskdir,'Anatomy'));
+  eval(command);
+end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+for i = 1:length(senseRefNums)
+  disp(sprintf('=============================================='));
+  disp(sprintf('Convert ref to nifti and copy into maskdir'));
+  disp(sprintf('=============================================='));
+  % convert ref to nifti
+  fid2nifti(fidList{senseRefNums(i)}.filename);
+  
+  % move into emptyMLR directory for mask
+  command = sprintf('movefile %s %s;',setext(fidList{senseRefNums(i)}.filename,'hdr'),maskdir);
+  eval(command);
+  command = sprintf('movefile %s %s;',setext(fidList{senseRefNums(i)}.filename,'img'),maskdir);
+  eval(command);
+
+end  
+% move out of Pre
+command = sprintf('cd ..;'); eval(command);
 
 %%%%%%%%%%%%%%%%%%%%%
 %%   doMoveFiles   %%
@@ -710,6 +731,17 @@ end
 disp(sprintf('=============================================='));
 disp(sprintf('DONE moving files.'));
 disp(sprintf('=============================================='));
+
+% convert anatomy scans
+for i = 1:length(anatNums)
+  disp(sprintf('=========================='));
+  disp(sprintf('Convert %s to nifti  ',fidList{anatNums(i)}.filename));
+  disp(sprintf('=========================='));
+  % convert anatomy to nifti
+  command = sprintf('fid2nifti %s;',fullfile('Pre',fidList{anatNums(i)}.filename));
+  if justDisplay,disp(command),else,eval(command);end
+end
+
 
 if ~justDisplay
   closeLogfile
