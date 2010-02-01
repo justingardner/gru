@@ -90,27 +90,34 @@ fidList = getFileList(fiddir,'fid');
 fidList = getFidInfo(fidList);
 fidList = sortFidList(fidList);
 
-% look for mask in nifti form
-%the mask is made manually before dofmrigru1 from noise/ref in maskdir.
-%copy the correct maskfile into Pre MANUALLY
-maskList = getFileList(fiddir,'hdr','img','mask'); 
-if isempty(maskList)
-  disp(sprintf('(dofrmigru2) Could not find any mask files'));
-  return
-end
-noiseList = getFileList(fiddir,'edt','epr','noise');
-if isempty(noiseList)
-  disp(sprintf('(dofrmigru2) Could not find any noise files'));
-  return
-end
-refList = getFileList(fiddir,'edt','epr','ref');
-if isempty(refList)
-  disp(sprintf('(dofrmigru2) Could not find any ref files'));
-  return
-end
 % get list of epi scans
 epiNums = getEpiScanNums(fidList);
-senseScanNums = getSenseScanNums(fidList,epiNums);
+
+% check for sense processing
+senseProcessing = isSenseProcessing(fidList,epiNums);
+
+if senseProcessing
+  % look for mask in nifti form
+  %the mask is made manually before dofmrigru1 from noise/ref in maskdir.
+  %copy the correct maskfile into Pre MANUALLY
+  maskList = getFileList(fiddir,'hdr','img','mask'); 
+  if isempty(maskList)
+    disp(sprintf('(dofrmigru2) Could not find any mask files'));
+    return
+  end
+  noiseList = getFileList(fiddir,'edt','epr','noise');
+  if isempty(noiseList)
+    disp(sprintf('(dofrmigru2) Could not find any noise files'));
+    return
+  end
+  refList = getFileList(fiddir,'edt','epr','ref');
+  if isempty(refList)
+    disp(sprintf('(dofrmigru2) Could not find any ref files'));
+    return
+  end
+else
+  maskList = [];noiseList = [];refList = [];
+end
 
 % get anatomy scan nums
 anatNums = getAnatScanNums(fidList);
@@ -118,8 +125,15 @@ anatNums = getAnatScanNums(fidList);
 % check to make sure that all epi runs are processed
 [epiNumsWithPeaks epiNumsWithCarExt] = checkForPeaks(fidList,epiNums);
 
-% get which mask goes for each sense file
-[maskNums noiseNums refNums] = chooseMaskForSenseFiles(fidList,maskList,noiseList,refList,epiNums);
+% get some info for sense processing
+if senseProcessing
+  senseScanNums = getSenseScanNums(fidList,epiNums);
+  % get which mask goes for each sense file
+  [maskNums noiseNums refNums] = chooseMaskForSenseFiles(fidList,maskList,noiseList,refList,epiNums);
+else
+  % no sense processing defaults
+  senseScanNums = [];maskNums = [];noiseNums = [];refNums = [];
+end
 
 % check for something to do
 if isempty(epiNumsWithCarExt)
@@ -136,18 +150,18 @@ dispList(fidList,epiNumsWithCarExt,sprintf('Epi scans to process'));
 dispList(fidList,anatNums,sprintf('Anatomy files'));
 
 % display the commands for processing
-processFiles(1,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums);
+processFiles(1,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing);
 
 % now ask the user if they want to continue, because now we'll actually copy the files and set everything up.
 if ~askuser('OK to run above commands?'),return,end
 
 % now do it
-processFiles(0,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums);
+processFiles(0,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing);
 
 %%%%%%%%%%%%%%%%%%%%%%
 %%   processFiles   %%
 %%%%%%%%%%%%%%%%%%%%%%
-function processFiles(justDisplay,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums)
+function processFiles(justDisplay,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing)
 
 global postproc;
 global sense;
@@ -171,16 +185,18 @@ for i = 1:length(anatNums)
   if justDisplay,disp(command),else,eval(command),end
 end
 
-for i = 1:length(maskList)
-  disp(sprintf('=============================================='));
-  disp(sprintf('Convert masks from nifti to sdt/spr'));
-  disp(sprintf('=============================================='));
-  % convert mask from nifti to to sdt/spr form
-  maskname = maskList{i}.filename; % still in nifti form
-  command = sprintf('[d h] = cbiReadNifti(''%s'');',maskname);
-  if justDisplay,disp(command),else,eval(command),end
-  command = sprintf('writesdt(''%s'',d);',setext(maskname,'sdt'));
-  if justDisplay,disp(command),else,eval(command),end
+if senseProcessing
+  for i = 1:length(maskList)
+    disp(sprintf('=============================================='));
+    disp(sprintf('Convert masks from nifti to sdt/spr'));
+    disp(sprintf('=============================================='));
+    % convert mask from nifti to to sdt/spr form
+    maskname = maskList{i}.filename; % still in nifti form
+    command = sprintf('[d h] = cbiReadNifti(''%s'');',maskname);
+    if justDisplay,disp(command),else,eval(command),end
+    command = sprintf('writesdt(''%s'',d);',setext(maskname,'sdt'));
+    if justDisplay,disp(command),else,eval(command),end
+  end
 end
 
 % and delete headers
@@ -198,13 +214,15 @@ disp(sprintf('=============================================='));
 % physiofix the files
 
 for i = 1:length(epiNumsWithCarExt)
+  % get some names for things
+  fidname = fidList{epiNumsWithCarExt(i)}.filename;
+  edtname = setext(fidList{epiNumsWithCarExt(i)}.filename,'edt');
+  sdtname = setext(fidList{epiNumsWithCarExt(i)}.filename,'sdt');
+  hdrname = setext(fidList{epiNumsWithCarExt(i)}.filename,'hdr');
+
   % see if it is sense
   if any(i==senseScanNums)
-    % get some names for things
-    fidname = fidList{epiNumsWithCarExt(i)}.filename;
-    edtname = setext(fidList{epiNumsWithCarExt(i)}.filename,'edt');
-    sdtname = setext(fidList{epiNumsWithCarExt(i)}.filename,'sdt');
-    hdrname = setext(fidList{epiNumsWithCarExt(i)}.filename,'hdr');
+    % noise, ref and mask numbers
     noiseNum = noiseNums(find(i==senseScanNums));
     refNum = refNums(find(i==senseScanNums));
     maskNum = maskNums(find(i==senseScanNums));
@@ -235,7 +253,22 @@ for i = 1:length(epiNumsWithCarExt)
     command = sprintf('cbiWriteNifti(''%s.hdr'',data.data,hdr);',stripext(fullfile('..','Raw','TSeries',hdrname)));
     if justDisplay,disp(command),else,eval(command),end
   else
-    disp(sprintf('(dofmrigru) UHOH!!!!! plain processing (not sense is not implemented yet!!! FIX FIX FIX!!!)'));
+    %check to see if this epi has peaks. if so run postproc with physiofix
+    if any(epiNumsWithCarExt(i) == epiNumsWithPeaks)
+        % convert to epis to edt file, doing physiofix and dc correction
+        command = sprintf('mysystem(''%s -outtype 2 -dc -physiofix %s %s'');',postproc,fidname,sdtname);
+    else
+        % convert to epis to edt file, don't do physiofix but dc correction
+        command = sprintf('mysystem(''%s -outtype 2 -dc %s %s'');',postproc,fidname,sdtname);
+    end
+    if justDisplay,disp(command),else,eval(command),end
+    % then convert the sdt file into a nifti
+    command = sprintf('[hdr] = fid2niftihdr(''%s'');',fidname);
+    if justDisplay,disp(command),else,eval(command),end
+    command = sprintf('data = readsdt(''%s.sdt'');',stripext(sdtname));
+    if justDisplay,disp(command),else,eval(command),end
+    command = sprintf('cbiWriteNifti(''%s.hdr'',data.data,hdr);',stripext(fullfile('..','Raw','TSeries',hdrname)));
+    if justDisplay,disp(command),else,eval(command),end
   end
 end
 
@@ -411,6 +444,9 @@ if isempty(epiNums)
   return
 end
 
+% check to see if any of the epi scans have acceleration greater than 1
+senseProcessing = isSenseProcessing(fidList,epiNums);
+
 % get anatomy scan nums
 anatNums = getAnatScanNums(fidList);
 if isempty(anatNums)
@@ -420,11 +456,11 @@ end
 
 % get sense noise/ref scans
 [senseNoiseNums senseRefNums] = getSenseNums(fidList);
-if isempty(senseRefNums)
+if isempty(senseRefNums) && senseProcessing
     disp(sprintf('(dofmrigru1) Could not find any sense ref files in %s',fidDir));
     return
 end
-if isempty(senseNoiseNums)
+if isempty(senseNoiseNums) && senseProcessing
     disp(sprintf('(dofmrigru1) Could not find any sense noise files in %s',fidDir));
     return
 end
@@ -447,8 +483,10 @@ stimfileList = getFileList(stimfileDir,'mat');
 % display what we found
 dispList(fidList,epiNums,sprintf('Epi scans: %s',fidDir));
 dispList(fidList,anatNums,sprintf('Anatomy scans: %s',fidDir));
-dispList(fidList,senseRefNums,sprintf('Sense reference scan: %s',fidDir));
-dispList(fidList,senseNoiseNums,sprintf('Sense noise scan: %s',fidDir));
+if senseProcessing
+  dispList(fidList,senseRefNums,sprintf('Sense reference scan: %s',fidDir));
+  dispList(fidList,senseNoiseNums,sprintf('Sense noise scan: %s',fidDir));
+end
 dispList(carList,[],sprintf('Car/Ext files: %s',carextDir));
 dispList(pdfList,[],sprintf('PDF files: %s',pdfDir));
 dispList(stimfileList,[],sprintf('Stimfiles: %s',stimfileDir));
@@ -465,46 +503,52 @@ if ~askuser('OK to run above commands?'),return,end
 % now do it
 fidList = doMoveFiles(0,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums);
 
-% process ref and anatomy fid to make the mask
-command = sprintf('cd Pre;'); eval(command);% move into Pre
-global maskdir;
-% location of masks
-% make new empty mask directory in Pre
-makeEmptyMLRDir('Mask','description=Empty session for making a mask','defaultParams=1');
-maskdir = fullfile(pwd,'Mask');
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% convert anatomy scans
 for i = 1:length(anatNums)
-  disp(sprintf('=============================================='));
-  disp(sprintf('Convert anatomy to nifti and copy into maskdir'));
-  disp(sprintf('=============================================='));
+  disp(sprintf('=========================='));
+  disp(sprintf('Convert anatomy to nifti  '));
+  disp(sprintf('=========================='));
   % convert anatomy to nifti
-  command = sprintf('fid2nifti %s;',fidList{anatNums(i)}.filename);
-  eval(command);
-  % move into emptyMLR directory
-  command = sprintf('copyfile %s %s;',setext(fidList{anatNums(i)}.filename,'hdr'),fullfile(maskdir,'Anatomy'));
-  eval(command);
-  command = sprintf('copyfile %s %s;',setext(fidList{anatNums(i)}.filename,'img'),fullfile(maskdir,'Anatomy'));
+  command = sprintf('fid2nifti %s;',fullfile('Pre',fidList{anatNums(i)}.filename));
   eval(command);
 end
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-for i = 1:length(senseRefNums)
-  disp(sprintf('=============================================='));
-  disp(sprintf('Convert ref to nifti and copy into maskdir'));
-  disp(sprintf('=============================================='));
-  % convert ref to nifti
-  fid2nifti(fidList{senseRefNums(i)}.filename);
+if senseProcessing
+  % process ref and anatomy fid to make the mask
+  command = sprintf('cd Pre;'); eval(command);% move into Pre
+  global maskdir;
+  % location of masks
+  % make new empty mask directory in Pre
+  makeEmptyMLRDir('Mask','description=Empty session for making a mask','defaultParams=1');
+  maskdir = fullfile(pwd,'Mask');
+
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  for i = 1:length(anatNums)
+    % move into emptyMLR directory
+    command = sprintf('copyfile %s %s;',setext(fidList{anatNums(i)}.filename,'hdr'),fullfile(maskdir,'Anatomy'));
+    eval(command);
+    command = sprintf('copyfile %s %s;',setext(fidList{anatNums(i)}.filename,'img'),fullfile(maskdir,'Anatomy'));
+    eval(command);
+  end
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+  for i = 1:length(senseRefNums)
+    disp(sprintf('=============================================='));
+    disp(sprintf('Convert ref to nifti and copy into maskdir'));
+    disp(sprintf('=============================================='));
+    % convert ref to nifti
+    fid2nifti(fidList{senseRefNums(i)}.filename);
   
-  % move into emptyMLR directory for mask
-  command = sprintf('movefile %s %s;',setext(fidList{senseRefNums(i)}.filename,'hdr'),maskdir);
-  eval(command);
-  command = sprintf('movefile %s %s;',setext(fidList{senseRefNums(i)}.filename,'img'),maskdir);
-  eval(command);
+    % move into emptyMLR directory for mask
+    command = sprintf('movefile %s %s;',setext(fidList{senseRefNums(i)}.filename,'hdr'),maskdir);
+    eval(command);
+    command = sprintf('movefile %s %s;',setext(fidList{senseRefNums(i)}.filename,'img'),maskdir);
+    eval(command);
 
-end  
-% move out of Pre
-command = sprintf('cd ..;'); eval(command);
+  end  
+  % move out of Pre
+  command = sprintf('cd ..;'); eval(command);
+end
 
 % now run mrInit
 disp(sprintf('(dofmrigru1) Setup mrInit for your directory'));
@@ -659,7 +703,7 @@ for i = 1:length(epiNums)
     % write as a nifti file
     cbiWriteNifti(destName,d,h);
   else
-    disp(sprintf('Make temporaty nifti file for %s in %s',srcName,destName));
+    disp(sprintf('Make temporary nifti file for %s in %s',srcName,destName));
   end
 end
 
@@ -1084,5 +1128,17 @@ for i = 1:length(commandNames)
     disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=gru:dataprocessing for help setting up your computer'));
     retval = 0;
     return
+  end
+end
+
+%%%%%%%%%%%%%%%%%%%%%
+% isSenseProcessing %
+%%%%%%%%%%%%%%%%%%%%%
+function senseProcessing = isSenseProcessing(fidList,epiNums)
+senseProcessing = 0;
+
+for i = epiNums
+  if isfield(fidList{i}.info,'accFactor') && (fidList{i}.info.accFactor>1)
+    senseProcessing = 1;
   end
 end
