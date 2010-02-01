@@ -259,10 +259,10 @@ for i = 1:length(epiNumsWithCarExt)
   else
     %check to see if this epi has peaks. if so run postproc with physiofix
     if any(epiNumsWithCarExt(i) == epiNumsWithPeaks)
-        % convert to epis to edt file, doing physiofix and dc correction
+        % convert epis to sdt file, doing physiofix and dc correction
         command = sprintf('mysystem(''%s -outtype 2 -dc -physiofix %s %s'');',postproc,fidname,sdtname);
     else
-        % convert to epis to edt file, don't do physiofix but dc correction
+        % convert epis to sdt file, don't do physiofix but dc correction
         command = sprintf('mysystem(''%s -outtype 2 -dc %s %s'');',postproc,fidname,sdtname);
     end
     if justDisplay,disp(command),else,eval(command),end
