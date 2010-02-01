@@ -789,9 +789,6 @@ end
 %%%%%%%%%%%%%%%%%%%%%%
 function dispStr = dispList(fidList,nums,name)
 
-% empty nums means to display all
-if isempty(nums),nums = 1:length(fidList);end
-
 dispStr = {};
 disp(sprintf('============================='));
 disp(sprintf('%s',name));
@@ -802,6 +799,11 @@ for i = 1:length(nums)
   else
     disp(fidList{nums(i)}.filename);
   end
+end
+
+% empty nums means to display all
+if isempty(nums)
+  disp('NO MATCHING SCANS');
 end
 
 %%%%%%%%%%%%%%%%%%%%
