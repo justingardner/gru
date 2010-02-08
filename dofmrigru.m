@@ -21,7 +21,7 @@
 %
 %             Now, make sure that your raw data is setup as follows:
 %
-%             /usr1/yuko/data/S00120091216 should contain all of your data. Including
+%             /usr1/justin/data/S00120091216 should contain all of your data. Including
 %             all of the .fid directories)
 %             all of the car/ext files
 %             all of the stimfiles (if you have them)
@@ -29,19 +29,19 @@
 % 
 %             Now you can run dofmrigru as follows:
 %
-%             dofmrigru('dataDir=/usr1/yuko/data')
+%             dofmrigru('dataDir=/usr1/justin/data')
 %
 %             Other options:
 %                'epirri=eprri5': set which epirri processing function to use
 %                'postproc=pp': set which postproc program to use
 %                'sense=sense_mac_intel': set which sense reconstruction to use
-%                'fidDir=/usr1/yuko/data/s00620101001/Pre': Set this if you want to load the first pass
+%                'fidDir=/usr1/justin/data/s00620101001/Pre': Set this if you want to load the first pass
 %                    fid files form a specific directory.
-%                'carextDir=/usr1/yuko/data/s00620101001/carext': Set this if you want to load the first pass
+%                'carextDir=/usr1/justin/data/s00620101001/carext': Set this if you want to load the first pass
 %                    car/ext files form a specific directory.
-%                'stimfileDir=/usr1/yuko/data/s00620101001/stimfile': Set this if you want to load the first pass
+%                'stimfileDir=/usr1/justin/data/s00620101001/stimfile': Set this if you want to load the first pass
 %                    stimfiles form a specific directory.
-%                'pdfDir=/usr1/yuko/data/s00620101001/stimfile': Set this if you want to load the first pass
+%                'pdfDir=/usr1/justin/data/s00620101001/stimfile': Set this if you want to load the first pass
 %                    pdf files form a specific directory.
 %                'numMotionComp=1': Set to 0 if you don't want to run MLR motion comp. Set to > 1 if you want
 %                    to set multiple motionComp parameters (e.g. for motionComping two sets of scans taken at
@@ -69,7 +69,7 @@ numMotionComp = [];
 global epirri;
 global postproc;
 global sense;
-getArgs(varargin,{'dataDir=/usr1/yuko/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epirri=epirri5','postproc=pp','sense=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1'});
+getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epirri=epirri5','postproc=pp','sense=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1'});
 
 % check to make sure we have the computer setup correctly to run epirri, postproc and sense
 if checkfMRISupportUnitCommands == 0,return,end
@@ -500,9 +500,9 @@ if senseProcessing
   dispList(fidList,senseRefNums,sprintf('Sense reference scan: %s',fidDir));
   dispList(fidList,senseNoiseNums,sprintf('Sense noise scan: %s',fidDir));
 end
-dispList(carList,[],sprintf('Car/Ext files: %s',carextDir));
-dispList(pdfList,[],sprintf('PDF files: %s',pdfDir));
-dispList(stimfileList,[],sprintf('Stimfiles: %s',stimfileDir));
+dispList(carList,nan,sprintf('Car/Ext files: %s',carextDir));
+dispList(pdfList,nan,sprintf('PDF files: %s',pdfDir));
+dispList(stimfileList,nan,sprintf('Stimfiles: %s',stimfileDir));
 
 % go find the matching car files for each scan
 carMatchNum = getCarMatch(carList,fidList,epiNums);
@@ -793,6 +793,10 @@ dispStr = {};
 disp(sprintf('============================='));
 disp(sprintf('%s',name));
 disp(sprintf('============================='));
+
+% if nums is nan, show all files
+if isnan(nums),nums = 1:length(fidList);end
+
 for i = 1:length(nums)
   if isfield(fidList{nums(i)},'dispstr')
     disp(fidList{nums(i)}.dispstr);
