@@ -544,43 +544,48 @@ disp(sprintf('=============================================='));
 disp(sprintf('Make empty MLR directory for mask creation    '));
 disp(sprintf('=============================================='));
 
-if justDisplay,return,end
-  
 % process ref and anatomy fid to make the mask
-command = sprintf('cd Pre;'); eval(command);% move into Pre
+command = sprintf('cd Pre;'); myeval(command,justDisplay);% move into Pre
 global maskdir;
 % location of masks
 % make new empty mask directory in Pre
-makeEmptyMLRDir('Mask','description=Empty session for making a mask','defaultParams=1');
-maskdir = fullfile(pwd,'Mask');
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-for i = 1:length(anatNums)
-  % move into emptyMLR directory
-  command = sprintf('copyfile %s %s;',setext(fidList{anatNums(i)}.filename,'hdr'),fullfile(maskdir,'Anatomy'));
-  eval(command);
-  command = sprintf('copyfile %s %s;',setext(fidList{anatNums(i)}.filename,'img'),fullfile(maskdir,'Anatomy'));
-  eval(command);
+if ~justDisplay
+  makeEmptyMLRDir('Mask','description=Empty session for making a mask','defaultParams=1');
+else
+  disp('makeEmptyMLRDisplay');
 end
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+maskdir = fullfile(pwd,'Mask');
 
 for i = 1:length(senseRefNums)
   disp(sprintf('=============================================='));
   disp(sprintf('Convert ref to nifti and copy into maskdir'));
   disp(sprintf('=============================================='));
   % convert ref to nifti
-  fid2nifti(fidList{senseRefNums(i)}.filename);
+  if ~justDisplay
+    fid2nifti(fidList{senseRefNums(i)}.filename);
+  end
   
   % move into emptyMLR directory for mask
-  command = sprintf('movefile %s %s;',setext(fidList{senseRefNums(i)}.filename,'hdr'),maskdir);
-  eval(command);
-  command = sprintf('movefile %s %s;',setext(fidList{senseRefNums(i)}.filename,'img'),maskdir);
-  eval(command);
+  command = sprintf('movefile %s %s;',setext(fidList{senseRefNums(i)}.filename,'hdr'),fullfile(maskdir,'Anatomy'));
+  myeval(command,justDisplay);
+  command = sprintf('movefile %s %s;',setext(fidList{senseRefNums(i)}.filename,'img'),fullfile(maskdir,'Anatomy'));
+  myeval(command,justDisplay);
 
 end  
 % move out of Pre
-command = sprintf('cd ..;'); eval(command);
+command = sprintf('cd ..;'); myeval(command,justDisplay);
 
+%%%%%%%%%%%%
+%% myeval %%
+%%%%%%%%%%%%
+function myeval(command,justDisplay)
+
+if justDisplay
+  disp(command);
+else
+  eval(command);
+end  
 %%%%%%%%%%%%%%%%%%%%%
 %%   doMoveFiles   %%
 %%%%%%%%%%%%%%%%%%%%%
