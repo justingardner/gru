@@ -16,13 +16,22 @@
 %             Then it will align using AFNI the t1 and t2 images
 %
 %             Then it will put up a GUI to set the threshold. Click Ok and it will save the t1t2.hdr
+%             set verbose=0 for no comments.
+%             To not run T1T2alignment:
+%        
+%             t1t2('t1','t2','T1T2alignment=0');
+%
+%             Note that you can also do normalization by dividing by a blurred version 
+%             of the same T1. This will save an image called t1t1.hdr
+%
+%             t1t2('t1');
 % 
 % 
 %
 function retval = t1t2(t1_fidname,t2_fidname,varargin)
 
 % check arguments
-if ~any(nargin == [1 2 3 4 5 6 7 8 9 10])
+if nargin == 0
   help t1t2
   return
 end
@@ -38,7 +47,9 @@ T1T2alignment=[];
 getArgs(varargin,{'verbose=1','T1T2alignment=1'});
 
 % check for correct commands to run this program
-if ~checkCommands(verbose),return,end
+if ~isempty(t2_fidname) && T1T2alignment
+  if ~checkCommands(verbose),return,end
+end
 
 % check filenames
 [tf t1_fidname] = checkFilenames(t1_fidname,verbose);
@@ -53,7 +64,7 @@ t1 = alignImages(t1,verbose);
 t1 = averageImages(t1,verbose);
 %t1ic = t1t2IntensityContrastCorrection(t1,verbose);
 
-% load t2 files, align images and average, then align to T1
+% load t2 files, align images and average
 t2 = loadImageFiles(t2_fidname,verbose);
 t2 = alignImages(t2,verbose);
 t2 = averageImages(t2,verbose);
@@ -309,9 +320,9 @@ maxSlice = size(t1.d,3);
 midSlice = round(maxSlice/2);
 
 % set up params
-paramsInfo{1} = {'threshold',1,'numeric=1','incdec=[-0.1 0.1]','minmax=[0 inf]','callback',@displayT1T2,'passParams=1','Controls the threshold of the T2 image that creates the mask. Set this to make as clean a mask as possible'};
-paramsInfo{end+1} = {'sliceNum',midSlice,'numeric=1','incdec=[-1 1]',sprintf('minmax=[1 %i]',maxSlice),'callback',@displayT1T2,'passParams=1','Which slice to display'};
-paramsInfo{end+1} = {'blurLevel',blurLevel,'numeric=1','incdec=[-1 1]','minmax=[0 inf]','round=1','callback',@displayT1T2,'passParams=1','Which slice to display'};
+paramsInfo{1} = {'sliceNum',midSlice,'numeric=1','incdec=[-1 1]',sprintf('minmax=[1 %i]',maxSlice),'callback',@displayT1T2,'passParams=1','Which slice to display'};
+paramsInfo{end+1} = {'threshold',1,'numeric=1','incdec=[-0.1 0.1]','minmax=[0 inf]','callback',@displayT1T2,'passParams=1','Controls the threshold of the T2 image that creates the mask. Set this to make as clean a mask as possible'};
+paramsInfo{end+1} = {'blurLevel',blurLevel,'numeric=1','incdec=[-1 1]','minmax=[0 inf]','round=1','callback',@displayT1T2,'passParams=1','How much to blur the image'};
 		
 % get default params to display initial image
 params = mrParamsDefault(paramsInfo);
