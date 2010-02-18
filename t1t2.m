@@ -57,15 +57,19 @@ t1 = averageImages(t1,verbose);
 t2 = loadImageFiles(t2_fidname,verbose);
 t2 = alignImages(t2,verbose);
 t2 = averageImages(t2,verbose);
-if T1T2alignment
+
+% now do T1/T2 alignment using AFNI
+if T1T2alignment && ~isempty(t2)
   t2 = alignT1toT2(t1,t2,verbose);
 end
-t2 = blurImage(t2,verbose);
 
 % now set threshold and divide T1 by T2
 if ~isempty(t2)
-  vol = divideT1byT2(t1,t2);
-  if ~isempty(vol),saveNifti(vol,'t1t2');end
+  vol = divideT1byT2(t1,t2,1);
+  if ~isempty(vol),saveNifti(vol,'t1t2',verbose);end
+else
+  vol = divideT1byT2(t1,t1,3);
+  if ~isempty(vol),saveNifti(vol,'t1t1',verbose);end
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%
@@ -222,8 +226,8 @@ t2filename = 't2_preAlignment.hdr';
 t2alignedFilename = 't2.hdr';
 
 % write the files out to disk
-saveNifti(t1,t1filename);
-saveNifti(t2,t2filename);
+saveNifti(t1,t1filename,verbose);
+saveNifti(t2,t2filename,verbose);
 
 % run the afni command
 disppercent(-inf,sprintf('(t1t2) Aligning T1 to T2 using AFNI:%s',AFNIcommand));
@@ -243,6 +247,7 @@ disppercent(inf);
 %%%%%%%%%%%%%%%%%%%
 function saveNifti(im,name,verbose)
 
+if verbose,disp(sprintf('(t1t2) Saving %s',name));end
 name = setext(name,'hdr');
 cbiWriteNifti(name,im.d,im.hdr);
 
@@ -284,7 +289,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%
 %    divideT1byT2    %
 %%%%%%%%%%%%%%%%%%%%%%
-function vol = divideT1byT2(t1,t2,verbose)
+function vol = divideT1byT2(t1,t2,blurLevel,verbose)
 
 vol = [];
 
@@ -295,9 +300,10 @@ global t1t2fig;
 t1t2fig.f = smartfig('t1t2');
 t1t2fig.f2 = smartfig('t1t2final');
 
-
+% set fields
 t1t2fig.t1 = t1;
 t1t2fig.t2 = t2;
+t1t2fig.params = [];
 
 maxSlice = size(t1.d,3);
 midSlice = round(maxSlice/2);
@@ -305,9 +311,7 @@ midSlice = round(maxSlice/2);
 % set up params
 paramsInfo{1} = {'threshold',1,'numeric=1','incdec=[-0.1 0.1]','minmax=[0 inf]','callback',@displayT1T2,'passParams=1','Controls the threshold of the T2 image that creates the mask. Set this to make as clean a mask as possible'};
 paramsInfo{end+1} = {'sliceNum',midSlice,'numeric=1','incdec=[-1 1]',sprintf('minmax=[1 %i]',maxSlice),'callback',@displayT1T2,'passParams=1','Which slice to display'};
-paramsInfo{end+1} = {'blurLevel',t2.blurLevel,'numeric=1','incdec=[-1 1]','minmax=[0 inf]','round=1','callback',@displayT1T2,'passParams=1','Which slice to display'};
-paramsInfo{end+1} = {'gamma',0.4,'numeric=1','incdec=[-0.1 0.1]','minmax=[0 inf]','callback',@displayT1T2,'passParams=1','Changes the display gamma of the T1T2 image'};
-
+paramsInfo{end+1} = {'blurLevel',blurLevel,'numeric=1','incdec=[-1 1]','minmax=[0 inf]','round=1','callback',@displayT1T2,'passParams=1','Which slice to display'};
 		
 % get default params to display initial image
 params = mrParamsDefault(paramsInfo);
@@ -320,13 +324,31 @@ params = mrParamsDialog(paramsInfo,'Set threshold');
 close(t1t2fig.f);
 close(t1t2fig.f2);
 drawnow;
+t2 = t1t2fig.t2;
 clear global t1t2fig;
 
 % user cancel
 if isempty(params),return,end
 
+% compute T1/T2
 vol = computeT1T2(t1,t2,params);
 
+%%%%%%%%%%%%%%%%%%%%%%%
+%%   paramsChanged   %%
+%%%%%%%%%%%%%%%%%%%%%%%
+function tf = paramsChanged(params1,params2)
+
+tf = 1;
+% if either is empty need to recompute
+if isempty(params1),return,end
+if isempty(params2),return,end
+
+% if these parameters have changed, need to recompute
+if ~isequal(params1.threshold,params2.threshold),return,end
+if ~isequal(params1.blurLevel,params2.blurLevel),return,end
+
+% otherwise they are effectively the same
+tf = 0;
 
 %%%%%%%%%%%%%%%%%%%%%
 %%   computeT1T2   %%
@@ -334,13 +356,14 @@ vol = computeT1T2(t1,t2,params);
 function [t1t2 mask t2] = computeT1T2(t1,t2,params,sliceNum)
 
 % see if we have to blur T2
-if params.blurLevel ~= t2.blurLevel
+if ~isfield(t2,'blurLevel') || (params.blurLevel ~= t2.blurLevel)
   t2 = blurImage(t2,1,params.blurLevel);
 end
 
 % default to all slices
-if ieNotDefined('sliceNum'),sliceNum = 1:size(t1,3);end
+if ieNotDefined('sliceNum'),sliceNum = 1:size(t1.d,3);end
 
+disppercent(-inf,'(t1t2) Computing t1/t2');
 % get mask
 mask = t2.d(:,:,sliceNum)>params.threshold;
 divmask = mask.*t2.blurd(:,:,sliceNum);
@@ -349,6 +372,11 @@ divmask(divmask==0) = inf;
 % do the division
 t1t2.d = t1.d(:,:,sliceNum)./divmask;
 t1t2.hdr = t1.hdr;
+
+% now compute normalization factors
+t1t2.min = min(t1t2.d(mask));
+t1t2.max = max(t1t2.d(mask));
+disppercent(inf);
 
 %%%%%%%%%%%%%%%%%%%%
 %    displayT1T2   %
@@ -362,12 +390,14 @@ figure(t1t2fig.f);
 subplot(1,3,1);
 imagesc(t1t2fig.t1.d(:,:,params.sliceNum));
 axis square;
+axis off;
 title('T1');
 drawnow
 
 % compute division
-if ~isfield(t1t2fig,'params') || (t1t2fig.params.threshold ~= params.threshold) || (t1t2fig.params.blurLevel ~= params.blurLevel) || (t1t2fig.params.sliceNum ~= params.sliceNum)
-  [t1t2fig.t1t2 t1t2fig.mask t1t2fig.t2] = computeT1T2(t1t2fig.t1,t1t2fig.t2,params,params.sliceNum);
+if paramsChanged(t1t2fig.params,params)
+  [t1t2fig.t1t2 t1t2fig.mask t1t2fig.t2] = computeT1T2(t1t2fig.t1,t1t2fig.t2,params);
+  t1t2fig.params = params;
 end
 
 % display T2
@@ -375,13 +405,15 @@ figure(t1t2fig.f);
 subplot(1,3,2);
 imagesc(t1t2fig.t2.blurd(:,:,params.sliceNum));
 axis square;
+axis off;
 title('T2');
 
 % display mask
 subplot(1,3,3);
 figure(t1t2fig.f);
-imagesc(t1t2fig.mask);
+imagesc(t1t2fig.mask(:,:,params.sliceNum));
 axis square;
+axis off;
 title('Mask');
 
 % set colormap
@@ -389,8 +421,10 @@ colormap(gray);
 
 % draw t1/t2
 figure(t1t2fig.f2);
-imageg(t1t2fig.t1t2.d,params.gamma);
+image(255*(t1t2fig.t1t2.d(:,:,params.sliceNum)-t1t2fig.t1t2.min)/(t1t2fig.t1t2.max-t1t2fig.t1t2.min));
 title('T1/T2');
+axis square;
+axis off;
 
 colormap(gray);
 
@@ -422,3 +456,17 @@ for i = 1:size(img.d,3)
 end
 if verbose,disppercent(inf);end
 
+%%%%%%%%%%%%%%%
+%%   check   %%
+%%%%%%%%%%%%%%%
+function check
+
+% test outtput to compare different methods
+d1 = cbiReadNifti('t1t2.hdr');d1 = (d1-min(d1(:)))/(max(d1(:))-min(d1(:)));
+d2 = cbiReadNifti('t1t1.hdr');d2 = (d2-min(d2(:)))/(max(d2(:))-min(d2(:)));
+d3 = cbiReadNifti('t1.hdr');d3 = (d3-min(d3(:)))/(max(d3(:))-min(d3(:)));
+
+d = d1;
+d(:,:,:,2) = d2;
+d(:,:,:,3) = d3;
+mlrDisplayEPI(d);
