@@ -74,6 +74,9 @@ getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir
 % check to make sure we have the computer setup correctly to run epirri, postproc and sense
 if checkfMRISupportUnitCommands == 0,return,end
 
+% Shutdown MLR if it is running
+mrQuit();
+
 % see if this is the first preprocessing or the second one
 if ~isdir('Pre')
   disp(sprintf('(dofmrigru) Running Initial dofmrigru process'));
