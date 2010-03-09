@@ -198,7 +198,7 @@ for i = restOfImages
   end
   % warp the volume
   im{i}.d = warpAffine3(im{i}.d,M,badVal,border,interpMethod);
-  [trash indexi] = ismember(i,restOfimages);
+  [trash indexi] = ismember(i,restOfImages);
   disppercent(indexi/length(restOfImages));
 end
 disppercent(inf);
