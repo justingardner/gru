@@ -270,9 +270,12 @@ for i = 1:length(epiNumsWithCarExt)
     end
     if justDisplay,disp(command),else,eval(command),end
     % then convert the sdt file into a nifti
-    command = sprintf('[hdr] = fid2niftihdr(''%s'');',fidname);
+    command = sprintf('[hdr info] = fid2niftihdr(''%s'');',fidname);
     if justDisplay,disp(command),else,eval(command),end
     command = sprintf('data = readsdt(''%s.sdt'');',stripext(sdtname));
+    if justDisplay,disp(command),else,eval(command),end
+    % remove reference volume
+    command = sprintf('if info.nRefVolumes,data = data(:,:,:,info.nRefVolumes+1:end);end');
     if justDisplay,disp(command),else,eval(command),end
     command = sprintf('cbiWriteNifti(''%s.hdr'',data.data,hdr);',stripext(fullfile('..','Raw','TSeries',hdrname)));
     if justDisplay,disp(command),else,eval(command),end
