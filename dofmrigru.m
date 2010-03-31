@@ -268,7 +268,7 @@ for i = 1:length(epiNumsWithCarExt)
         % convert epis to sdt file, don't do physiofix but dc correction
         command = sprintf('mysystem(''%s -outtype 2 -dc %s %s'');',postproc,fidname,sdtname);
     end
-%    if justDisplay,disp(command),else,eval(command),end
+    if justDisplay,disp(command),else,eval(command),end
     % then convert the sdt file into a nifti
     command = sprintf('[hdr info] = fid2niftihdr(''%s'');',fidname);
     if justDisplay,disp(command),else,eval(command),end
