@@ -263,21 +263,22 @@ for i = 1:length(epiNumsWithCarExt)
     %check to see if this epi has peaks. if so run postproc with physiofix
     if any(epiNumsWithCarExt(i) == epiNumsWithPeaks)
         % convert epis to sdt file, doing physiofix and dc correction
-        command = sprintf('mysystem(''%s -outtype 2 -dc -physiofix %s %s'');',postproc,fidname,sdtname);
+        command = sprintf('mysystem(''%s -outtype 3 -dc -physiofix %s %s'');',postproc,fidname,sdtname);
     else
         % convert epis to sdt file, don't do physiofix but dc correction
-        command = sprintf('mysystem(''%s -outtype 2 -dc %s %s'');',postproc,fidname,sdtname);
+        command = sprintf('mysystem(''%s -outtype 3 -dc %s %s'');',postproc,fidname,sdtname);
     end
     if justDisplay,disp(command),else,eval(command),end
-    % then convert the sdt file into a nifti
+    % then convert the output of postproc to a valid nifti file, by
+    % pasting on the header from fid2niftihdr
     command = sprintf('[hdr info] = fid2niftihdr(''%s'');',fidname);
     if justDisplay,disp(command),else,eval(command),end
-    command = sprintf('data = readsdt(''%s.sdt'');',stripext(sdtname));
+    command = sprintf('data = cbiReadNifti(''%s.hdr'');',stripext(sdtname));
     if justDisplay,disp(command),else,eval(command),end
     % remove reference volume
-    command = sprintf('if info.nRefVolumes,data.data = data.data(:,:,:,info.nRefVolumes+1:end);end');
+    command = sprintf('if info.nRefVolumes,data = data(:,:,:,info.nRefVolumes+1:end);end');
     if justDisplay,disp(command),else,eval(command),end
-    command = sprintf('cbiWriteNifti(''%s.hdr'',data.data,hdr);',stripext(fullfile('..','Raw','TSeries',hdrname)));
+    command = sprintf('cbiWriteNifti(''%s.hdr'',data,hdr);',stripext(fullfile('..','Raw','TSeries',hdrname)));
     if justDisplay,disp(command),else,eval(command),end
   end
 end
