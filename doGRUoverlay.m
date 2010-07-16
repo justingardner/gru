@@ -1,6 +1,6 @@
 
 function doGRUoverlay
-%% Convert venogram to an overlay (intensities range from 0-1)
+%% Convert venogram named ('veno.img') to an overlay (intensities range from 0-1) which can be opened in mrLoadRet. 
 d=cbiReadNifti('veno.img');
 vmax=max(d(:));
 vmin=min(d(:));
@@ -21,6 +21,9 @@ hdr=cbiWriteNiftiHeader(hdr,'venoOVER.hdr')
 mkdir('Raw/TSeries')
 movefile('venoOVER.img','Raw/TSeries/venoOVER.img')
 movefile('venoOVER.hdr','Raw/TSeries/venoOVER.hdr')
+
+%% run mr align - align 3d and veno to canonical
+mralign
 
 %% run mrinit
 mrInit

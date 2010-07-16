@@ -226,7 +226,9 @@ for i = 1:length(epiNumsWithCarExt)
   edtname = setext(fidList{epiNumsWithCarExt(i)}.filename,'edt');
   sdtname = setext(fidList{epiNumsWithCarExt(i)}.filename,'sdt');
   hdrname = setext(fidList{epiNumsWithCarExt(i)}.filename,'hdr');
+  imgname = setext(fidList{epiNumsWithCarExt(i)}.filename,'img');
 
+  
   % see if it is sense
   if any(i==senseScanNums)
     % noise, ref and mask numbers
@@ -263,22 +265,30 @@ for i = 1:length(epiNumsWithCarExt)
     %check to see if this epi has peaks. if so run postproc with physiofix
     if any(epiNumsWithCarExt(i) == epiNumsWithPeaks)
         % convert epis to sdt file, doing physiofix and dc correction
-        command = sprintf('mysystem(''%s -outtype 3 -dc -physiofix %s %s'');',postproc,fidname,sdtname);
+        command = sprintf('mysystem(''%s -outtype 3 -dc -physiofix %s %s'');',postproc,fidname,imgname);
     else
         % convert epis to sdt file, don't do physiofix but dc correction
-        command = sprintf('mysystem(''%s -outtype 3 -dc %s %s'');',postproc,fidname,sdtname);
+        command = sprintf('mysystem(''%s -outtype 3 -dc %s %s'');',postproc,fidname,imgname);
     end
     if justDisplay,disp(command),else,eval(command),end
     % then convert the output of postproc to a valid nifti file, by
     % pasting on the header from fid2niftihdr
     command = sprintf('[hdr info] = fid2niftihdr(''%s'');',fidname);
     if justDisplay,disp(command),else,eval(command),end
-    command = sprintf('data = cbiReadNifti(''%s.hdr'');',stripext(sdtname));
+    % add back reference volume to header
+    command = sprintf('if info.nRefVolumes,hdr.dim(5) = hdr.dim(5) + info.nRefVolumes;end');
     if justDisplay,disp(command),else,eval(command),end
-    % remove reference volume
-    command = sprintf('if info.nRefVolumes,data = data(:,:,:,info.nRefVolumes+1:end);end');
+    % save header
+    command = sprintf('cbiWriteNiftiHeader(hdr,''%s'');',hdrname);
     if justDisplay,disp(command),else,eval(command),end
-    command = sprintf('cbiWriteNifti(''%s.hdr'',data,hdr);',stripext(fullfile('..','Raw','TSeries',hdrname)));
+    % now load completed nifti file for saving into Raw/TSeries
+    command = sprintf('[d h] = cbiReadNifti(''%s'');',hdrname);
+    if justDisplay,disp(command),else,eval(command),end
+    % now, remove reference volumes from nifti file if necessary, 
+    command = sprintf('if info.nRefVolumes,d = d(:,:,:,info.nRefVolumes+1:end);h.dim(5) = h.dim(5)-info.nRefVolumes;end',hdrname,hdrname);
+    if justDisplay,disp(command),else,eval(command),end
+    % save nifti to Raw/TSeries
+    command = sprintf('cbiWriteNifti(''%s'',d,h);',fullfile('..','Raw','TSeries',hdrname));
     if justDisplay,disp(command),else,eval(command),end
   end
 end
