@@ -241,6 +241,7 @@ for i = 1:length(epiNumsWithCarExt)
     %covarname = covarList{covarNum}.filename;
     noisename = noiseList{noiseNum}.filename;
     refname = refList{refNum}.filename;
+    if movepro~=0,disp('(dofmrigru) movepro not implemented yet for sense processing');keyboard;end
     %check to see if this epi has peaks. if so run postproc with physiofix
     if any(epiNumsWithCarExt(i) == epiNumsWithPeaks)
         % convert to epis to edt file, doing physiofix and dc correction
