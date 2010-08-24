@@ -66,10 +66,11 @@ carextDir = [];
 pdfDir = [];
 stimfileDir = [];
 numMotionComp = [];
+movepro=[];
 global epirri;
 global postproc;
 global sense;
-getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epirri=epirri5','postproc=pp','sense=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1'});
+getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epirri=epirri5','postproc=pp','sense=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0'});
 
 % check to make sure we have the computer setup correctly to run epirri, postproc and sense
 if checkfMRISupportUnitCommands == 0,return,end
@@ -83,13 +84,13 @@ if ~isdir('Pre')
   dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp);
 else
   disp(sprintf('(dofmrigru) Running Second dofmrigru process'));
-  dofmrigru2
+  dofmrigru2(movepro);
 end
 
 %%%%%%%%%%%%%%%%%%%%
 %%   dofmrigru2   %%
 %%%%%%%%%%%%%%%%%%%%
-function dofmrigru2
+function dofmrigru2(movepro)
 
 % get fid file list
 fiddir = 'Pre';
@@ -157,18 +158,18 @@ dispList(fidList,epiNumsWithCarExt,sprintf('Epi scans to process'));
 dispList(fidList,anatNums,sprintf('Anatomy files'));
 
 % display the commands for processing
-processFiles(1,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing);
+processFiles(1,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro);
 
 % now ask the user if they want to continue, because now we'll actually copy the files and set everything up.
 if ~askuser('OK to run above commands?'),return,end
 
 % now do it
-processFiles(0,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing);
+processFiles(0,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro);
 
 %%%%%%%%%%%%%%%%%%%%%%
 %%   processFiles   %%
 %%%%%%%%%%%%%%%%%%%%%%
-function processFiles(justDisplay,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing)
+function processFiles(justDisplay,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro)
 
 global postproc;
 global sense;
@@ -264,16 +265,29 @@ for i = 1:length(epiNumsWithCarExt)
   else
     %check to see if this epi has peaks. if so run postproc with physiofix
     if any(epiNumsWithCarExt(i) == epiNumsWithPeaks)
-        % convert epis to sdt file, doing physiofix and dc correction
-        command = sprintf('mysystem(''%s -outtype 3 -dc -physiofix %s %s'');',postproc,fidname,imgname);
+      % if we don't have to movepro, then just use postproc to read
+      % the fid directly
+      if movepro==0
+	% convert epis to sdt file, doing physiofix and dc correction
+	command = sprintf('mysystem(''%s -outtype 3 -dc -physiofix %s %s'');',postproc,fidname,imgname);
+      else
+	% if we have to movepro, then convert the file to sdt using
+	% fid2nifti.
+	command = sprintf('[d h] = fid2nifti(''%s'',''movepro=%f'');writesdt(''%s'',d);mysystem(''%s -intype 2 -outtype 3 -dc -physiofix %s %s'');',fidname,movepro,setext(fidname,'sdt'),postproc,setext(fidname,'sdt'),imgname);
+      end
     else
-        % convert epis to sdt file, don't do physiofix but dc correction
-        command = sprintf('mysystem(''%s -outtype 3 -dc %s %s'');',postproc,fidname,imgname);
-    end
+      if movepro==0
+	% convert epis to sdt file, don't do physiofix but dc correction
+	command = sprintf('mysystem(''%s -outtype 3 -dc %s %s'');',postproc,fidname,imgname);
+      else
+	% no physiofix files, movepro with fid2nifti
+	command = sprintf('[d h] = fid2nifti(''%s'',''movepro=%f'');writesdt(''%s'',d);mysystem(''%s -intype 2 -outtype 3 -dc %s %s'');',fidname,movepro,setext(fidname,'sdt'),postproc,setext(fidname,'sdt'),imgname);
+      end
+      end
     if justDisplay,disp(command),else,eval(command),end
     % then convert the output of postproc to a valid nifti file, by
     % pasting on the header from fid2niftihdr
-    command = sprintf('[hdr info] = fid2niftihdr(''%s'');',fidname);
+    command = sprintf('[hdr info] = fid2niftihdr(''%s'',1,''movepro=%f'');',fidname,movepro);
     if justDisplay,disp(command),else,eval(command),end
     % add back reference volume to header
     command = sprintf('if info.nRefVolumes,hdr.dim(5) = hdr.dim(5) + info.nRefVolumes;end');
