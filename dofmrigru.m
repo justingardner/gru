@@ -1175,7 +1175,7 @@ for i = 1:length(commandNames)
   % check for commandStatus error
   if commandStatus~=0
     disp(sprintf('(dofmrigru) Could not find %s command: %s',commandNames{i},eval(commandNames{i})));
-    disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=gru:dataprocessing for help setting up your computer'));
+    disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=grupub:dofmrigru for help setting up your computer'));
     retval = 0;
     return
   end
@@ -1185,7 +1185,7 @@ for i = 1:length(commandNames)
   if commandStatus>1
     disp(commandRetval);
     disp(sprintf('(dofmrigru) Found %s command: %s, but could not run (possibly missing fink library?)',commandNames{i},eval(commandNames{i})));
-    disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=gru:dataprocessing for help setting up your computer'));
+    disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=grupub:dofmrigru for help setting up your computer'));
     retval = 0;
     return
   end
