@@ -265,25 +265,22 @@ for i = 1:length(epiNumsWithCarExt)
   else
     %check to see if this epi has peaks. if so run postproc with physiofix
     if any(epiNumsWithCarExt(i) == epiNumsWithPeaks)
-      % if we don't have to movepro, then just use postproc to read
-      % the fid directly
-      if movepro==0
-	% convert epis to sdt file, doing physiofix and dc correction
-	command = sprintf('mysystem(''%s -outtype 3 -dc -physiofix %s %s'');',postproc,fidname,imgname);
-      else
-	% if we have to movepro, then convert the file to sdt using
-	% fid2nifti.
-	command = sprintf('[d h] = fid2nifti(''%s'',''movepro=%f'');writesdt(''%s'',d);mysystem(''%s -intype 2 -outtype 3 -dc -physiofix %s %s'');',fidname,movepro,setext(fidname,'sdt'),postproc,setext(fidname,'sdt'),imgname);
-      end
+      % run with physiofix correction
+      ppoptions = '-dc -physiofix';
     else
-      if movepro==0
-	% convert epis to sdt file, don't do physiofix but dc correction
-	command = sprintf('mysystem(''%s -outtype 3 -dc %s %s'');',postproc,fidname,imgname);
-      else
-	% no physiofix files, movepro with fid2nifti
-	command = sprintf('[d h] = fid2nifti(''%s'',''movepro=%f'');writesdt(''%s'',d);mysystem(''%s -intype 2 -outtype 3 -dc %s %s'');',fidname,movepro,setext(fidname,'sdt'),postproc,setext(fidname,'sdt'),imgname);
-      end
-      end
+      % run without phsyiofix corrections
+      ppoptions = '-dc';
+    end
+    % if we don't have to movepro, then just use postproc to read
+    % the fid directly
+    if movepro==0
+      % convert epis to sdt file, doing physiofix and dc correction
+      command = sprintf('mysystem(''%s -outtype 3 %s %s %s'');',postproc,ppoptions,fidname,imgname);
+    else
+      % if we have to movepro, then convert the file to sdt using
+      % fid2nifti.
+      command = sprintf('[d h] = fid2nifti(''%s'',''movepro=%f'');writesdt(''%s'',d);mysystem(''%s -intype 2 -outtype 3 %s %s %s'');',fidname,movepro,setext(fidname,'sdt'),postproc,ppoptions,setext(fidname,'sdt'),imgname);
+    end
     if justDisplay,disp(command),else,eval(command),end
     % then convert the output of postproc to a valid nifti file, by
     % pasting on the header from fid2niftihdr
