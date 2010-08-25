@@ -87,6 +87,57 @@ else
   dofmrigru2(movepro);
 end
 
+%%%%%%%%%%%%%%%%%%%%%%%%%
+%    removeTempFiles    %
+%%%%%%%%%%%%%%%%%%%%%%%%%
+function removeTempFiles(fidList)
+
+% find all temp files to delete
+deleteList = {};
+fileExt = {'hdr','img','sdt','spr','edt','epr'};
+for i = 1:length(fidList)
+  filestem = stripext(fidList{i}.fullfile);
+  for j = 1:length(fileExt)
+    % check for files with that extension
+    filename = setext(filestem,fileExt{j});
+    if isfile(filename)
+      deleteList{end+1} = filename;
+    end
+  end
+end
+
+% check for some other files
+otherFiles = {'dofmrigru.log','dofmrigru2.log','logbook'};
+for i = 1:length(otherFiles)
+  filename = fullfile('Pre',otherFiles{i});
+  if isfile(filename)
+    deleteList{end+1} = filename;
+  end
+end
+
+if ~isempty(deleteList)
+  disp(sprintf('=============================================='));
+  disp(sprintf('Temporary files'));
+  disp(sprintf('=============================================='));
+  for i = 1:length(deleteList)
+    disp(sprintf('%i: %s',i,deleteList{i}));
+  end
+  disp(sprintf('=============================================='));
+
+  if askuser('Found temporary files. Ok to remove them and place them in the directory Pre/deleteme')
+    % make the directory if necessary
+    if ~isdir('Pre/deleteme')
+      mkdir(fullfile('Pre/deleteme'));
+    end
+    % move the files
+    for i = 1:length(deleteList)
+      moveToFilename = fullfile('Pre','deleteme',getLastDir(deleteList{i}));
+      disp(sprintf('Moving %s -> %s',deleteList{i},moveToFilename));
+      movefile(deleteList{i},moveToFilename);
+    end
+  end
+end
+
 %%%%%%%%%%%%%%%%%%%%
 %%   dofmrigru2   %%
 %%%%%%%%%%%%%%%%%%%%
@@ -97,6 +148,9 @@ fiddir = 'Pre';
 fidList = getFileList(fiddir,'fid');
 fidList = getFidInfo(fidList);
 fidList = sortFidList(fidList);
+
+% remove any already existing temp files
+removeTempFiles(fidList);
 
 % get list of epi scans
 epiNums = getEpiScanNums(fidList);
