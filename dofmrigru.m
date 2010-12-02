@@ -468,7 +468,8 @@ for i = 1:length(epiNums)
   % shortcut
   fid = fidList{epiNums(i)};
   % check for car/ext
-  if ~all(fid.hasCarExt)
+%  if ~all(fid.hasCarExt) %%edited after upgrade of MRIphysio recording mac. ext files obsolete.
+  if ~any(fid.hasCarExt)
       passedCheckCarExt(i) = 0;
     % display what is missing
     filenames = {'car','ext'};
@@ -751,7 +752,10 @@ disp(sprintf('=============================================='));
 for i = 1:length(carMatchNum)
   command = sprintf('copyfile %s %s',carList{carMatchNum(i)}.fullfile,fullfile('Pre',fidList{epiNums(i)}.filename));
   if justDisplay,disp(command),else,eval(command),end
-  command = sprintf('copyfile %s %s',fullfile(carList{carMatchNum(i)}.path,carList{carMatchNum(i)}.extfilename),fullfile('Pre',fidList{epiNums(i)}.filename));
+  if isfield(carList{carMatchNum(i)},'extfilename')
+   disp('ext not found. not being copied...');
+   command = sprintf('copyfile %s %s',fullfile(carList{carMatchNum(i)}.path,carList{carMatchNum(i)}.extfilename),fullfile('Pre',fidList{epiNums(i)}.filename));
+  end
   if justDisplay,disp(command),else,eval(command);,end
 end
 
@@ -922,7 +926,10 @@ disppercent(-inf,'(dofmrigru1) Get car info');
 for i = 1:length(carList)
   disppercent(i/length(carList));
   carList{i}.car = readcar(carList{i}.fullfile);
-  carList{i}.ext = readext(fullfile(carList{i}.path,carList{i}.extfilename));
+  if isfield(carList{i},'extfilename')
+    disp('ext not found. skipping...');
+    carList{i}.ext = readext(fullfile(carList{i}.path,carList{i}.extfilename));
+  end
   carList{i}.dispstr = sprintf('%s',carList{i}.filename);
 end
 disppercent(inf);
