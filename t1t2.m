@@ -324,6 +324,7 @@ midSlice = round(maxSlice/2);
 paramsInfo{1} = {'sliceNum',midSlice,'numeric=1','incdec=[-1 1]',sprintf('minmax=[1 %i]',maxSlice),'callback',@displayT1T2,'passParams=1','Which slice to display'};
 paramsInfo{end+1} = {'threshold',1,'numeric=1','incdec=[-0.1 0.1]','minmax=[0 inf]','callback',@displayT1T2,'passParams=1','Controls the threshold of the T2 image that creates the mask. Set this to make as clean a mask as possible'};
 paramsInfo{end+1} = {'blurLevel',blurLevel,'numeric=1','incdec=[-1 1]','minmax=[0 inf]','round=1','callback',@displayT1T2,'passParams=1','How much to blur the image'};
+paramsInfo{end+1} = {'sliceOrientation',{'saggital','coronal','axial'},'callback',@displayT1T2,'passParams=1','Which slice orientation to display'};
 		
 % get default params to display initial image
 params = mrParamsDefault(paramsInfo);
@@ -397,10 +398,20 @@ function displayT1T2(params)
 
 global t1t2fig;
 
+sliceOrientation = find(strcmp(params.sliceOrientation,{'saggital','coronal','axial'}));
+
 % display T1
 figure(t1t2fig.f);
 subplot(1,3,1);
-imagesc(t1t2fig.t1.d(:,:,params.sliceNum));
+switch sliceOrientation
+  case {1}
+   imagesc(t1t2fig.t1.d(:,:,params.sliceNum));
+  case {2}
+   imagesc(squeeze(t1t2fig.t1.d(:,params.sliceNum,:)));
+  case {3}
+   imagesc(flipud(squeeze(t1t2fig.t1.d(params.sliceNum,:,:))));
+end
+
 axis square;
 axis off;
 title('T1');
@@ -415,7 +426,15 @@ end
 % display T2
 figure(t1t2fig.f);
 subplot(1,3,2);
-imagesc(t1t2fig.t2.blurd(:,:,params.sliceNum));
+switch sliceOrientation
+ case {1}
+  imagesc(t1t2fig.t2.blurd(:,:,params.sliceNum));
+ case {2}
+  imagesc(squeeze(t1t2fig.t2.blurd(:,params.sliceNum,:)));
+ case {3}
+  imagesc(flipud(squeeze(t1t2fig.t2.blurd(params.sliceNum,:,:))));
+end
+
 axis square;
 axis off;
 title('T2');
@@ -423,7 +442,15 @@ title('T2');
 % display mask
 subplot(1,3,3);
 figure(t1t2fig.f);
-imagesc(t1t2fig.mask(:,:,params.sliceNum));
+switch sliceOrientation
+ case {1}
+  imagesc(squeeze(t1t2fig.mask(:,:,params.sliceNum)));
+ case {2}
+   imagesc(squeeze(t1t2fig.mask(:,params.sliceNum,:)));
+ case {3}
+   imagesc(flipud(squeeze(t1t2fig.mask(params.sliceNum,:,:))));
+end
+
 axis square;
 axis off;
 title('Mask');
@@ -433,7 +460,17 @@ colormap(gray);
 
 % draw t1/t2
 figure(t1t2fig.f2);
-image(255*(t1t2fig.t1t2.d(:,:,params.sliceNum)-t1t2fig.t1t2.min)/(t1t2fig.t1t2.max-t1t2fig.t1t2.min));
+switch sliceOrientation
+ case {1}
+  im = t1t2fig.t1t2.d(:,:,params.sliceNum);
+ case {2}
+  im = t1t2fig.t1t2.d(:,params.sliceNum,:);
+ case {3}
+  im = flipud(squeeze(t1t2fig.t1t2.d(params.sliceNum,:,:)));
+end
+im = squeeze(im);
+im = 255*(im-t1t2fig.t1t2.min)/(t1t2fig.t1t2.max-t1t2fig.t1t2.min);
+image(im);
 title('T1/T2');
 axis square;
 axis off;
