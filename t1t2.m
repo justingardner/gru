@@ -44,7 +44,13 @@ end
 % get arguments
 verbose=[];
 T1T2alignment=[];
-getArgs(varargin,{'verbose=1','T1T2alignment=1'});
+getArgs(varargin,{'verbose=1','T1T2alignment=1','roi=[]','ref=[]'});
+
+% load ROI
+if ~isempty(roi),loadROI(roi);end
+
+% load ref image
+if ~isempty(ref),loadRef(ref);end
 
 % check for correct commands to run this program
 if ~isempty(t2_fidname) && T1T2alignment
@@ -306,16 +312,21 @@ function vol = divideT1byT2(t1,t2,blurLevel,verbose)
 vol = [];
 
 % some global variables for displaying
-global t1t2fig;
+global gt1t2;
 
 % display figure
-t1t2fig.f = smartfig('t1t2');
-t1t2fig.f2 = smartfig('t1t2final');
-
+gt1t2.f = smartfig('t1t2');
+gt1t2.f2 = smartfig('t1t2final');
+gt1t2.histfig = smartfig('t1t2histfig');
+if isfield(gt1t2,'ref') && ~isempty(gt1t2.ref)
+  gt1t2.reffig = smartfig('t1t2reffig');
+end
 % set fields
-t1t2fig.t1 = t1;
-t1t2fig.t2 = t2;
-t1t2fig.params = [];
+gt1t2.t1 = t1;
+gt1t2.t2 = t2;
+gt1t2.params = [];
+
+gt1t2.roiPath = '.';
 
 maxSlice = size(t1.d,3);
 midSlice = round(maxSlice/2);
@@ -325,20 +336,25 @@ paramsInfo{1} = {'sliceNum',midSlice,'numeric=1','incdec=[-1 1]',sprintf('minmax
 paramsInfo{end+1} = {'threshold',1,'numeric=1','incdec=[-0.1 0.1]','minmax=[0 inf]','callback',@displayT1T2,'passParams=1','Controls the threshold of the T2 image that creates the mask. Set this to make as clean a mask as possible'};
 paramsInfo{end+1} = {'blurLevel',blurLevel,'numeric=1','incdec=[-1 1]','minmax=[0 inf]','round=1','callback',@displayT1T2,'passParams=1','How much to blur the image'};
 paramsInfo{end+1} = {'sliceOrientation',{'saggital','coronal','axial'},'callback',@displayT1T2,'passParams=1','Which slice orientation to display'};
+paramsInfo{end+1} = {'loadROI',0,'type=pushbutton','callback',@loadROI,'passParams=1','buttonString=Load ROI','Load ROI for displaying localized histogram'};
 		
 % get default params to display initial image
 params = mrParamsDefault(paramsInfo);
 displayT1T2(params);
 
 % now put up dialog box 
-params = mrParamsDialog(paramsInfo,'Set threshold');
+params = mrParamsDialog(paramsInfo,'T1T2 controls','modal=0');
 
 % clean up
-close(t1t2fig.f);
-close(t1t2fig.f2);
+close(gt1t2.f);
+close(gt1t2.f2);
+close(gt1t2.histfig);
+if isfield(gt1t2,'reffig')
+  close(gt1t2.reffig);
+end
 drawnow;
-t2 = t1t2fig.t2;
-clear global t1t2fig;
+t2 = gt1t2.t2;
+clear global gt1t2;
 
 % user cancel
 if isempty(params),return,end
@@ -396,20 +412,20 @@ disppercent(inf);
 %%%%%%%%%%%%%%%%%%%%
 function displayT1T2(params)
 
-global t1t2fig;
+global gt1t2;
 
 sliceOrientation = find(strcmp(params.sliceOrientation,{'saggital','coronal','axial'}));
 
 % display T1
-figure(t1t2fig.f);
+figure(gt1t2.f);
 subplot(1,3,1);
 switch sliceOrientation
   case {1}
-   imagesc(t1t2fig.t1.d(:,:,params.sliceNum));
+   imagesc(gt1t2.t1.d(:,:,params.sliceNum));
   case {2}
-   imagesc(squeeze(t1t2fig.t1.d(:,params.sliceNum,:)));
+   imagesc(squeeze(gt1t2.t1.d(:,params.sliceNum,:)));
   case {3}
-   imagesc(flipud(squeeze(t1t2fig.t1.d(params.sliceNum,:,:))));
+   imagesc(flipud(squeeze(gt1t2.t1.d(params.sliceNum,:,:))));
 end
 
 axis square;
@@ -418,21 +434,21 @@ title('T1');
 drawnow
 
 % compute division
-if paramsChanged(t1t2fig.params,params)
-  [t1t2fig.t1t2 t1t2fig.mask t1t2fig.t2] = computeT1T2(t1t2fig.t1,t1t2fig.t2,params);
-  t1t2fig.params = params;
+if paramsChanged(gt1t2.params,params)
+  [gt1t2.t1t2 gt1t2.mask gt1t2.t2] = computeT1T2(gt1t2.t1,gt1t2.t2,params);
+  gt1t2.params = params;
 end
 
 % display T2
-figure(t1t2fig.f);
+figure(gt1t2.f);
 subplot(1,3,2);
 switch sliceOrientation
  case {1}
-  imagesc(t1t2fig.t2.blurd(:,:,params.sliceNum));
+  imagesc(gt1t2.t2.blurd(:,:,params.sliceNum));
  case {2}
-  imagesc(squeeze(t1t2fig.t2.blurd(:,params.sliceNum,:)));
+  imagesc(squeeze(gt1t2.t2.blurd(:,params.sliceNum,:)));
  case {3}
-  imagesc(flipud(squeeze(t1t2fig.t2.blurd(params.sliceNum,:,:))));
+  imagesc(flipud(squeeze(gt1t2.t2.blurd(params.sliceNum,:,:))));
 end
 
 axis square;
@@ -441,14 +457,14 @@ title('T2');
 
 % display mask
 subplot(1,3,3);
-figure(t1t2fig.f);
+figure(gt1t2.f);
 switch sliceOrientation
  case {1}
-  imagesc(squeeze(t1t2fig.mask(:,:,params.sliceNum)));
+  imagesc(squeeze(gt1t2.mask(:,:,params.sliceNum)));
  case {2}
-   imagesc(squeeze(t1t2fig.mask(:,params.sliceNum,:)));
+   imagesc(squeeze(gt1t2.mask(:,params.sliceNum,:)));
  case {3}
-   imagesc(flipud(squeeze(t1t2fig.mask(params.sliceNum,:,:))));
+   imagesc(flipud(squeeze(gt1t2.mask(params.sliceNum,:,:))));
 end
 
 axis square;
@@ -458,24 +474,86 @@ title('Mask');
 % set colormap
 colormap(gray);
 
-% draw t1/t2
-figure(t1t2fig.f2);
+% get slice
 switch sliceOrientation
  case {1}
-  im = t1t2fig.t1t2.d(:,:,params.sliceNum);
+  imSlice = gt1t2.t1t2.d(:,:,params.sliceNum);
  case {2}
-  im = t1t2fig.t1t2.d(:,params.sliceNum,:);
+  imSlice = gt1t2.t1t2.d(:,params.sliceNum,:);
  case {3}
-  im = flipud(squeeze(t1t2fig.t1t2.d(params.sliceNum,:,:)));
+  imSlice = flipud(squeeze(gt1t2.t1t2.d(params.sliceNum,:,:)));
 end
-im = squeeze(im);
-im = 255*(im-t1t2fig.t1t2.min)/(t1t2fig.t1t2.max-t1t2fig.t1t2.min);
-image(im);
+imSlice = squeeze(imSlice);
+
+% compute and display histogram
+figure(gt1t2.histfig);cla;
+
+if ~isfield(gt1t2,'roi') || ~isroi(gt1t2.roi)
+  myhist(imSlice(:),100);
+  imDisplaySlice = imSlice;
+else
+  % load the voxels 
+  % get the linear coords
+  linearCoords = sub2ind(size(gt1t2.t1t2.d),gt1t2.roi.coords(1,:),gt1t2.roi.coords(2,:),gt1t2.roi.coords(3,:));
+  vals = gt1t2.t1t2.d(linearCoords);
+  subplot(2,1,1);
+  H = myhist(vals,100);
+  [m s] = mixgauss(vals,2);
+  title(sprintf('Histogram for ROI: %s',gt1t2.roi.name));
+  ylabel('N voxels');
+  xlabel('Pixel intensity');
+  a = axis;
+  subplot(2,1,2);
+  myhist(imSlice(:),H.bins);
+  % color slice according to mean and standard deviation of gray lump
+  imDisplaySlice = colorMatchingVoxels(imSlice,m(1),s(1));
+end
+% set title for distribution across slice
+title(sprintf('Histogram of values across slice'));
+ylabel('N voxels');
+xlabel('Pixel intensity');
+
+
+imDisplaySlice = (imDisplaySlice-gt1t2.t1t2.min)/(gt1t2.t1t2.max-gt1t2.t1t2.min);
+imDisplaySlice(imDisplaySlice<0) = 0;
+imDisplaySlice(imDisplaySlice>1) = 1;
+
+figure(gt1t2.f2);
+image(imDisplaySlice);
 title('T1/T2');
 axis square;
 axis off;
 
 colormap(gray);
+
+% now display ref image if it exists
+if isfield(gt1t2,'ref') && ~isempty(gt1t2.ref)
+  % get the slice
+  switch sliceOrientation
+   case {1}
+    refSlice = gt1t2.ref(:,:,params.sliceNum);
+   case {2}
+    refSlice = gt1t2.ref(:,params.sliceNum,:);
+   case {3}
+    refSlice = flipud(squeeze(gt1t2.ref(params.sliceNum,:,:)));
+  end
+  refSlice = squeeze(refSlice);
+
+  
+  figure(gt1t2.reffig);
+  clf;
+  subplot(1,2,1);
+  imagesc(refSlice);
+  title(gt1t2.refname);
+  axis square;
+  axis off;
+  colormap(gray);
+  subplot(1,2,2);
+  plot(imSlice(:),refSlice(:),'k.');
+  xlabel('t1t2 pixel intensity');
+  ylabel('ref pixel intensity');
+  axis square;
+end
 
 %%%%%%%%%%%%%%%%%%%
 %%   blurImage   %%
@@ -519,3 +597,174 @@ d = d1;
 d(:,:,:,2) = d2;
 d(:,:,:,3) = d3;
 mlrDisplayEPI(d);
+
+%%%%%%%%%%%%%%%%%
+%%   loadROI   %%
+%%%%%%%%%%%%%%%%%
+function val = loadROI(params)
+
+val = [];
+global gt1t2;
+
+% see if we are passed in a roi name
+justLoad = 0;
+if isstr(params)
+  justLoad = 1;
+  fullPath = params;
+else
+  % get the path to the roi the user wants to load
+  fullPath = getPathStrDialog(gt1t2.roiPath,'Load ROI','*.mat');
+end
+
+% if no path, return
+if isempty(fullPath),return,end
+
+% check for file
+if ~isfile(fullPath)
+  disp(sprintf('(t1t2) Could not load roi %s',fullPath));
+  return;
+end
+
+% load file, and get roi variable
+roi = load(fullPath);
+roiname = fieldnames(roi);
+if length(roiname) > 1
+  disp(sprintf('(t1t2) File %s contains more than one variable',fullPath));
+  return
+end
+roi = roi.(roiname{1});
+
+% check if it is a roi
+if ~isroi(roi)
+  disp(sprintf('(t1t2) File %s is not an ROI',fullPath));
+  return
+end
+
+% save in global variable and redraw
+gt1t2.roi = roi;
+
+disp(sprintf('(t1t2) Loaded ROI %s',fullPath));
+if ~justLoad
+  % redraw display
+  displayT1T2(params);
+end
+
+%%%%%%%%%%%%%%%%%
+%%   loadRef   %%
+%%%%%%%%%%%%%%%%%
+function loadRef(filename)
+
+global gt1t2;
+
+% load nifti pair
+filename = setext(filename,'hdr');
+
+% check for file
+if ~isfile(filename)
+  disp(sprintf('(t1t2) Could not load ref image %s',filename));
+  return;
+end
+
+% load file
+disp(sprintf('(t1t2:loadRef) Loading ref image %s',filename));
+gt1t2.ref = cbiReadNifti(filename);
+gt1t2.refname = filename;
+
+%%%%%%%%%%%%%%%%%%
+%%   mixgauss   %%
+%%%%%%%%%%%%%%%%%%
+function [m s] = mixgauss(x,k)
+
+% make x a row vector and replicate k times for use later
+x = x(:)';
+xk = ones(k,1)*x;
+
+% get number of elements
+n = length(x);
+
+% initialize which distribution each point lies in
+whichDist = ceil(rand(1,n)*k);
+
+% initialize mean and stdard deviations
+for i = 1:k
+  m(i) = mean(x(whichDist==i));
+  s(i) = std(x(whichDist==i));
+end
+
+% choose how little mean has to change to stop algorithm
+epsilon = 0.0000001;
+
+oldm = inf;
+disppercent(-inf,'(mixgauss) Doing k-means');
+while max(abs(oldm(:)-m(:)))>epsilon
+  pWhichDist = [];
+  % now compute the probability each point lies in each distribution
+  for i = 1:k
+    pWhichDist(i,:) = normpdf(x,m(i),s(i));
+  end
+  % and normalize
+  pWhichDist = pWhichDist./(ones(k,1)*sum(pWhichDist,1));
+  % uncomment the next line if you want to do
+  % a soft k-means (EM)
+  pWhichDist = pWhichDist>0.5;
+  % make into a weight vector that sums to 1
+  w = pWhichDist./(sum(pWhichDist,2)*ones(1,size(pWhichDist,2)));
+
+  % no compute means and standard deviations weighted by the
+  % weight vector we just computed
+  oldm = m;
+  m = mean(w.*xk,2)*n;
+  s = sqrt((1./(1-sum(w.^2,2))).*sum(w.*(xk-m*ones(1,n)).^2,2));
+
+  % display
+  cla;
+  H = myhist(x,100,'k',1);
+  hold on
+  a = axis;
+  x1 = a(1):(a(2)-a(1))/100:a(2);
+  for i = 1:k
+    plot(H.bins,normpdfbins(H.bins,m(i),s(i)),getcolor(i));
+  end
+  vline(m);
+  drawnow
+end
+
+% sort the means
+[m i] = sort(m);
+s = s(i);
+disppercent(inf);
+
+%%%%%%%%%%%%%%%%%%%%%
+%%   normpdfbins   %%
+%%%%%%%%%%%%%%%%%%%%%
+function y = normpdfbins(x,m,s)
+
+% get binsize
+binsize = median(diff(x));
+
+x = [x(:)'-binsize/2 x(end)+binsize/2];
+y = diff(normcdf(x,m,s));
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%   colorMatchingVoxels   %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function imOut = colorMatchingVoxels(im,m,s)
+
+% find all matching voxels
+dist = abs((im-m)/s);
+dist(dist>2) = nan;
+dist = (2-dist)/2;
+dist(isnan(dist)) = 0;
+
+match = find((im(:) < (m+s)) & (im(:) > (m-s)));
+disp(sprintf('(t1t2:colorMtachingVoxels) Found %i voxels that match within 1 std',length(match)));
+
+% make in image where they are red
+im1 = im;
+im0 = im;
+im0 = im.*(1-dist);
+imOut(:,:,1) = im1;
+imOut(:,:,2) = im0;
+imOut(:,:,3) = im0;
+
+
