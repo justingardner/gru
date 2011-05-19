@@ -425,7 +425,11 @@ switch sliceOrientation
   case {2}
    imagesc(squeeze(gt1t2.t1.d(:,params.sliceNum,:)));
   case {3}
+<<<<<<< .mine
+   imagesc(fliplr(flipud(squeeze(t1t2fig.t1.d(params.sliceNum,:,:)))));
+=======
    imagesc(flipud(squeeze(gt1t2.t1.d(params.sliceNum,:,:))));
+>>>>>>> .r77
 end
 
 axis square;
@@ -448,7 +452,8 @@ switch sliceOrientation
  case {2}
   imagesc(squeeze(gt1t2.t2.blurd(:,params.sliceNum,:)));
  case {3}
-  imagesc(flipud(squeeze(gt1t2.t2.blurd(params.sliceNum,:,:))));
+  imagesc(fliplr(flipud(squeeze(t1t2fig.t2.blurd(params.sliceNum,:,:)))));
+%  imagesc(flipud(squeeze(gt1t2.t2.blurd(params.sliceNum,:,:))));
 end
 
 axis square;
@@ -464,7 +469,8 @@ switch sliceOrientation
  case {2}
    imagesc(squeeze(gt1t2.mask(:,params.sliceNum,:)));
  case {3}
-   imagesc(flipud(squeeze(gt1t2.mask(params.sliceNum,:,:))));
+   imagesc(fliplr(flipud(squeeze(t1t2fig.mask(params.sliceNum,:,:)))));
+%   imagesc(flipud(squeeze(gt1t2.mask(params.sliceNum,:,:))));
 end
 
 axis square;
@@ -481,7 +487,8 @@ switch sliceOrientation
  case {2}
   imSlice = gt1t2.t1t2.d(:,params.sliceNum,:);
  case {3}
-  imSlice = flipud(squeeze(gt1t2.t1t2.d(params.sliceNum,:,:)));
+  im = fliplr(flipud(squeeze(t1t2fig.t1t2.d(params.sliceNum,:,:))));
+%  imSlice = flipud(squeeze(gt1t2.t1t2.d(params.sliceNum,:,:)));
 end
 imSlice = squeeze(imSlice);
 
