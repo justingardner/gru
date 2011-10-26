@@ -32,7 +32,7 @@
 %             dofmrigru('dataDir=/usr1/justin/data')
 %
 %             Other options:
-%                'epirri=eprri5': set which epirri processing function to use
+%                'epirri=epibsi': set which epirri processing function to use
 %                'postproc=pp': set which postproc program to use
 %                'sense=sense_mac_intel': set which sense reconstruction to use
 %                'fidDir=/usr1/justin/data/s00620101001/Pre': Set this if you want to load the first pass
@@ -70,7 +70,8 @@ movepro=[];
 global epirri;
 global postproc;
 global sense;
-getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epirri=epirri5','postproc=pp','sense=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0'});
+global tsense;
+getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epirri=epibsi6.1','postproc=pp','tsense=/usr4/local/mac_bin2/tsense_test','sense=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0'});
 
 % check to make sure we have the computer setup correctly to run epirri, postproc and sense
 if checkfMRISupportUnitCommands == 0,return,end
@@ -199,8 +200,8 @@ end
 
 % check for something to do
 if isempty(epiNumsWithCarExt)
-  disp(sprintf('(dofmrigru) No epi scans to process'));
-  return
+  if ~askuser('(dofmrigru) No epi scans with car/ext files. Process all files?'),return,end
+  epiNumsWithCarExt = epiNums;
 end
 
 % check to see if we should quit given that some of the peak files are missing
@@ -328,14 +329,15 @@ for i = 1:length(epiNumsWithCarExt)
     end
     % if we don't have to movepro, then just use postproc to read
     % the fid directly
-    if movepro==0
+    if 0 %movepro==0
       % convert epis to sdt file, doing physiofix and dc correction
       command = sprintf('mysystem(''%s -outtype 3 %s %s %s'');',postproc,ppoptions,fidname,imgname);
     else
       % if we have to movepro, then convert the file to sdt using
       % fid2nifti.
-      command = sprintf('[d h] = fid2nifti(''%s'',''movepro=%f'');writesdt(''%s'',d);mysystem(''%s -intype 2 -outtype 3 %s %s %s'');',fidname,movepro,setext(fidname,'sdt'),postproc,ppoptions,setext(fidname,'sdt'),imgname);
+      command = sprintf('[d h] = fid2nifti(''%s'',''movepro=%f'',''keepref=1'');writesdt(''%s'',d);mysystem(''%s -intype 2 -outtype 3 %s %s %s'');',fidname,movepro,setext(fidname,'sdt'),postproc,ppoptions,setext(fidname,'sdt'),imgname);
     end
+    keyboard
     if justDisplay,disp(command),else,eval(command),end
     % then convert the output of postproc to a valid nifti file, by
     % pasting on the header from fid2niftihdr
@@ -468,9 +470,8 @@ for i = 1:length(epiNums)
   % shortcut
   fid = fidList{epiNums(i)};
   % check for car/ext
-%  if ~all(fid.hasCarExt) %%edited after upgrade of MRIphysio recording mac. ext files obsolete.
   if ~any(fid.hasCarExt)
-      passedCheckCarExt(i) = 0;
+    passedCheckCarExt(i) = 0;
     % display what is missing
     filenames = {'car','ext'};
     for j = 1:length(filenames)
@@ -518,7 +519,7 @@ expdir = getLastDir(pwd);
 % in there that has the same name as the current directory
 % i.e. s00120090706 that contains the fid files and the
 % car/ext files
-if isempty(fidDir),fidDir = fullfile(dataDir,expdir);end
+if isempty(fidDir),fidDir = fullfile(dataDir,expdir,'raw');end
 if isempty(carextDir),carextDir = fullfile(dataDir,expdir);end
 if isempty(stimfileDir), stimfileDir = fullfile(dataDir,expdir);end
 if isempty(pdfDir),pdfDir = fullfile(dataDir,expdir);end
@@ -568,7 +569,6 @@ carList = getFileList(carextDir,'car','ext');
 carList = getCarInfo(carList);
 if isempty(carList)
   disp(sprintf('(dofmrigru1) Could not find any car/ext files in %s',carextDir));
-  return
 end
 
 % find pdf files
@@ -589,8 +589,12 @@ dispList(pdfList,nan,sprintf('PDF files: %s',pdfDir));
 dispList(stimfileList,nan,sprintf('Stimfiles: %s',stimfileDir));
 
 % go find the matching car files for each scan
-carMatchNum = getCarMatch(carList,fidList,epiNums);
-if isempty(carMatchNum),return,end
+if ~isempty(carList)
+  carMatchNum = getCarMatch(carList,fidList,epiNums);
+  if isempty(carMatchNum),return,end
+else
+  carMatchNum = [];
+end
 
 % setup directories etc.
 doMoveFiles(1,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums);
@@ -769,7 +773,7 @@ if justDisplay,disp(command),else,eval(command),end
 % run epirri on all scans and sense noise/ref 
 allScanNums = [epiNums senseNoiseNums senseRefNums];
 for i = 1:length(allScanNums)
-  command = sprintf('status = mysystem(''%s %s 1 1 2 0 1 0'');',epirri,fidList{allScanNums(i)}.filename);
+  command = sprintf('status = mysystem(''%s %s'');',epirri,fidList{allScanNums(i)}.filename);
   if justDisplay
     disp(command)
   else
@@ -960,6 +964,8 @@ for i = 1:length(fidList)
     [fidList{i}.endTime fidList{i}.endTimeStr] = getDatenumFromLogLine(thisline);
     fclose(f);
     log = 1;
+  else
+    disp(sprintf('(dofmrigru:getFidInfo) Missing log in %s',fidList{i}.filename));
   end
   % make the display string
   fidList{i}.dispstr = sprintf('%s: ',fidList{i}.filename);
@@ -1067,7 +1073,7 @@ function anatNums = getAnatScanNums(fidList)
 anatNums = [];
 % look for 3D scans
 for i = 1:length(fidList)
-  if ~isempty(fidList{i}.info) && fidList{i}.info.processed
+  if ~isempty(fidList{i}.info)
     % check for 3d scan
     if fidList{i}.info.acq3d
       % make sure it is not a raw scan
@@ -1236,12 +1242,13 @@ function retval = checkfMRISupportUnitCommands
 global epirri;
 global postproc;
 global sense;
+global tsense;
 
 retval = 1;
 
 % commands to check
-commandNames = {'epirri','postproc','sense'};
-helpFlag = {'','-help',''};
+commandNames = {'epirri','postproc','sense','tsense'};
+helpFlag = {'','-help','',''};
 for i = 1:length(commandNames)
   % suse which to tell if we have the command
   [commandStatus commandRetval] = system(sprintf('which %s',eval(commandNames{i})));
