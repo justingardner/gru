@@ -69,9 +69,9 @@ numMotionComp = [];
 movepro=[];
 global epirri;
 global postproc;
-global sense;
-global tsense;
-getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epirri=epibsi6.1','postproc=pp','tsense=/usr4/local/mac_bin2/tsense_test','sense=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0'});
+global senseCommand;
+global tsenseCommand;
+getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epirri=epibsi6.1','postproc=pp','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=0'});
 
 % check to make sure we have the computer setup correctly to run epirri, postproc and sense
 if checkfMRISupportUnitCommands == 0,return,end
@@ -82,7 +82,7 @@ mrQuit;
 % see if this is the first preprocessing or the second one
 if ~isdir('Pre')
   disp(sprintf('(dofmrigru) Running Initial dofmrigru process'));
-  dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp);
+  dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp,tsense);
 else
   disp(sprintf('(dofmrigru) Running Second dofmrigru process'));
   dofmrigru2(movepro);
@@ -227,7 +227,7 @@ processFiles(0,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCa
 function processFiles(justDisplay,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro)
 
 global postproc;
-global sense;
+global senseCommand;
 
 command = sprintf('cd Pre');
 if justDisplay,disp(command),else,eval(command),end
@@ -307,9 +307,9 @@ for i = 1:length(epiNumsWithCarExt)
     end
     if justDisplay,disp(command),else,eval(command),end
     % run the sense processing for this file
-    command = sprintf('mysystem(''%s -data %s -full %s -noise %s -mask %s -remove -recon %s'');',sense,stripext(fidname),stripext(refname),stripext(noisename),stripext(maskname),stripext(fidname));
+    command = sprintf('mysystem(''%s -data %s -full %s -noise %s -mask %s -remove -recon %s'');',senseCommand,stripext(fidname),stripext(refname),stripext(noisename),stripext(maskname),stripext(fidname));
     % command = sprintf('mysystem(''%s -? -? %s %s
-    % %s'')',sense,maskname,covarname,edtname); this is for super old sense!
+    % %s'')',senseCommand,maskname,covarname,edtname); this is for super old sense!
     if justDisplay,disp(command),else,eval(command),end
     % then convert the sdt file into a nifti
     command = sprintf('[hdr] = fid2niftihdr(''%s'');',fidname);
@@ -508,7 +508,7 @@ end
 %%%%%%%%%%%%%%%%%%%%
 %%   dofmrigru1   %%
 %%%%%%%%%%%%%%%%%%%%
-function dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp)
+function dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp,tsense)
 
 global dataDir;
 
@@ -545,6 +545,22 @@ end
 % check to see if any of the epi scans have acceleration greater than 1
 senseProcessing = isSenseProcessing(fidList,epiNums);
 
+% check for tsense
+if ~isempty(tsense) || ~isequal(tsense,0)
+  % if tsense was set to one value then
+  % set the tsense value for all epi scans
+  if length(tsense) == 1
+    tsense(1:length(epiNums)) = tsense;
+  end
+  % otherwise make sure it has the same number of 
+  % elements as epi scans
+  tsense(end+1:length(epiNums)) = 0;
+end
+if all(tsense == 0)
+  % no tsense
+  tsense = [];
+end
+
 % get anatomy scan nums
 anatNums = getAnatScanNums(fidList);
 if isempty(anatNums)
@@ -578,7 +594,7 @@ pdfList = getFileList(pdfDir,'pdf');
 stimfileList = getFileList(stimfileDir,'mat');
 
 % display what we found
-dispList(fidList,epiNums,sprintf('Epi scans: %s',fidDir));
+dispList(fidList,epiNums,sprintf('Epi scans: %s',fidDir),'tsense',tsense);
 dispList(fidList,anatNums,sprintf('Anatomy scans: %s',fidDir));
 if senseProcessing
   dispList(fidList,senseRefNums,sprintf('Sense reference scan: %s',fidDir));
@@ -610,6 +626,11 @@ fidList = doMoveFiles(0,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums
 
 % make mask dir
 if senseProcessing,makeMaskDir(0,fidList,anatNums,senseRefNums);end
+
+% save tsense settings
+if ~isempty(tsense)
+  save tsense tsense
+end
 
 % now run mrInit
 disp(sprintf('(dofmrigru1) Setup mrInit for your directory'));
@@ -883,7 +904,10 @@ end
 %%%%%%%%%%%%%%%%%%%%%%
 %%   dispScanlist   %%
 %%%%%%%%%%%%%%%%%%%%%%
-function dispStr = dispList(fidList,nums,name)
+function dispStr = dispList(fidList,nums,name,varargin)
+
+tsense = [];
+getArgs(varargin,{'tsense=[]'});
 
 dispStr = {};
 disp(sprintf('============================='));
@@ -894,16 +918,23 @@ disp(sprintf('============================='));
 if isnan(nums),nums = 1:length(fidList);end
 
 for i = 1:length(nums)
+  % get display string
   if isfield(fidList{nums(i)},'dispstr')
-    disp(fidList{nums(i)}.dispstr);
+    dispstr = fidList{nums(i)}.dispstr;
   else
-    disp(fidList{nums(i)}.filename);
+    dispstr = fidList{nums(i)}.filename;
   end
+  % add tsense info
+  if length(tsense)>= i
+    dispstr = sprintf('%s tsense: %ix',dispstr,tsense(i));
+  end
+  % display the string
+  disp(dispstr);
 end
 
 % empty nums means to display all
 if isempty(nums)
-  disp('NO MATCHING SCANS');
+  disp('NO MATCHING FILES');
 end
 
 %%%%%%%%%%%%%%%%%%%%
@@ -1241,13 +1272,13 @@ function retval = checkfMRISupportUnitCommands
 
 global epirri;
 global postproc;
-global sense;
-global tsense;
+global senseCommand;
+global tsenseCommand;
 
 retval = 1;
 
 % commands to check
-commandNames = {'epirri','postproc','sense','tsense'};
+commandNames = {'epirri','postproc','senseCommand','tsenseCommand'};
 helpFlag = {'','-help','',''};
 for i = 1:length(commandNames)
   % suse which to tell if we have the command
@@ -1256,6 +1287,10 @@ for i = 1:length(commandNames)
   if commandStatus~=0
     disp(sprintf('(dofmrigru) Could not find %s command: %s',commandNames{i},eval(commandNames{i})));
     disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=grupub:dofmrigru for help setting up your computer'));
+    if strcmp(commandNames{i},'senseCommand')
+      % just warn
+      continue;
+    end
     retval = 0;
     return
   end

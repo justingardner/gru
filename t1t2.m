@@ -425,11 +425,8 @@ switch sliceOrientation
   case {2}
    imagesc(squeeze(gt1t2.t1.d(:,params.sliceNum,:)));
   case {3}
-<<<<<<< .mine
    imagesc(fliplr(flipud(squeeze(t1t2fig.t1.d(params.sliceNum,:,:)))));
-=======
-   imagesc(flipud(squeeze(gt1t2.t1.d(params.sliceNum,:,:))));
->>>>>>> .r77
+%   imagesc(flipud(squeeze(gt1t2.t1.d(params.sliceNum,:,:))));
 end
 
 axis square;
