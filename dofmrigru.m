@@ -71,7 +71,7 @@ global epirri;
 global postproc;
 global senseCommand;
 global tsenseCommand;
-getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epirri=epibsi6.1','postproc=pp','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=0'});
+getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epirri=epibsi6.1','postproc=pp','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=[]'});
 
 % check to make sure we have the computer setup correctly to run epirri, postproc and sense
 if checkfMRISupportUnitCommands == 0,return,end
@@ -85,7 +85,7 @@ if ~isdir('Pre')
   dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp,tsense);
 else
   disp(sprintf('(dofmrigru) Running Second dofmrigru process'));
-  dofmrigru2(movepro);
+  dofmrigru2(movepro,tsense);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -142,7 +142,7 @@ end
 %%%%%%%%%%%%%%%%%%%%
 %%   dofmrigru2   %%
 %%%%%%%%%%%%%%%%%%%%
-function dofmrigru2(movepro)
+function dofmrigru2(movepro,tsense)
 
 % get fid file list
 fiddir = 'Pre';
@@ -155,6 +155,26 @@ removeTempFiles(fidList);
 
 % get list of epi scans
 epiNums = getEpiScanNums(fidList);
+
+% set the tsense array
+tsense = setTsense(tsense,length(epiNums));
+
+% load up tsense info if it exist
+if isfile('tsense.mat')
+  tsenseLoaded = load('tsense');
+  % check for match
+  if ~isempty(tsense) && ~isequal(tsense,tsenseLoaded.tsense)
+    disp(sprintf('(dofmrigru2) Tsense acceleration factor from pass 1 (%s) are different from pass 2 (%s)',mlrnum2str(tsenseLoaded.tsense),mlrnum2str(tsense)));
+    if ~askuser('Continue'),return,end
+  end
+  tsense = tsenseLoaded.tsense;
+end
+
+% check the tsense settings
+[tf fidList] = checkTsense(fidList,epiNums,tsense);
+if ~tf && ~askuser('(dofmrigru) Continue?')
+  return
+end
 
 % check for sense processing
 senseProcessing = isSenseProcessing(fidList,epiNums);
@@ -202,10 +222,8 @@ end
 if isempty(epiNumsWithCarExt)
   if ~askuser('(dofmrigru) No epi scans with car/ext files. Process all files?'),return,end
   epiNumsWithCarExt = epiNums;
-end
-
 % check to see if we should quit given that some of the peak files are missing
-if length(epiNumsWithPeaks) ~= length(epiNums)
+elseif length(epiNumsWithPeaks) ~= length(epiNums)
   if ~askuser('You are missing some peak files. Do you still want to continue'),return,end
 end
 
@@ -213,21 +231,22 @@ dispList(fidList,epiNumsWithCarExt,sprintf('Epi scans to process'));
 dispList(fidList,anatNums,sprintf('Anatomy files'));
 
 % display the commands for processing
-processFiles(1,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro);
+processFiles(1,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense);
 
 % now ask the user if they want to continue, because now we'll actually copy the files and set everything up.
 if ~askuser('OK to run above commands?'),return,end
 
 % now do it
-processFiles(0,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro);
+processFiles(0,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense);
 
 %%%%%%%%%%%%%%%%%%%%%%
 %%   processFiles   %%
 %%%%%%%%%%%%%%%%%%%%%%
-function processFiles(justDisplay,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro)
+function processFiles(justDisplay,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense)
 
 global postproc;
 global senseCommand;
+global tsenseCommand;
 
 command = sprintf('cd Pre');
 if justDisplay,disp(command),else,eval(command),end
@@ -284,8 +303,18 @@ for i = 1:length(epiNumsWithCarExt)
   hdrname = setext(fidList{epiNumsWithCarExt(i)}.filename,'hdr');
   imgname = setext(fidList{epiNumsWithCarExt(i)}.filename,'img');
 
+  %check to see if this epi has peaks. if so run postproc with physiofix
+  if any(epiNumsWithCarExt(i) == epiNumsWithPeaks)
+    % run with physiofix correction
+    ppoptions = '-dc -physiofix';
+  else
+    % run without phsyiofix corrections
+    ppoptions = '-dc';
+  end
   
-  % see if it is sense
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  %    sense processing
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   if any(i==senseScanNums)
     % noise, ref and mask numbers
     noiseNum = noiseNums(find(i==senseScanNums));
@@ -299,17 +328,15 @@ for i = 1:length(epiNumsWithCarExt)
     if movepro~=0,disp('(dofmrigru) movepro not implemented yet for sense processing');keyboard;end
     %check to see if this epi has peaks. if so run postproc with physiofix
     if any(epiNumsWithCarExt(i) == epiNumsWithPeaks)
-        % convert to epis to edt file, doing physiofix and dc correction
-        command = sprintf('mysystem(''%s -outtype 1 -dc -physiofix %s %s'');',postproc,fidname,edtname);
+      % convert to epis to edt file, doing physiofix and dc correction
+      command = sprintf('mysystem(''%s -outtype 1 -dc -physiofix %s %s'');',postproc,fidname,edtname);
     else
-        % convert to epis to edt file, don't do physiofix but dc correction
-        command = sprintf('mysystem(''%s -outtype 1 -dc %s %s'');',postproc,fidname,edtname);
+      % convert to epis to edt file, don't do physiofix but dc correction
+      command = sprintf('mysystem(''%s -outtype 1 -dc %s %s'');',postproc,fidname,edtname);
     end
     if justDisplay,disp(command),else,eval(command),end
     % run the sense processing for this file
     command = sprintf('mysystem(''%s -data %s -full %s -noise %s -mask %s -remove -recon %s'');',senseCommand,stripext(fidname),stripext(refname),stripext(noisename),stripext(maskname),stripext(fidname));
-    % command = sprintf('mysystem(''%s -? -? %s %s
-    % %s'')',senseCommand,maskname,covarname,edtname); this is for super old sense!
     if justDisplay,disp(command),else,eval(command),end
     % then convert the sdt file into a nifti
     command = sprintf('[hdr] = fid2niftihdr(''%s'');',fidname);
@@ -318,26 +345,44 @@ for i = 1:length(epiNumsWithCarExt)
     if justDisplay,disp(command),else,eval(command),end
     command = sprintf('cbiWriteNifti(''%s.hdr'',data.data,hdr);',stripext(fullfile('..','Raw','TSeries',hdrname)));
     if justDisplay,disp(command),else,eval(command),end
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  %    tsense
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  elseif ~isempty(tsense) && tsense(i)>1
+    % convert to epr
+    command = sprintf('mysystem(''%s %s %s -outtype 1 %s.edt'');',postproc,ppoptions,fidname,stripext(fidname));
+    if justDisplay,disp(command),else,eval(command),end
+    % run tsense 
+    command = sprintf('mysystem(''%s -full %s -recon %s -accf %i %s -remove'');',tsenseCommand,stripext(fidname),stripext(fidname),tsense(i),num2str(tsense(i):-1:1));
+    if justDisplay,disp(command),else,eval(command),end
+    % load the created file
+    command = sprintf('d = readsdt(''%s'');',sdtname);
+    if justDisplay,disp(command),else,eval(command),end
+    % then convert the output of tsense to a valid nifti file, by
+    % pasting on the header from fid2niftihdr
+    command = sprintf('[hdr info] = fid2niftihdr(''%s'',1);',fidname);
+    if justDisplay,disp(command),else,eval(command),end
+    % double number of volumes
+    command = sprintf('hdr.dim(5) = hdr.dim(5)*%i;hdr.pixdim(5) = hdr.pixdim(5)/%i',tsense(i),tsense(i));
+    if justDisplay,disp(command),else,eval(command),end
+    % save header
+    command = sprintf('cbiWriteNifti(''%s'',d.data,hdr);',fullfile('..','Raw','TSeries',hdrname));
+    if justDisplay,disp(command),else,eval(command),end
   else
-    %check to see if this epi has peaks. if so run postproc with physiofix
-    if any(epiNumsWithCarExt(i) == epiNumsWithPeaks)
-      % run with physiofix correction
-      ppoptions = '-dc -physiofix';
-    else
-      % run without phsyiofix corrections
-      ppoptions = '-dc';
-    end
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  %    normal processing
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % if we don't have to movepro, then just use postproc to read
     % the fid directly
     if 0 %movepro==0
-      % convert epis to sdt file, doing physiofix and dc correction
-      command = sprintf('mysystem(''%s -outtype 3 %s %s %s'');',postproc,ppoptions,fidname,imgname);
+	 % convert epis to sdt file, doing physiofix and dc correction
+	 command = sprintf('mysystem(''%s -outtype 3 %s %s %s'');',postproc,ppoptions,fidname,imgname);
     else
       % if we have to movepro, then convert the file to sdt using
       % fid2nifti.
       command = sprintf('[d h] = fid2nifti(''%s'',''movepro=%f'',''keepref=1'');writesdt(''%s'',d);mysystem(''%s -intype 2 -outtype 3 %s %s %s'');',fidname,movepro,setext(fidname,'sdt'),postproc,ppoptions,setext(fidname,'sdt'),imgname);
     end
-    keyboard
+
     if justDisplay,disp(command),else,eval(command),end
     % then convert the output of postproc to a valid nifti file, by
     % pasting on the header from fid2niftihdr
@@ -373,13 +418,13 @@ if ~justDisplay
   while isfile(motionCompFilename)
     % load the params
     eval(sprintf('load %s',motionCompFilename));
-    % run the motion comp
-    v = newView;
-    v = motionComp(v,params);
-    deleteView(v);
-    % get the next motionCompParams to run
-    motionCompFilenameNum = motionCompFilenameNum+1;
-    motionCompFilename = sprintf('motionCompParams%i.mat',motionCompFilenameNum);
+		       % run the motion comp
+		       v = newView;
+		       v = motionComp(v,params);
+		       deleteView(v);
+		       % get the next motionCompParams to run
+		       motionCompFilenameNum = motionCompFilenameNum+1;
+		       motionCompFilename = sprintf('motionCompParams%i.mat',motionCompFilenameNum);
   end
 end
 
@@ -442,8 +487,8 @@ paramsInfo{7} = {'refFile',refNamesMatch,'group=scanNum'};
 
 % put out the dialog
 if (length(maskNames) == 1)&&(length(refNames) == 1)&&(length(noiseNames) == 1)% && (length(covarNames) == 1)
-  % if there is nothing to choose (i.e. there are not multiple mask and covar, then just select the default)
-  params = mrParamsDefault(paramsInfo);
+									       % if there is nothing to choose (i.e. there are not multiple mask and covar, then just select the default)
+									       params = mrParamsDefault(paramsInfo);
 else
   % otherwise have the user choose
   params = mrParamsDialog(paramsInfo,'Select which mask file we want to use');
@@ -496,13 +541,13 @@ end
 scansThatPassedPeaks = find(passedCheckPeaks);
 epiNumsWithPeaks = [];
 for i = 1:length(scansThatPassedPeaks)
-    epiNumsWithPeaks(end+1) = epiNums(scansThatPassedPeaks(i));
+  epiNumsWithPeaks(end+1) = epiNums(scansThatPassedPeaks(i));
 end
 
 scansThatPassedCarExt = find(passedCheckCarExt);
 epiNumsWithCarExt = [];
 for i = 1:length(scansThatPassedCarExt)
-    epiNumsWithCarExt(end+1) = epiNums(scansThatPassedCarExt(i));
+  epiNumsWithCarExt(end+1) = epiNums(scansThatPassedCarExt(i));
 end
 
 %%%%%%%%%%%%%%%%%%%%
@@ -545,40 +590,35 @@ end
 % check to see if any of the epi scans have acceleration greater than 1
 senseProcessing = isSenseProcessing(fidList,epiNums);
 
-% check for tsense
-if ~isempty(tsense) || ~isequal(tsense,0)
-  % if tsense was set to one value then
-  % set the tsense value for all epi scans
-  if length(tsense) == 1
-    tsense(1:length(epiNums)) = tsense;
-  end
-  % otherwise make sure it has the same number of 
-  % elements as epi scans
-  tsense(end+1:length(epiNums)) = 0;
-end
-if all(tsense == 0)
-  % no tsense
-  tsense = [];
+% set the tsense array
+tsense = setTsense(tsense,length(epiNums));
+
+% check the tsense scans, for ones in which we are
+% accelerating make sure the setting's are correct
+% otherwise if the scan looks like it should be accelerated
+% then give warning
+[tf fidList] = checkTsense(fidList,epiNums,tsense);
+if ~tf && ~askuser('(dofmrigru) Continue?')
+  return
 end
 
 % get anatomy scan nums
 anatNums = getAnatScanNums(fidList);
 if isempty(anatNums)
-    disp(sprintf('(dofmrigru1) Could not find any non-raw anatomies in %s',fidDir));
-    return
+  disp(sprintf('(dofmrigru1) Could not find any non-raw anatomies in %s',fidDir));
+  return
 end
 
 % get sense noise/ref scans
 [senseNoiseNums senseRefNums] = getSenseNums(fidList);
 if isempty(senseRefNums) && senseProcessing
-    disp(sprintf('(dofmrigru1) Could not find any sense ref files in %s',fidDir));
-    return
+  disp(sprintf('(dofmrigru1) Could not find any sense ref files in %s',fidDir));
+  return
 end
 if isempty(senseNoiseNums) && senseProcessing
-    disp(sprintf('(dofmrigru1) Could not find any sense noise files in %s',fidDir));
-    return
+  disp(sprintf('(dofmrigru1) Could not find any sense noise files in %s',fidDir));
+  return
 end
-
 
 % find car/ext files
 carList = getFileList(carextDir,'car','ext');
@@ -594,7 +634,7 @@ pdfList = getFileList(pdfDir,'pdf');
 stimfileList = getFileList(stimfileDir,'mat');
 
 % display what we found
-dispList(fidList,epiNums,sprintf('Epi scans: %s',fidDir),'tsense',tsense);
+dispList(fidList,epiNums,sprintf('Epi scans: %s',fidDir));
 dispList(fidList,anatNums,sprintf('Anatomy scans: %s',fidDir));
 if senseProcessing
   dispList(fidList,senseRefNums,sprintf('Sense reference scan: %s',fidDir));
@@ -613,7 +653,7 @@ else
 end
 
 % setup directories etc.
-doMoveFiles(1,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums);
+doMoveFiles(1,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums,tsense);
 
 % make mask dir
 if senseProcessing,makeMaskDir(1,fidList,anatNums,senseRefNums);end
@@ -622,7 +662,7 @@ if senseProcessing,makeMaskDir(1,fidList,anatNums,senseRefNums);end
 if ~askuser('OK to run above commands?'),return,end
 
 % now do it
-fidList = doMoveFiles(0,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums);
+fidList = doMoveFiles(0,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums,tsense);
 
 % make mask dir
 if senseProcessing,makeMaskDir(0,fidList,anatNums,senseRefNums);end
@@ -698,7 +738,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%
 %%   doMoveFiles   %%
 %%%%%%%%%%%%%%%%%%%%%
-function fidList = doMoveFiles(justDisplay,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums)
+function fidList = doMoveFiles(justDisplay,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums,tsense)
 
 % some command names
 global epirri;
@@ -762,7 +802,7 @@ for i = 1:length(fidList)
   if ~any(i==allUsefulFids)
     command = sprintf('copyfile %s %s',fidList{i}.fullfile,fullfile('Pre/Aux',fidList{i}.filename));
     if justDisplay,disp(command);else,eval(command);,end
-  %otherwise put it in Pre
+    %otherwise put it in Pre
   else
     command = sprintf('copyfile %s %s',fidList{i}.fullfile,fullfile('Pre',fidList{i}.filename));
     if justDisplay,disp(command),else,eval(command);,end
@@ -778,8 +818,8 @@ for i = 1:length(carMatchNum)
   command = sprintf('copyfile %s %s',carList{carMatchNum(i)}.fullfile,fullfile('Pre',fidList{epiNums(i)}.filename));
   if justDisplay,disp(command),else,eval(command),end
   if isfield(carList{carMatchNum(i)},'extfilename')
-   disp('ext not found. not being copied...');
-   command = sprintf('copyfile %s %s',fullfile(carList{carMatchNum(i)}.path,carList{carMatchNum(i)}.extfilename),fullfile('Pre',fidList{epiNums(i)}.filename));
+    disp('ext not found. not being copied...');
+    command = sprintf('copyfile %s %s',fullfile(carList{carMatchNum(i)}.path,carList{carMatchNum(i)}.extfilename),fullfile('Pre',fidList{epiNums(i)}.filename));
   end
   if justDisplay,disp(command),else,eval(command);,end
 end
@@ -800,8 +840,8 @@ for i = 1:length(allScanNums)
   else
     eval(command);
     if status > 1
-        disp(sprintf('(dofmrigru) %s generated error %i when running',epirri,status));
-        keyboard
+      disp(sprintf('(dofmrigru) %s generated error %i when running',epirri,status));
+      keyboard
     end    
   end
 end
@@ -817,7 +857,6 @@ end
 command = sprintf('cd ..');
 if justDisplay,disp(command),else,eval(command);,end
 
-
 disp(sprintf('=============================================='));
 disp(sprintf('Making temporary (empty) nifti files for running mrInit'));
 disp(sprintf('=============================================='));
@@ -828,9 +867,18 @@ for i = 1:length(epiNums)
     % make a nifti header
     [h info] = fid2niftihdr(srcName);
     % now, grab the data
-    if info.accFactor == 1
+    if ~isempty(tsense) && (tsense(i) > 1)
+      % load the file
       d = fid2nifti(srcName);
-    % for a sense file we are going to have to grab the reference scan data
+      % now we have to create data as if it has gone through
+      % tsense processing
+      d = repmat(d,[1 1 1 tsense(i)]);
+      % fix up the header
+      h.pixdim(5) = h.pixdim(5)/tsense(i);
+      h.dim(5) = h.dim(5)*tsense(i);
+    elseif info.accFactor == 1
+      d = fid2nifti(srcName);
+      % for a sense file we are going to have to grab the reference scan data
     else
       d = fid2nifti(fullfile('Pre',fidList{senseRefNums(1)}.filename));
       % now make the data info a single volume
@@ -897,17 +945,14 @@ if isempty(params),return;end
 
 % now get the matching numbers
 for i = 1:length(params.carFile)
-    carMatchNum(i) = find(strcmp(params.carFile(i),carNames));
+  carMatchNum(i) = find(strcmp(params.carFile(i),carNames));
 end
 
 
 %%%%%%%%%%%%%%%%%%%%%%
 %%   dispScanlist   %%
 %%%%%%%%%%%%%%%%%%%%%%
-function dispStr = dispList(fidList,nums,name,varargin)
-
-tsense = [];
-getArgs(varargin,{'tsense=[]'});
+function dispStr = dispList(fidList,nums,name)
 
 dispStr = {};
 disp(sprintf('============================='));
@@ -923,10 +968,6 @@ for i = 1:length(nums)
     dispstr = fidList{nums(i)}.dispstr;
   else
     dispstr = fidList{nums(i)}.filename;
-  end
-  % add tsense info
-  if length(tsense)>= i
-    dispstr = sprintf('%s tsense: %ix',dispstr,tsense(i));
   end
   % display the string
   disp(dispstr);
@@ -1003,9 +1044,9 @@ for i = 1:length(fidList)
   fidList{i}.dispstr = sprintf('%s%s->%s',fidList{i}.dispstr,fidList{i}.startTimeStr,fidList{i}.endTimeStr);
   if ~isempty(fidList{i}.info)
     fidList{i}.dispstr = sprintf('%s [%i %i %i %i] [%0.1f %0.1f %0.1f]',fidList{i}.dispstr,fidList{i}.info.dim(1),fidList{i}.info.dim(2),fidList{i}.info.dim(3),fidList{i}.info.dim(4),fidList{i}.info.voxsize(1),fidList{i}.info.voxsize(2),fidList{i}.info.voxsize(3));
-     if ~isempty(fidList{i}.info.accFactor)
+    if ~isempty(fidList{i}.info.accFactor)
       fidList{i}.dispstr = sprintf('%s x%i',fidList{i}.dispstr,fidList{i}.info.accFactor);
-     end
+    end
   end
   fidList{i}.hasCarExt = [0 0];
   fidList{i}.hasPeakFiles = [0 0 0];
@@ -1114,13 +1155,13 @@ for i = 1:length(fidList)
     else
       % check for an anatomy sounding name (i.e. has the word "anat" in it
       if ~isempty(strfind(lower(fidList{i}.filename),'anat'))
-%          keyboard
-%          %make sure it is not a raw scan (has been epirri5 processed)
-%          command = sprintf('thisanatprocpar = readprocpar(''%s'')',fidList{i}.fullfile);
-%          eval(command);
-%          if thisanatprocpar.ni ~= 0
-            anatNums(end+1) = i;
-%         end
+	%          keyboard
+	%          %make sure it is not a raw scan (has been epirri5 processed)
+	%          command = sprintf('thisanatprocpar = readprocpar(''%s'')',fidList{i}.fullfile);
+	%          eval(command);
+	%          if thisanatprocpar.ni ~= 0
+	anatNums(end+1) = i;
+	%         end
       end
     end
   end
@@ -1169,7 +1210,7 @@ for i = 1:length(dirList)
   % get the file extension
   thisExt = getext(dirList(i).name);
   % check for match
-   for j = 1:length(extList)
+  for j = 1:length(extList)
     if strcmp(extList{j},thisExt)
       % found the match
       if ~match
@@ -1186,16 +1227,16 @@ for i = 1:length(dirList)
 	  fileList{end}.fullfile = fullfile(dirname,dirList(i).name);
 	  fileList{end}.path = dirname;
 	  fileList{end}.(sprintf('%sfilename',extList{j})) = dirList(i).name;
-	  % check for matching file
-	  stemName = stripext(fullfile(dirname,dirList(i).name));
-	  for k = 1:length(matchExtList)
-	    if ~isfile(setext(stemName,matchExtList{j}))
-	      disp(sprintf('(dofmrigru1:getFileList) No matching %s file for %s',matchExtList{j},dirList(i).name));
-	    else
-	      fileList{end}.(sprintf('%sfilename',matchExtList{j})) = setext(dirList(i).name,matchExtList{j});
-	    end
-	  end
-	  
+				  % check for matching file
+				  stemName = stripext(fullfile(dirname,dirList(i).name));
+				  for k = 1:length(matchExtList)
+				    if ~isfile(setext(stemName,matchExtList{j}))
+				      disp(sprintf('(dofmrigru1:getFileList) No matching %s file for %s',matchExtList{j},dirList(i).name));
+				    else
+				      fileList{end}.(sprintf('%sfilename',matchExtList{j})) = setext(dirList(i).name,matchExtList{j});
+				    end
+				  end
+				  
 	end
       end
       match = 1;
@@ -1283,27 +1324,27 @@ helpFlag = {'','-help','',''};
 for i = 1:length(commandNames)
   % suse which to tell if we have the command
   [commandStatus commandRetval] = system(sprintf('which %s',eval(commandNames{i})));
-  % check for commandStatus error
-  if commandStatus~=0
-    disp(sprintf('(dofmrigru) Could not find %s command: %s',commandNames{i},eval(commandNames{i})));
-    disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=grupub:dofmrigru for help setting up your computer'));
-    if strcmp(commandNames{i},'senseCommand')
-      % just warn
-      continue;
-    end
-    retval = 0;
-    return
-  end
-  % run the command to see what happens
-  [commandStatus commandRetval] = system(sprintf('%s %s',eval(commandNames{i}),helpFlag{i}));
-  % check for commandStatus error
-  if commandStatus>1
-    disp(commandRetval);
-    disp(sprintf('(dofmrigru) Found %s command: %s, but could not run (possibly missing fink library?)',commandNames{i},eval(commandNames{i})));
-    disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=grupub:dofmrigru for help setting up your computer'));
-    retval = 0;
-    return
-  end
+							% check for commandStatus error
+							if commandStatus~=0
+							  disp(sprintf('(dofmrigru) Could not find %s command: %s',commandNames{i},eval(commandNames{i})));
+							  disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=grupub:dofmrigru for help setting up your computer'));
+							  if strcmp(commandNames{i},'senseCommand')
+							    % just warn
+							    continue;
+							  end
+							  retval = 0;
+							  return
+							end
+							% run the command to see what happens
+							[commandStatus commandRetval] = system(sprintf('%s %s',eval(commandNames{i}),helpFlag{i}));
+													   % check for commandStatus error
+													   if commandStatus>1
+													     disp(commandRetval);
+													     disp(sprintf('(dofmrigru) Found %s command: %s, but could not run (possibly missing fink library?)',commandNames{i},eval(commandNames{i})));
+													     disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=grupub:dofmrigru for help setting up your computer'));
+													     retval = 0;
+													     return
+													   end
 end
 
 %%%%%%%%%%%%%%%%%%%%%
@@ -1317,3 +1358,47 @@ for i = epiNums
     senseProcessing = 1;
   end
 end
+
+%%%%%%%%%%%%%%%%%%%%%
+%    checkTsense    %
+%%%%%%%%%%%%%%%%%%%%%
+function [tf fidList] = checkTsense(fidList,epiNums,tsense)
+
+tf = true;
+
+if ~isempty(tsense)
+  for iEPI = 1:length(epiNums)
+    % get some things about the scan
+    numshots = fidList{epiNums(iEPI)}.procpar.numshots;
+    if rem(numshots,tsense(iEPI)) ~= 0
+      disp(sprintf('(dofmrigru) !!! tSense acceleration factor for %s of %i does not evenely divide into num shots: %i',fidList{epiNums(iEPI)}.filename,tsense(iEPI),numshots));
+      tf = false;
+    end
+    if tsense(iEPI)
+      % set the display string
+      fidList{epiNums(iEPI)}.dispstr = sprintf('%s tSense: %ix tr=%s nShots=%i nVols=%i',fidList{epiNums(iEPI)}.dispstr,tsense(iEPI),mlrnum2str(fidList{epiNums(iEPI)}.info.tr/tsense(iEPI)),numshots/tsense(iEPI),fidList{epiNums(iEPI)}.info.dim(4)*tsense(iEPI));
+    end
+  end
+end
+
+%%%%%%%%%%%%%%%%%%%
+%    setTsense    %
+%%%%%%%%%%%%%%%%%%%
+function tsense = setTsense(tsense,nEPI)
+
+% check for tsense
+if ~isempty(tsense)
+  % if tsense was set to one value then
+  % set the tsense value for all epi scans
+  if length(tsense) == 1
+    tsense(1:nEPI) = tsense;
+  end
+  % otherwise make sure it has the same number of 
+  % elements as epi scans
+  tsense(end+1:nEPI) = 0;
+end
+if all(tsense == 0)
+  % no tsense
+  tsense = [];
+end
+
