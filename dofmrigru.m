@@ -32,9 +32,20 @@
 %             dofmrigru('dataDir=/usr1/justin/data')
 %
 %             Other options:
-%                'epirri=epibsi': set which epirri processing function to use
-%                'postproc=pp': set which postproc program to use
-%                'sense=sense_mac_intel': set which sense reconstruction to use
+%                'epibsi=epibsi6.1': set which epibsi processing function to use
+%                'navCorrectMag=1': use navigator magnitude correction with epibsi
+%                'navCorrectPhase=1': use navigator phase correction with epibsi
+%                'dcCorrect=1': use DC correction with epibsi
+%                'refScan=1': do reference scan correction
+%                'postproc=pp37': set which postproc program to use
+%                'tsenseCommand=tsense_test': set which tsense recon program to use
+%                'tsense=1': set to 0 to turn off using tsense. If you want to
+%                   set particular acceleration factor set the acc factor
+%                   and shot order (e.g. [3 3 2 1]). Or set a cell array
+%                   with the acc factor/shot order array for each epi in your scan. If
+%                   set to 1, will use the ideal tsense acceleration factor 
+%                   according to the number of shots and interleaving
+%                'senseCommand=sense_mac_intel': set which sense reconstruction to use
 %                'fidDir=/usr1/justin/data/s00620101001/Pre': Set this if you want to load the first pass
 %                    fid files form a specific directory.
 %                'carextDir=/usr1/justin/data/s00620101001/carext': Set this if you want to load the first pass
@@ -67,17 +78,17 @@ pdfDir = [];
 stimfileDir = [];
 numMotionComp = [];
 movepro=[];
-global epirri;
-global epirriArgs;
+global epibsi;
+global epibsiArgs;
 global postproc;
 global senseCommand;
 global tsenseCommand;
-getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epirri=epibsi6.1','postproc=pp','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=[]','dcCorrect=1','navCorrectMag=1','navCorrectPhase=1'});
+getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epibsi=epibsi6.1','postproc=pp37','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=1','dcCorrect=[]','navCorrectMag=[]','navCorrectPhase=[]','refScan=[]'});
 
-% interpert the arguments for epirriArgs
-epirriArgs = sprintf('%i %i %i',navCorrectMag, navCorrectPhase, dcCorrect');
+% interpert the arguments for epibsiArgs
+epibsiArgs = setEpibsiArgs(navCorrectMag,navCorrectPhase,dcCorrect,refScan);
 
-% check to make sure we have the computer setup correctly to run epirri, postproc and sense
+% check to make sure we have the computer setup correctly to run epibsi, postproc and sense
 if checkfMRISupportUnitCommands == 0,return,end
 
 % make sure that MLR is not running
@@ -167,15 +178,15 @@ tsense = setTsense(tsense,length(epiNums));
 if isfile('tsense.mat')
   tsenseLoaded = load('tsense');
   % check for match
-  if ~isempty(tsense) && ~isequal(tsense,tsenseLoaded.tsense)
-    disp(sprintf('(dofmrigru2) Tsense acceleration factor from pass 1 (%s) are different from pass 2 (%s)',mlrnum2str(tsenseLoaded.tsense),mlrnum2str(tsense)));
+  if ~isempty(tsense) && ~all(cell2mat(tsense)==1) && ~isequal(tsense,tsenseLoaded.tsense)
+    disp(sprintf('(dofmrigru2) Tsense acceleration factor from pass 1 are different from pass 2'));
     if ~askuser('Continue'),return,end
   end
   tsense = tsenseLoaded.tsense;
 end
 
 % check the tsense settings
-[tf fidList] = checkTsense(fidList,epiNums,tsense);
+[tf fidList tsense] = checkTsense(fidList,epiNums,tsense);
 if ~tf && ~askuser('(dofmrigru) Continue?')
   return
 end
@@ -352,12 +363,16 @@ for i = 1:length(epiNumsWithCarExt)
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   %    tsense
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  elseif ~isempty(tsense) && tsense(i)>1
+  elseif ~isempty(tsense) && tsense{i}(1)>1
     % convert to epr
     command = sprintf('mysystem(''%s %s %s -outtype 1 %s.edt'');',postproc,ppoptions,fidname,stripext(fidname));
     if justDisplay,disp(command),else,eval(command),end
     % run tsense 
-    command = sprintf('mysystem(''%s -full %s -recon %s -accf %i %s -remove'');',tsenseCommand,stripext(fidname),stripext(fidname),tsense(i),num2str(tsense(i):-1:1));
+    if length(tsense{i}) > 1
+      command = sprintf('mysystem(''%s -full %s -recon %s -accf %s -remove'');',tsenseCommand,stripext(fidname),stripext(fidname),mlrnum2str(tsense{i}));
+    else
+      command = sprintf('mysystem(''%s -full %s -recon %s -remove'');',tsenseCommand,stripext(fidname),stripext(fidname));
+    end
     if justDisplay,disp(command),else,eval(command),end
     % load the created file
     command = sprintf('d = readsdt(''%s'');',sdtname);
@@ -367,7 +382,7 @@ for i = 1:length(epiNumsWithCarExt)
     command = sprintf('[hdr info] = fid2niftihdr(''%s'',1);',fidname);
     if justDisplay,disp(command),else,eval(command),end
     % double number of volumes
-    command = sprintf('hdr.dim(5) = hdr.dim(5)*%i;hdr.pixdim(5) = hdr.pixdim(5)/%i',tsense(i),tsense(i));
+    command = sprintf('hdr.dim(5) = hdr.dim(5)*%i;hdr.pixdim(5) = hdr.pixdim(5)/%i',tsense{i}(1),tsense{i}(1));
     if justDisplay,disp(command),else,eval(command),end
     % save header
     command = sprintf('cbiWriteNifti(''%s'',d.data,hdr);',fullfile('..','Raw','TSeries',hdrname));
@@ -601,7 +616,7 @@ tsense = setTsense(tsense,length(epiNums));
 % accelerating make sure the setting's are correct
 % otherwise if the scan looks like it should be accelerated
 % then give warning
-[tf fidList] = checkTsense(fidList,epiNums,tsense);
+[tf fidList tsense] = checkTsense(fidList,epiNums,tsense);
 if ~tf && ~askuser('(dofmrigru) Continue?')
   return
 end
@@ -676,16 +691,26 @@ if ~isempty(tsense)
   save tsense tsense
 end
 
+% get subject id
+exptname = getLastDir(pwd);
+if (length(exptname) > 4) && (exptname(1) == 's')
+  subjectID = exptname(1:4);
+else
+  subjectID = '';
+end
+
 % now run mrInit
 disp(sprintf('(dofmrigru1) Setup mrInit for your directory'));
-mrInit;
+mrInit([],[],sprintf('subject=%s',subjectID));
 
 % set up motion comp parameters
 for i = 1:numMotionComp
   v = newView;
-  [v params] = motionComp(v,[],'justGetParams=1');
-  deleteView(v);
-  eval(sprintf('save motionCompParams%i params',i));
+  if ~isempty(v)
+    [v params] = motionComp(v,[],'justGetParams=1');
+    deleteView(v);
+    eval(sprintf('save motionCompParams%i params',i));
+  end
 end
 
 %%%%%%%%%%%%%%%%%%%%%
@@ -745,8 +770,8 @@ end
 function fidList = doMoveFiles(justDisplay,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums,tsense)
 
 % some command names
-global epirri;
-global epirriArgs;
+global epibsi;
+global epibsiArgs;
 global postproc;
 
 disp(sprintf('=============================================='));
@@ -836,16 +861,16 @@ disp(sprintf('=============================================='));
 command = sprintf('cd Pre');
 if justDisplay,disp(command),else,eval(command),end
 
-% run epirri on all scans and sense noise/ref 
+% run epibsi on all scans and sense noise/ref 
 allScanNums = [epiNums senseNoiseNums senseRefNums];
 for i = 1:length(allScanNums)
-  command = sprintf('status = mysystem(''%s %s %s'');',epirri,fidList{allScanNums(i)}.filename,epirriArgs);
+  command = sprintf('status = mysystem(''%s %s %s'');',epibsi,fidList{allScanNums(i)}.filename,epibsiArgs);
   if justDisplay
     disp(command)
   else
     eval(command);
     if status > 1
-      disp(sprintf('(dofmrigru) %s with args %s generated error %i when running',epirri,epirriArgs,status));
+      disp(sprintf('(dofmrigru) %s with args %s generated error %i when running',epibsi,epibsiArgs,status));
       keyboard
     end    
   end
@@ -872,15 +897,15 @@ for i = 1:length(epiNums)
     % make a nifti header
     [h info] = fid2niftihdr(srcName);
     % now, grab the data
-    if ~isempty(tsense) && (tsense(i) > 1)
+    if ~isempty(tsense) && (tsense{i}(1) > 1)
       % load the file
       d = fid2nifti(srcName);
       % now we have to create data as if it has gone through
       % tsense processing
-      d = repmat(d,[1 1 1 tsense(i)]);
+      d = repmat(d,[1 1 1 tsense{i}(1)]);
       % fix up the header
-      h.pixdim(5) = h.pixdim(5)/tsense(i);
-      h.dim(5) = h.dim(5)*tsense(i);
+      h.pixdim(5) = h.pixdim(5)/tsense{i}(1);
+      h.dim(5) = h.dim(5)*tsense{i}(1);
     elseif info.accFactor == 1
       d = fid2nifti(srcName);
       % for a sense file we are going to have to grab the reference scan data
@@ -1161,7 +1186,7 @@ for i = 1:length(fidList)
       % check for an anatomy sounding name (i.e. has the word "anat" in it
       if ~isempty(strfind(lower(fidList{i}.filename),'anat'))
 	%          keyboard
-	%          %make sure it is not a raw scan (has been epirri5 processed)
+	%          %make sure it is not a raw scan (has been epibsi5 processed)
 	%          command = sprintf('thisanatprocpar = readprocpar(''%s'')',fidList{i}.fullfile);
 	%          eval(command);
 	%          if thisanatprocpar.ni ~= 0
@@ -1316,7 +1341,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%
 function retval = checkfMRISupportUnitCommands
 
-global epirri;
+global epibsi;
 global postproc;
 global senseCommand;
 global tsenseCommand;
@@ -1324,32 +1349,32 @@ global tsenseCommand;
 retval = 1;
 
 % commands to check
-commandNames = {'epirri','postproc','senseCommand','tsenseCommand'};
+commandNames = {'epibsi','postproc','senseCommand','tsenseCommand'};
 helpFlag = {'','-help','',''};
 for i = 1:length(commandNames)
   % suse which to tell if we have the command
   [commandStatus commandRetval] = system(sprintf('which %s',eval(commandNames{i})));
-							% check for commandStatus error
-							if commandStatus~=0
-							  disp(sprintf('(dofmrigru) Could not find %s command: %s',commandNames{i},eval(commandNames{i})));
-							  disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=grupub:dofmrigru for help setting up your computer'));
-							  if strcmp(commandNames{i},'senseCommand')
-							    % just warn
-							    continue;
-							  end
-							  retval = 0;
-							  return
-							end
-							% run the command to see what happens
-							[commandStatus commandRetval] = system(sprintf('%s %s',eval(commandNames{i}),helpFlag{i}));
-													   % check for commandStatus error
-													   if commandStatus>1
-													     disp(commandRetval);
-													     disp(sprintf('(dofmrigru) Found %s command: %s, but could not run (possibly missing fink library?)',commandNames{i},eval(commandNames{i})));
-													     disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=grupub:dofmrigru for help setting up your computer'));
-													     retval = 0;
-													     return
-													   end
+  % check for commandStatus error
+  if commandStatus~=0
+    disp(sprintf('(dofmrigru) Could not find %s command: %s',commandNames{i},eval(commandNames{i})));
+    disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=grupub:dofmrigru for help setting up your computer'));
+    if strcmp(commandNames{i},'senseCommand')
+      % just warn
+      continue;
+    end
+    retval = 0;
+    return
+  end
+  % run the command to see what happens
+  [commandStatus commandRetval] = system(sprintf('%s %s',eval(commandNames{i}),helpFlag{i}));
+  % check for commandStatus error
+  if commandStatus>1
+    disp(commandRetval);
+    disp(sprintf('(dofmrigru) Found %s command: %s, but could not run (possibly missing fink library?)',commandNames{i},eval(commandNames{i})));
+    disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=grupub:dofmrigru for help setting up your computer'));
+    retval = 0;
+    return
+  end
 end
 
 %%%%%%%%%%%%%%%%%%%%%
@@ -1367,7 +1392,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%
 %    checkTsense    %
 %%%%%%%%%%%%%%%%%%%%%
-function [tf fidList] = checkTsense(fidList,epiNums,tsense)
+function [tf fidList tsense] = checkTsense(fidList,epiNums,tsense)
 
 tf = true;
 
@@ -1375,13 +1400,44 @@ if ~isempty(tsense)
   for iEPI = 1:length(epiNums)
     % get some things about the scan
     numshots = fidList{epiNums(iEPI)}.procpar.numshots;
-    if rem(numshots,tsense(iEPI)) ~= 0
-      disp(sprintf('(dofmrigru) !!! tSense acceleration factor for %s of %i does not evenely divide into num shots: %i',fidList{epiNums(iEPI)}.filename,tsense(iEPI),numshots));
-      tf = false;
+    ilts = fidList{epiNums(iEPI)}.procpar.ilts;
+    % if set to use tsense, get its tsense acceleration
+    if isscalar(tsense{iEPI})
+      if isequal(tsense{iEPI},1)
+	% make sure it is not SENSE
+	if ~(isfield(fidList{epiNums(iEPI)}.info,'accFactor') && (fidList{epiNums(iEPI)}.info.accFactor>1))
+	  % calculate optimal tsense acceleration
+	  tsense{iEPI} = numshots/ilts;
+	end
+      elseif ~isequal(tsense{iEPI},0)
+	if tsense{iEPI} ~= numshots/ilts;
+	  disp(sprintf('(dofmrigru) !!! tSense acceleration must specify shot order. Resetting to default acceleration of %i !!!',numshots/ilts))
+	  tsense{iEPI} = numshots/ilts;
+	  tf = false;
+	end
+      end
+    % if set to sepecify num shots and shot order, 
+    % then check to make sure that these are
+    % set to sensible values
+    else
+      % first get accerleation
+      tSenseAcc = tsense{iEPI}(1);
+      % now make sure we have enough arguments to speify the shot order
+      if ~isequal(1:tSenseAcc,sort(tSense{iEPI}(2:end)))
+	disp(sprintf('(dofmrigru) !!! tSense acceleration must specify shot order for all shots. Resetting to default acceleration of %i !!!',numshots/ilts))
+	tsense{iEPI} = numshots/ilts;
+	tf = false;
+      else
+	% otherwise check whether this is optimal or not
+	if tSenseAcc ~= numshots/ilts
+	  disp(sprintf('(dofmrigru) Using tSense acceleration factor of %s which is not optimal for numshots: %i ilts: %i',tSenseAcc,numshots,ilts));
+	  tf = false;
+	end
+      end
     end
-    if tsense(iEPI)
+    if tsense{iEPI}(1)
       % set the display string
-      fidList{epiNums(iEPI)}.dispstr = sprintf('%s tSense: %ix tr=%s nShots=%i nVols=%i',fidList{epiNums(iEPI)}.dispstr,tsense(iEPI),mlrnum2str(fidList{epiNums(iEPI)}.info.tr/tsense(iEPI)),numshots/tsense(iEPI),fidList{epiNums(iEPI)}.info.dim(4)*tsense(iEPI));
+      fidList{epiNums(iEPI)}.dispstr = sprintf('%s tSense: %ix tr=%s nShots=%i nVols=%i',fidList{epiNums(iEPI)}.dispstr,tsense{iEPI}(1),mlrnum2str(fidList{epiNums(iEPI)}.info.tr/tsense{iEPI}(1)),numshots/tsense{iEPI}(1),fidList{epiNums(iEPI)}.info.dim(4)*tsense{iEPI}(1));
     end
   end
 end
@@ -1391,19 +1447,88 @@ end
 %%%%%%%%%%%%%%%%%%%
 function tsense = setTsense(tsense,nEPI)
 
-% check for tsense
-if ~isempty(tsense)
-  % if tsense was set to one value then
-  % set the tsense value for all epi scans
-  if length(tsense) == 1
-    tsense(1:nEPI) = tsense;
-  end
-  % otherwise make sure it has the same number of 
-  % elements as epi scans
-  tsense(end+1:nEPI) = 0;
+if ischar(tsense)
+  disp(sprintf('(dofmrigru) tSense input cannot be a string.'));
+  keyboard
 end
-if all(tsense == 0)
+
+% if this looks like acceleration factor plus shot order
+% then make into a cell array so that each epi scan
+% will use these parameters
+if ~iscell(tsense) && isequal(1:tsense(1),sort(tsense(2:end)))
+  tsense = {tsense};
+end
+
+if ~iscell(tsense)
+  % set values to the ones in the array
+  % if there are not enough values, for example
+  % there is only one value, set to the last
+  % value in the array - thus for example
+  % if the value tsense is a scalar will set
+  % all values to that scalar
+  accFactor = tsense;
+  tsense = {};
+  for i = 1:nEPI
+    tsense{i} = accFactor(min(i,length(accFactor)));
+  end
+elseif iscell(tsense)
+  for i = length(tsense)+1:nEPI
+    tsense{i} = tsense{end};
+  end
+end  
+
+if all(cell2mat(tsense) == 0)
   % no tsense
   tsense = [];
 end
 
+%%%%%%%%%%%%%%%%%%%%
+%    epibsiArgs    %
+%%%%%%%%%%%%%%%%%%%%
+function epibsiArgs = setEpibsiArgs(navCorrectMag,navCorrectPhase,dcCorrect,refScan)
+
+% default settings
+epibsiArgs = '';
+
+% defaults
+defaultNavCorrectMag = 1;
+defaultNavCorrectPhase = 1;
+defaultDcCorrect = 1;
+defaultRefScan = 1;
+
+% default arguments
+if isempty(navCorrectMag) && isempty(navCorrectPhase) && isempty(dcCorrect) && isempty(refScan)
+  return
+end
+
+% check navCorrectMag
+if isempty(navCorrectMag) navCorrectMag = defaultNavCorrectMag;end
+if ~any(navCorrectMag == [0 1])
+  disp(sprintf('(dofmrigru) navCorrectMag should be either 0 or 1. Using default'));
+  navCorrectMag = defaultNavCorrectMag;
+end
+
+% check navCorrectPhase
+if isempty(navCorrectPhase) navCorrectPhase = defaultNavCorrectPhase;end
+if ~any(navCorrectPhase == [0 1])
+  disp(sprintf('(dofmrigru) navCorrectPhase should be either 0 or 1. Using default'));
+  navCorrectPhase = defaultNavCorrectPhase;
+end
+
+% check dcCorrect
+if isempty(dcCorrect) dcCorrect = defaultDcCorrect;end
+if ~any(dcCorrect == [0 1])
+  disp(sprintf('(dofmrigru) dcCorrect should be either 0 or 1. Using default'));
+  dcCorrect = defaultDcCorrect;
+end
+
+% check refScan
+if isempty(refScan) refScan = defaultRefScan;end
+if refScan == 0, refScan = -1;end
+if ~any(refScan == [-1 1])
+  disp(sprintf('(dofmrigru) refScan should be either -1 or 1. Using default'));
+  refScan = defaultRefScan;
+end
+
+epibsiArgs = sprintf('%i %i %i 0 %i -1',navCorrectMag, navCorrectPhase, dcCorrect,refScan);
+disp(sprintf('(dofmrigru) epibsiArgs set to: %s (mag correct, phase correct, dc correct, print nav data, ref scan, data type)',epibsiArgs));
