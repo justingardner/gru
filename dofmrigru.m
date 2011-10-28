@@ -166,7 +166,7 @@ fidList = getFidInfo(fidList);
 fidList = sortFidList(fidList);
 
 % remove any already existing temp files
-removeTempFiles(fidList);
+%removeTempFiles(fidList);
 
 % get list of epi scans
 epiNums = getEpiScanNums(fidList);
@@ -1073,7 +1073,13 @@ for i = 1:length(fidList)
   fidList{i}.dispstr = sprintf('%s: ',fidList{i}.filename);
   fidList{i}.dispstr = sprintf('%s%s->%s',fidList{i}.dispstr,fidList{i}.startTimeStr,fidList{i}.endTimeStr);
   if ~isempty(fidList{i}.info)
-    fidList{i}.dispstr = sprintf('%s [%i %i %i %i] [%0.1f %0.1f %0.1f]',fidList{i}.dispstr,fidList{i}.info.dim(1),fidList{i}.info.dim(2),fidList{i}.info.dim(3),fidList{i}.info.dim(4),fidList{i}.info.voxsize(1),fidList{i}.info.voxsize(2),fidList{i}.info.voxsize(3));
+    if fidList{i}.info.isepi && fidList{i}.info.compressedFid
+      % unprocessed epi (the phase encodes are set wrong)
+      fidList{i}.dispstr = sprintf('%s [%i ? %i %i] [%0.1f ? %0.1f]',fidList{i}.dispstr,fidList{i}.info.dim(1),fidList{i}.info.dim(3),fidList{i}.info.dim(4),fidList{i}.info.voxsize(1),fidList{i}.info.voxsize(3));
+    else
+      % otherwise
+      fidList{i}.dispstr = sprintf('%s [%i %i %i %i] [%0.1f %0.1f %0.1f]',fidList{i}.dispstr,fidList{i}.info.dim(1),fidList{i}.info.dim(2),fidList{i}.info.dim(3),fidList{i}.info.dim(4),fidList{i}.info.voxsize(1),fidList{i}.info.voxsize(2),fidList{i}.info.voxsize(3));
+    end
     if ~isempty(fidList{i}.info.accFactor)
       fidList{i}.dispstr = sprintf('%s x%i',fidList{i}.dispstr,fidList{i}.info.accFactor);
     end
@@ -1257,16 +1263,16 @@ for i = 1:length(dirList)
 	  fileList{end}.fullfile = fullfile(dirname,dirList(i).name);
 	  fileList{end}.path = dirname;
 	  fileList{end}.(sprintf('%sfilename',extList{j})) = dirList(i).name;
-				  % check for matching file
-				  stemName = stripext(fullfile(dirname,dirList(i).name));
-				  for k = 1:length(matchExtList)
-				    if ~isfile(setext(stemName,matchExtList{j}))
-				      disp(sprintf('(dofmrigru1:getFileList) No matching %s file for %s',matchExtList{j},dirList(i).name));
-				    else
-				      fileList{end}.(sprintf('%sfilename',matchExtList{j})) = setext(dirList(i).name,matchExtList{j});
-				    end
-				  end
-				  
+	  % check for matching file
+	  stemName = stripext(fullfile(dirname,dirList(i).name));
+	  for k = 1:length(matchExtList)
+	    if ~isfile(setext(stemName,matchExtList{j}))
+	      disp(sprintf('(dofmrigru1:getFileList) No matching %s file for %s',matchExtList{j},dirList(i).name));
+	    else
+	      fileList{end}.(sprintf('%sfilename',matchExtList{j})) = setext(dirList(i).name,matchExtList{j});
+	    end
+	  end
+	  
 	end
       end
       match = 1;
