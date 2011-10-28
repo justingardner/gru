@@ -68,10 +68,14 @@ stimfileDir = [];
 numMotionComp = [];
 movepro=[];
 global epirri;
+global epirriArgs;
 global postproc;
 global senseCommand;
 global tsenseCommand;
-getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epirri=epibsi6.1','postproc=pp','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=[]'});
+getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epirri=epibsi6.1','postproc=pp','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=[]','dcCorrect=1','navCorrectMag=1','navCorrectPhase=1'});
+
+% interpert the arguments for epirriArgs
+epirriArgs = sprintf('%i %i %i',navCorrectMag, navCorrectPhase, dcCorrect');
 
 % check to make sure we have the computer setup correctly to run epirri, postproc and sense
 if checkfMRISupportUnitCommands == 0,return,end
@@ -742,6 +746,7 @@ function fidList = doMoveFiles(justDisplay,fidList,carList,pdfList,stimfileList,
 
 % some command names
 global epirri;
+global epirriArgs;
 global postproc;
 
 disp(sprintf('=============================================='));
@@ -834,13 +839,13 @@ if justDisplay,disp(command),else,eval(command),end
 % run epirri on all scans and sense noise/ref 
 allScanNums = [epiNums senseNoiseNums senseRefNums];
 for i = 1:length(allScanNums)
-  command = sprintf('status = mysystem(''%s %s'');',epirri,fidList{allScanNums(i)}.filename);
+  command = sprintf('status = mysystem(''%s %s %s'');',epirri,fidList{allScanNums(i)}.filename,epirriArgs);
   if justDisplay
     disp(command)
   else
     eval(command);
     if status > 1
-      disp(sprintf('(dofmrigru) %s generated error %i when running',epirri,status));
+      disp(sprintf('(dofmrigru) %s with args %s generated error %i when running',epirri,epirriArgs,status));
       keyboard
     end    
   end
