@@ -194,6 +194,32 @@ end
 % check for sense processing
 senseProcessing = isSenseProcessing(fidList,epiNums);
 
+% get mask and noise for tsense
+tSenseMaskList = [];tSenseNoiseList = [];
+if ~isempty(tsense)
+  tSenseMaskList = getFileList(fiddir,'hdr','img','mask'); 
+  if isempty(tSenseMaskList)
+    disp(sprintf('(dofrmigru2) Could not find any mask files for tSense processing'));
+  else
+    % load headers for each mask
+    for i = 1:length(tSenseMaskList)
+      % load header
+      tSenseMaskList{i}.h = mlrImageHeaderLoad(tSenseMaskList{i}.fullfile);
+      tSenseMaskList{i}.dispstr = sprintf('%s [%s]',tSenseMaskList{i}.filename,num2str(tSenseMaskList{i}.h.dim,'%i '));
+    end
+    % display list of mask files
+    dispList(tSenseMaskList,1:length(tSenseMaskList),'Mask files for tSense');
+  end
+  tSenseNoiseList = getFileList(fiddir,'edt','epr','noise');
+  if isempty(tSenseNoiseList)
+    disp(sprintf('(dofrmigru2) Could not find any noise files for tSense processing'));
+  else
+    dispList(tSenseNoiseList,1:length(tSenseNoiseList),'Noise files for tSense');
+  end
+end
+
+% get mask/noise/ref for sense processing
+maskList = [];noiseList = [];refList = [];
 if senseProcessing
   % look for mask in nifti form
   %the mask is made manually before dofmrigru1 from noise/ref in maskdir.
@@ -213,8 +239,6 @@ if senseProcessing
     disp(sprintf('(dofrmigru2) Could not find any ref files'));
     return
   end
-else
-  maskList = [];noiseList = [];refList = [];
 end
 
 % get anatomy scan nums
@@ -233,9 +257,18 @@ else
   senseScanNums = [];maskNums = [];noiseNums = [];refNums = [];
 end
 
+% get info for tsense processing
+if ~isempty(tsense)
+  % get the associated mask and noise nums
+  [tSenseMaskNums tSenseNoiseNums] = chooseMaskForSenseFiles(fidList,tSenseMaskList,tSenseNoiseList,[],epiNums);
+else
+  tSenseMaskNums = [];
+  tSenseNoiseNums = [];
+end
+
 % check for something to do
 if isempty(epiNumsWithCarExt)
-  if ~askuser('(dofmrigru) No epi scans with car/ext files. Process all files?'),return,end
+  if ~askuser('(dofmrigru) No epi scans with car/ext files. Process anyway?'),return,end
   epiNumsWithCarExt = epiNums;
 % check to see if we should quit given that some of the peak files are missing
 elseif length(epiNumsWithPeaks) ~= length(epiNums)
@@ -246,18 +279,18 @@ dispList(fidList,epiNumsWithCarExt,sprintf('Epi scans to process'));
 dispList(fidList,anatNums,sprintf('Anatomy files'));
 
 % display the commands for processing
-processFiles(1,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense);
+processFiles(1,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums);
 
 % now ask the user if they want to continue, because now we'll actually copy the files and set everything up.
 if ~askuser('OK to run above commands?'),return,end
 
 % now do it
-processFiles(0,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense);
+processFiles(0,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums);
 
 %%%%%%%%%%%%%%%%%%%%%%
 %%   processFiles   %%
 %%%%%%%%%%%%%%%%%%%%%%
-function processFiles(justDisplay,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense)
+function processFiles(justDisplay,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums)
 
 global postproc;
 global senseCommand;
@@ -289,6 +322,20 @@ if senseProcessing
     disp(sprintf('=============================================='));
     % convert mask from nifti to to sdt/spr form
     maskname = maskList{i}.filename; % still in nifti form
+    command = sprintf('[d h] = cbiReadNifti(''%s'');',maskname);
+    if justDisplay,disp(command),else,eval(command),end
+    command = sprintf('writesdt(''%s'',d);',setext(maskname,'sdt'));
+    if justDisplay,disp(command),else,eval(command),end
+  end
+end
+
+if ~isempty(tsense)
+  for i = 1:length(tSenseMaskList)
+    disp(sprintf('=============================================='));
+    disp(sprintf('Convert tSense masks from nifti to sdt/spr'));
+    disp(sprintf('=============================================='));
+    % convert mask from nifti to to sdt/spr form
+    maskname = tSenseMaskList{i}.filename; % still in nifti form
     command = sprintf('[d h] = cbiReadNifti(''%s'');',maskname);
     if justDisplay,disp(command),else,eval(command),end
     command = sprintf('writesdt(''%s'',d);',setext(maskname,'sdt'));
@@ -367,11 +414,23 @@ for i = 1:length(epiNumsWithCarExt)
     % convert to epr
     command = sprintf('mysystem(''%s %s %s -outtype 1 %s.edt'');',postproc,ppoptions,fidname,stripext(fidname));
     if justDisplay,disp(command),else,eval(command),end
+    % see if there is a mask file
+    if ~isempty(tSenseMaskNums) && (tSenseMaskNums(i) ~= 0)
+      maskStr = sprintf('-mask %s',setext(tSenseMaskList{tSenseMaskNums(i)}.filename,'sdt'));
+    else
+      maskStr = '';
+    end
+    % see if there is a noise file
+    if ~isempty(tSenseNoiseNums) 
+      noiseStr = sprintf('-noise %s',setext(tSenseNoiseList{tSenseNoiseNums(i)}.filename,'sdt'));
+    else
+      noiseStr = '';
+    end
     % run tsense 
     if length(tsense{i}) > 1
-      command = sprintf('mysystem(''%s -full %s -recon %s -accf %s -remove'');',tsenseCommand,stripext(fidname),stripext(fidname),mlrnum2str(tsense{i}));
+      command = sprintf('mysystem(''%s -full %s -recon %s -accf %s -remove %s %s'');',tsenseCommand,stripext(fidname),stripext(fidname),mlrnum2str(tsense{i}),maskStr,noiseStr);
     else
-      command = sprintf('mysystem(''%s -full %s -recon %s -remove'');',tsenseCommand,stripext(fidname),stripext(fidname));
+      command = sprintf('mysystem(''%s -full %s -recon %s -remove %s %s'');',tsenseCommand,stripext(fidname),stripext(fidname),maskStr,noiseStr);
     end
     if justDisplay,disp(command),else,eval(command),end
     % load the created file
@@ -463,35 +522,69 @@ function [maskNums noiseNums refNums] = chooseMaskForSenseFiles(fidList,maskList
 maskNums = []; noiseNums = []; refNums = [];
 if isempty(epiNums),return,end
 
+% no specified files
+if isempty(noiseList)&&isempty(maskList)&&isempty(refList),return,end
+
 % get the names of the mask files
-for i = 1:length(maskList)
-  maskNames{i} = maskList{i}.filename;
+if ~isempty(maskList)
+  for i = 1:length(maskList)
+    maskNames{i} = maskList{i}.filename;
+  end
 end
 
 % get the names of the noise files
-for i = 1:length(noiseList)
-  noiseNames{i} = noiseList{i}.filename;
+if ~isempty(noiseList)
+  for i = 1:length(noiseList)
+    noiseNames{i} = noiseList{i}.filename;
+  end
 end
 
 % get the names of the covar files
-for i = 1:length(refList)
-  refNames{i} = refList{i}.filename;
+if ~isempty(refList)
+  for i = 1:length(refList)
+    refNames{i} = refList{i}.filename;
+  end
 end
-
-% get the names of the covar files
-%for i = 1:length(covarList)
-%  covarNames{i} = covarList{i}.filename;
-%end
 
 % get info from scans
 for i = 1:length(epiNums)
-  scanNames{i} = stripext(fidList{epiNums(i)}.filename);
-  maskNamesMatch{i} = maskNames;
-  noiseNamesMatch{i} = noiseNames;
-  refNamesMatch{i} = refNames;
-  % covarNamesMatch{i} = covarNames;
+  scanNames{i} = sprintf('%s [%s]',stripext(fidList{epiNums(i)}.filename),num2str(fidList{epiNums(i)}.info.dim,'%i '));
+  if ~isempty(maskList)
+    maskNamesMatch{i} = {'None' maskNames{:}};
+  end
+  if ~isempty(noiseList)
+    noiseNamesMatch{i} = noiseNames;
+  end
+  if ~isempty(refList)
+    refNamesMatch{i} = refNames;
+  end
   startTime{i} = fidList{epiNums(i)}.startTimeStr;
   endTime{i} = fidList{epiNums(i)}.endTimeStr;
+end
+
+% check dimensions of mask
+epiHasMatchingMask(1:length(epiNums)) = 0;
+for i = 1:length(maskList)
+  % check dimensions to be 3
+  if maskList{i}.h.nDim == 3
+    % compare against that of each epi scan
+    for j = 1:length(epiNums)
+      if isequal(fidList{epiNums(j)}.info.dim(1:3),maskList{i}.h.dim(1:3))
+	% matching dimensions, promote this mask to the top of list as first choise
+	maskNamesMatch{j} = putOnTopOfList(maskList{i}.filename,maskNamesMatch{j});
+	epiHasMatchingMask(j) = 1;
+      end
+    end
+  else
+    disp(sprintf('(dofmrigru:chooseMaskForSenseFiles) Mask %s has strange dimensions: %s',maskList{i}.fullfile,num2str(maskList{i}.h.dim,'%i')));
+  end
+end
+
+% display warning for mismatch
+for i= 1:length(epiHasMatchingMask)
+  if ~epiHasMatchingMask(i)
+    disp(sprintf('(dofmrigru:chooseMaskForSenseFiles) EPI scan %s with dims %s does not match dimensions with any of the masks',fidList{epiNums(i)}.filename,mlrnum2str(fidList{epiNums(i)}.info.dim)));
+  end
 end
 
 % make an mrParamsDialog where you can select
@@ -499,27 +592,41 @@ paramsInfo{1} = {'scanNum',1,'round=1','incdec=[-1 1]',sprintf('minmax=[1 %i]',l
 paramsInfo{2} = {'scanName',scanNames,'group=scanNum','type=String','editable=0'};
 paramsInfo{3} = {'startTime',startTime,'group=scanNum','type=String','editable=0'};
 paramsInfo{4} = {'endTime',endTime,'group=scanNum','type=String','editable=0'};
-paramsInfo{5} = {'maskFile',maskNamesMatch,'group=scanNum'};
-% paramsInfo{6} = {'covarFile',covarNamesMatch,'group=scanNum'};
-paramsInfo{6} = {'noiseFile',noiseNamesMatch,'group=scanNum'};
-paramsInfo{7} = {'refFile',refNamesMatch,'group=scanNum'};
+if ~isempty(maskList)
+  paramsInfo{5} = {'maskFile',maskNamesMatch,'group=scanNum'};
+end
+if ~isempty(noiseList)
+  paramsInfo{6} = {'noiseFile',noiseNamesMatch,'group=scanNum'};
+end
+if ~isempty(refList)
+  paramsInfo{7} = {'refFile',refNamesMatch,'group=scanNum'};
+end
 
-% put out the dialog
-if (length(maskNames) == 1)&&(length(refNames) == 1)&&(length(noiseNames) == 1)% && (length(covarNames) == 1)
-									       % if there is nothing to choose (i.e. there are not multiple mask and covar, then just select the default)
-									       params = mrParamsDefault(paramsInfo);
+% put up the dialog
+if (isempty(maskList) || (length(maskNames) == 1)) && (isempty(refList) || (length(refNames) == 1)) && (isempty(noiseList) || (length(noiseNames) == 1))
+  % if there is nothing to choose (i.e. there are not multiple mask and covar, then just select the default)
+  params = mrParamsDefault(paramsInfo);
 else
   % otherwise have the user choose
-  params = mrParamsDialog(paramsInfo,'Select which mask file we want to use');
+  params = mrParamsDialog(paramsInfo,'Select which mask to use');
 end
 if isempty(params),return;end
 
-% get whcih mask and covar to use
+% get which mask,noise and ref to use
 for i = 1:length(epiNums)
-  maskNums(i) = find(strcmp(params.maskFile{i},maskNames));
-  noiseNums(i) = find(strcmp(params.noiseFile{i},noiseNames));
-  refNums(i) = find(strcmp(params.refFile{i},refNames));
-  % covarNums(i) = find(strcmp(params.covarFile{i},covarNames));
+  if ~isempty(maskList)
+    if strcmp(params.maskFile{i},'None')
+      maskNums(i) = 0;
+    else
+      maskNums(i) = find(strcmp(params.maskFile{i},maskNames));
+    end
+  end
+  if ~isempty(noiseList)
+    noiseNums(i) = find(strcmp(params.noiseFile{i},noiseNames));
+  end
+  if ~isempty(refList)
+    refNums(i) = find(strcmp(params.refFile{i},refNames));
+  end
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%
