@@ -416,13 +416,13 @@ for i = 1:length(epiNumsWithCarExt)
     if justDisplay,disp(command),else,eval(command),end
     % see if there is a mask file
     if ~isempty(tSenseMaskNums) && (tSenseMaskNums(i) ~= 0)
-      maskStr = sprintf('-mask %s',setext(tSenseMaskList{tSenseMaskNums(i)}.filename,'sdt'));
+      maskStr = sprintf('-mask %s',stripext(tSenseMaskList{tSenseMaskNums(i)}.filename));
     else
       maskStr = '';
     end
     % see if there is a noise file
     if ~isempty(tSenseNoiseNums) 
-      noiseStr = sprintf('-noise %s',setext(tSenseNoiseList{tSenseNoiseNums(i)}.filename,'sdt'));
+      noiseStr = sprintf('-noise %s',stripext(tSenseNoiseList{tSenseNoiseNums(i)}.filename));
     else
       noiseStr = '';
     end
@@ -583,7 +583,7 @@ end
 % display warning for mismatch
 for i= 1:length(epiHasMatchingMask)
   if ~epiHasMatchingMask(i)
-    disp(sprintf('(dofmrigru:chooseMaskForSenseFiles) EPI scan %s with dims %s does not match dimensions with any of the masks',fidList{epiNums(i)}.filename,mlrnum2str(fidList{epiNums(i)}.info.dim)));
+    disp(sprintf('(dofmrigru:chooseMaskForSenseFiles) EPI scan %s with dims [%s] does not match dimensions with any of the masks',fidList{epiNums(i)}.filename,num2str(fidList{epiNums(i)}.info.dim,'%i ')));
   end
 end
 
