@@ -691,9 +691,9 @@ expdir = getLastDir(pwd);
 % i.e. s00120090706 that contains the fid files and the
 % car/ext files
 if isempty(fidDir),fidDir = fullfile(dataDir,expdir,'raw');end
-if isempty(carextDir),carextDir = fullfile(dataDir,expdir);end
-if isempty(stimfileDir), stimfileDir = fullfile(dataDir,expdir);end
-if isempty(pdfDir),pdfDir = fullfile(dataDir,expdir);end
+if isempty(carextDir),carextDir = fullfile(dataDir,expdir,'aux');end
+if isempty(stimfileDir), stimfileDir = fullfile(dataDir,expdir,'aux');end
+if isempty(pdfDir),pdfDir = fullfile(dataDir,expdir,'aux');end
 
 % check the fiddir
 if ~isdir(fidDir)
