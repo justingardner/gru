@@ -131,21 +131,9 @@ filenames = cellArray(filenames);
 
 % load the fids with fid2nifti
 for i = 1:length(filenames)
-  % check if it is a nifti file
-  if strcmp(getext(filenames{i}),'hdr')
-    im{end+1}.filename = filenames{i};
-    [im{end}.d im{end}.hdr] = cbiReadNifti(filenames{i});
-    continue;
-  end
-  % otherwise it is a fid
   im{end+1}.filename = filenames{i};
-  if verbose,disppercent(-inf,sprintf('(t1t2) Loading %s',filenames{i}));,end
-  [im{end}.d im{end}.hdr] = fid2nifti(filenames{i});
-  if verbose,disppercent(inf);end
-  if isempty(im{end}.d) 
-    disp(sprintf('(t1t2) Empty data when loading %s',filenames{i}));
-    return
-  end
+  [im{end}.d im{end}.hdr] = mlrImageLoad(filenames{i},'orient=LPI');
+  im{end}.hdr = im{end}.hdr.hdr;
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -326,6 +314,9 @@ gt1t2.t1 = t1;
 gt1t2.t2 = t2;
 gt1t2.params = [];
 
+% set mouse handler
+set(gt1t2.f,'WindowButtonDownFcn',@t1t2floodfill);
+
 gt1t2.roiPath = '.';
 
 maxSlice = size(t1.d,3);
@@ -414,18 +405,18 @@ function displayT1T2(params)
 
 global gt1t2;
 
-sliceOrientation = find(strcmp(params.sliceOrientation,{'saggital','coronal','axial'}));
+sliceOrientation = find(strcmp(params.sliceOrientation,{'axial','coronal','saggital'}));
 
 % display T1
 figure(gt1t2.f);
 subplot(1,3,1);
 switch sliceOrientation
   case {1}
-   imagesc(gt1t2.t1.d(:,:,params.sliceNum));
+   imagesc(flipud(gt1t2.t1.d(:,:,params.sliceNum)'));
   case {2}
-   imagesc(squeeze(gt1t2.t1.d(:,params.sliceNum,:)));
+   imagesc(flipud(squeeze(gt1t2.t1.d(:,params.sliceNum,:))'));
   case {3}
-   imagesc(flipud(squeeze(gt1t2.t1.d(params.sliceNum,:,:))));
+   imagesc(flipud(squeeze(gt1t2.t1.d(params.sliceNum,:,:))'));
 end
 
 axis square;
@@ -436,19 +427,19 @@ drawnow
 % compute division
 if paramsChanged(gt1t2.params,params)
   [gt1t2.t1t2 gt1t2.mask gt1t2.t2] = computeT1T2(gt1t2.t1,gt1t2.t2,params);
-  gt1t2.params = params;
 end
+gt1t2.params = params;
 
 % display T2
 figure(gt1t2.f);
 subplot(1,3,2);
 switch sliceOrientation
  case {1}
-  imagesc(gt1t2.t2.blurd(:,:,params.sliceNum));
+  imagesc(flipud(gt1t2.t2.blurd(:,:,params.sliceNum)'));
  case {2}
-  imagesc(squeeze(gt1t2.t2.blurd(:,params.sliceNum,:)));
+  imagesc(flipud(squeeze(gt1t2.t2.blurd(:,params.sliceNum,:))'));
  case {3}
-  imagesc(flipud(squeeze(gt1t2.t2.blurd(params.sliceNum,:,:))));
+  imagesc(flipud(squeeze(gt1t2.t2.blurd(params.sliceNum,:,:))'));
 end
 
 axis square;
@@ -460,11 +451,11 @@ subplot(1,3,3);
 figure(gt1t2.f);
 switch sliceOrientation
  case {1}
-  imagesc(squeeze(gt1t2.mask(:,:,params.sliceNum)));
+  imagesc(flipud(squeeze(gt1t2.mask(:,:,params.sliceNum))'));
  case {2}
-   imagesc(squeeze(gt1t2.mask(:,params.sliceNum,:)));
+  imagesc(flipud(squeeze(gt1t2.mask(:,params.sliceNum,:))'));
  case {3}
-   imagesc(flipud(squeeze(gt1t2.mask(params.sliceNum,:,:))));
+  imagesc(flipud(squeeze(gt1t2.mask(params.sliceNum,:,:))'));
 end
 
 axis square;
@@ -481,7 +472,7 @@ switch sliceOrientation
  case {2}
   imSlice = gt1t2.t1t2.d(:,params.sliceNum,:);
  case {3}
-  imSlice = flipud(squeeze(gt1t2.t1t2.d(params.sliceNum,:,:)));
+  imSlice = squeeze(gt1t2.t1t2.d(params.sliceNum,:,:));
 end
 imSlice = squeeze(imSlice);
 
@@ -519,7 +510,7 @@ imDisplaySlice(imDisplaySlice<0) = 0;
 imDisplaySlice(imDisplaySlice>1) = 1;
 
 figure(gt1t2.f2);
-imagesc(imDisplaySlice);
+imagesc(flipud(imDisplaySlice'));
 title('T1/T2');
 axis square;
 axis off;
@@ -535,7 +526,7 @@ if isfield(gt1t2,'ref') && ~isempty(gt1t2.ref)
    case {2}
     refSlice = gt1t2.ref(:,params.sliceNum,:);
    case {3}
-    refSlice = flipud(squeeze(gt1t2.ref(params.sliceNum,:,:)));
+    refSlice = squeeze(gt1t2.ref(params.sliceNum,:,:));
   end
   refSlice = squeeze(refSlice);
 
@@ -543,7 +534,7 @@ if isfield(gt1t2,'ref') && ~isempty(gt1t2.ref)
   figure(gt1t2.reffig);
   clf;
   subplot(1,2,1);
-  imagesc(refSlice);
+  imagesc(flipud(refSlice'));
   title(gt1t2.refname);
   axis square;
   axis off;
@@ -768,3 +759,53 @@ imOut(:,:,2) = im0;
 imOut(:,:,3) = im0;
 
 
+%%%%%%%%%%%%%%%%%%%%%%%
+%    t1t2floodfill    %
+%%%%%%%%%%%%%%%%%%%%%%%
+function t1t2floodfill(src,eventdata)
+
+global gt1t2;
+
+% figure out which axis we are on
+pointerLoc = get(gt1t2.f,'CurrentPoint');
+pos = get(gt1t2.f,'Position');
+pos = pointerLoc./pos(3:4);
+subplotNum = ceil(pos(1)*3);
+if subplotNum == 2
+  a = subplot(1,3,subplotNum);
+else
+  return
+end
+
+% get the point on that axis
+pointerLoc = get(a,'CurrentPoint');
+pointerX = round(pointerLoc(1,1));
+pointerY = round(pointerLoc(1,2));
+
+% get image dims
+dims = size(gt1t2.t2.d);
+
+% get image dimension
+switch gt1t2.params.sliceOrientation
+  case {'axial'}
+   x = pointerX; y = dims(2)-pointerY+1; z = gt1t2.params.sliceNum;
+  case {'coronal'}
+   x = pointerX; y = gt1t2.params.sliceNum; z= dims(3)-pointerY+1;
+  case {'saggital'}
+   x = gt1t2.params.sliceNum; y = pointerX; z = dims(3)-pointerY+1;
+end
+
+% check dimensions
+if (x < 1) || (y < 0) || (z< 0) || (x > dims(1)) || (y > dims(2)) || (z > dims(3))
+  return
+end
+
+% display coordinates
+disp(sprintf('(t1t2:t1t2floodfill) Pointer at [%i,%i,%i]',x,y,z));
+
+
+% this will be the starting point of the floodfill
+%gt1t2.t2.blurd(x,y,z) = 0;
+%displayT1T2(gt1t2.params)
+
+%keyboard
