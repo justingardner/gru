@@ -44,7 +44,7 @@ end
 % get arguments
 verbose=[];
 T1T2alignment=[];
-getArgs(varargin,{'verbose=1','T1T2alignment=1','roi=[]','ref=[]'});
+getArgs(varargin,{'verbose=1','T1T2alignment=0','roi=[]','ref=[]'});
 
 % load ROI
 if ~isempty(roi),loadROI(roi);end
@@ -425,8 +425,7 @@ switch sliceOrientation
   case {2}
    imagesc(squeeze(gt1t2.t1.d(:,params.sliceNum,:)));
   case {3}
-   imagesc(fliplr(flipud(squeeze(t1t2fig.t1.d(params.sliceNum,:,:)))));
-%   imagesc(flipud(squeeze(gt1t2.t1.d(params.sliceNum,:,:))));
+   imagesc(flipud(squeeze(gt1t2.t1.d(params.sliceNum,:,:))));
 end
 
 axis square;
@@ -449,8 +448,7 @@ switch sliceOrientation
  case {2}
   imagesc(squeeze(gt1t2.t2.blurd(:,params.sliceNum,:)));
  case {3}
-  imagesc(fliplr(flipud(squeeze(t1t2fig.t2.blurd(params.sliceNum,:,:)))));
-%  imagesc(flipud(squeeze(gt1t2.t2.blurd(params.sliceNum,:,:))));
+  imagesc(flipud(squeeze(gt1t2.t2.blurd(params.sliceNum,:,:))));
 end
 
 axis square;
@@ -466,8 +464,7 @@ switch sliceOrientation
  case {2}
    imagesc(squeeze(gt1t2.mask(:,params.sliceNum,:)));
  case {3}
-   imagesc(fliplr(flipud(squeeze(t1t2fig.mask(params.sliceNum,:,:)))));
-%   imagesc(flipud(squeeze(gt1t2.mask(params.sliceNum,:,:))));
+   imagesc(flipud(squeeze(gt1t2.mask(params.sliceNum,:,:))));
 end
 
 axis square;
@@ -484,8 +481,7 @@ switch sliceOrientation
  case {2}
   imSlice = gt1t2.t1t2.d(:,params.sliceNum,:);
  case {3}
-  im = fliplr(flipud(squeeze(t1t2fig.t1t2.d(params.sliceNum,:,:))));
-%  imSlice = flipud(squeeze(gt1t2.t1t2.d(params.sliceNum,:,:)));
+  imSlice = flipud(squeeze(gt1t2.t1t2.d(params.sliceNum,:,:)));
 end
 imSlice = squeeze(imSlice);
 
