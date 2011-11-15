@@ -132,7 +132,7 @@ filenames = cellArray(filenames);
 % load the fids with fid2nifti
 for i = 1:length(filenames)
   im{end+1}.filename = filenames{i};
-  [im{end}.d im{end}.hdr] = mlrImageLoad(filenames{i},'orient=LPI');
+  [im{end}.d im{end}.hdr] = mlrImageLoad(filenames{i},'orient=LPI','nifti=1');
   im{end}.hdr = im{end}.hdr.hdr;
 end
 
