@@ -523,7 +523,7 @@ imDisplaySlice(imDisplaySlice<0) = 0;
 imDisplaySlice(imDisplaySlice>1) = 1;
 
 figure(gt1t2.f2);
-image(imDisplaySlice);
+imagesc(imDisplaySlice);
 title('T1/T2');
 axis square;
 axis off;
