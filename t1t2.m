@@ -255,7 +255,13 @@ function saveNifti(im,name,verbose)
 
 if verbose,disp(sprintf('(t1t2) Saving %s',name));end
 name = setext(name,'hdr');
-cbiWriteNifti(name,im.d,im.hdr);
+
+% get min and max for normalization of values to between 0 and 256
+mind = min(im.d(:)); 
+maxd = max(im.d(:));
+
+% write out image
+cbiWriteNifti(name,256*(im.d-mind)/(maxd-mind),im.hdr);
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %    checkCommands    %
