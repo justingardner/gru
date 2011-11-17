@@ -809,13 +809,36 @@ end
 disp(sprintf('(t1t2:t1t2floodfill) Pointer at [%i,%i,%i]',x,y,z));
 
 %keyboard
+maxfill = nan(dims);
 
-%neighbors = getNeighbors([x y z]',dims);
+visitedPoints = [];
+currentPoints = [x y z]';
+currentPoints = sub2ind(dims,currentPoints(1,:),currentPoints(2,:),currentPoints(3,:));
+disppercent(-inf,'(t1t2) Filling volume');
+while ~isempty(currentPoints)
+%    gt1t2.t2.blurd(currentPoints) = 0;
+%    displayT1T2(gt1t2.params)
+  for i = 1:length(currentPoints)
+    neighbors = getNeighbors(currentPoints(i),dims);
+    if gt1t2.mask(currentPoints(i))
+      maxfill(currentPoints(i)) = max(gt1t2.t2.blurd(neighbors(:)));
+    else
+      maxfill(currentPoints(i)) = max(max(gt1t2.t2.blurd(neighbors(:))),max(maxfill(neighbors(:))));
+    end
+  end
+  visitedPoints = union(visitedPoints,currentPoints);
+  currentPoints = getNeighbors(currentPoints,dims);
+  currentPoints = setdiff(currentPoints,visitedPoints);
+  disppercent(length(visitedPoints)/prod(dims));
+end
+disppercent(inf);
+gt1t2.blurd = maxfill;
+displayT1T2(gt1t2.params);
+
 % this will be the starting point of the floodfill
 %gt1t2.t2.blurd(x,y,z) = 0;
 %displayT1T2(gt1t2.params)
 %gt1t2.t2.blurd(neighbors) = 0;
-%displayT1T2(gt1t2.params)
 
 %keyboard
 
@@ -823,6 +846,9 @@ disp(sprintf('(t1t2:t1t2floodfill) Pointer at [%i,%i,%i]',x,y,z));
 %    getNeighbors    %
 %%%%%%%%%%%%%%%%%%%%%%
 function outlist = getNeighbors(inlist,dims)
+
+% convert from linear coordinates
+[x y z] = ind2sub(dims,inlist);
 
 % how many voxels we have
 nVoxels = size(inlist,2);
@@ -833,7 +859,7 @@ outlist = [];
 for xOffset = -1:1
   for yOffset = -1:1
     for zOffset = -1:1
-      outlist = [outlist inlist+repmat([xOffset yOffset zOffset]',1,nVoxels)];
+      outlist = [outlist [x;y;z]+repmat([xOffset yOffset zOffset]',1,nVoxels)];
     end
   end
 end
