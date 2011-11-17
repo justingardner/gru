@@ -133,7 +133,6 @@ filenames = cellArray(filenames);
 for i = 1:length(filenames)
   im{end+1}.filename = filenames{i};
   [im{end}.d im{end}.hdr] = mlrImageLoad(filenames{i},'orient=LPI','nifti=1');
-  im{end}.hdr = im{end}.hdr.hdr;
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -809,9 +808,40 @@ end
 % display coordinates
 disp(sprintf('(t1t2:t1t2floodfill) Pointer at [%i,%i,%i]',x,y,z));
 
+%keyboard
 
+%neighbors = getNeighbors([x y z]',dims);
 % this will be the starting point of the floodfill
 %gt1t2.t2.blurd(x,y,z) = 0;
 %displayT1T2(gt1t2.params)
+%gt1t2.t2.blurd(neighbors) = 0;
+%displayT1T2(gt1t2.params)
 
 %keyboard
+
+%%%%%%%%%%%%%%%%%%%%%%
+%    getNeighbors    %
+%%%%%%%%%%%%%%%%%%%%%%
+function outlist = getNeighbors(inlist,dims)
+
+% how many voxels we have
+nVoxels = size(inlist,2);
+
+% add or subtract 1 in every combination of dimensions to get 
+% all neighbors (will also include voxel itself)
+outlist = [];
+for xOffset = -1:1
+  for yOffset = -1:1
+    for zOffset = -1:1
+      outlist = [outlist inlist+repmat([xOffset yOffset zOffset]',1,nVoxels)];
+    end
+  end
+end
+
+% convert to linear coordinates
+outlist = mrSub2ind(dims,outlist(1,:),outlist(2,:),outlist(3,:));
+
+% remove nans (which will be ones outside the volume as computed
+% by mrSub2ind
+outlist = outlist(~isnan(outlist));
+
