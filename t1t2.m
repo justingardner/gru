@@ -814,25 +814,38 @@ maxfill = nan(dims);
 visitedPoints = [];
 currentPoints = [x y z]';
 currentPoints = sub2ind(dims,currentPoints(1,:),currentPoints(2,:),currentPoints(3,:));
+
+% get how the neighbors are spaced in a linear array, using getNeighbors to
+% generate the list of neighbors
+neighborDist = currentPoints-getNeighbors(currentPoints,dims)';
+
 disppercent(-inf,'(t1t2) Filling volume');
 while ~isempty(currentPoints)
-%    gt1t2.t2.blurd(currentPoints) = 0;
-%    displayT1T2(gt1t2.params)
-  for i = 1:length(currentPoints)
-    neighbors = getNeighbors(currentPoints(i),dims);
-    if gt1t2.mask(currentPoints(i))
-      maxfill(currentPoints(i)) = max(gt1t2.t2.blurd(neighbors(:)));
-    else
-      maxfill(currentPoints(i)) = max(max(gt1t2.t2.blurd(neighbors(:))),max(maxfill(neighbors(:))));
-    end
-  end
+  % get the neighbors using the fast algorithm (which simply adds the distances
+  % between the current points and the neighbors in linear coordinates)
+  currentNeighbors = getNeighborsFast(currentPoints(:)',neighborDist,dims);
+  % get the max across neighbors for each current point in the original
+  % and in the current state of the filled image
+  maxFromOriginal = max(gt1t2.t2.blurd(currentNeighbors));
+  maxFromFilled = max(maxfill(currentNeighbors));
+  % find which of the current points are in the mask
+  inmask = gt1t2.mask(currentPoints)';
+  % if they are in the mask then take the max from the original
+  maxfill(currentPoints(inmask)) = maxFromOriginal(inmask);
+  % if not in the mask then use the max from the original and from the filled
+  % this should propogate bright values outside of the brain
+  maxfill(currentPoints(~inmask)) = max([maxFromOriginal(~inmask);maxFromFilled(~inmask)]);
+  % update the visitedPoints list
   visitedPoints = union(visitedPoints,currentPoints);
-  currentPoints = getNeighbors(currentPoints,dims);
-  currentPoints = setdiff(currentPoints,visitedPoints);
+  % get the neighbors of the current point
+  currentPoints = getNeighborsFast(currentPoints(:)',neighborDist,dims);
+  % remove any points already visited.
+  currentPoints = setdiff(currentPoints(:),visitedPoints);
+  % update percent done display
   disppercent(length(visitedPoints)/prod(dims));
 end
 disppercent(inf);
-gt1t2.blurd = maxfill;
+gt1t2.t2.blurd = maxfill;
 displayT1T2(gt1t2.params);
 
 % this will be the starting point of the floodfill
@@ -841,6 +854,25 @@ displayT1T2(gt1t2.params);
 %gt1t2.t2.blurd(neighbors) = 0;
 
 %keyboard
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    getNeighborsFast    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+function neighbors = getNeighborsFast(inlist,neighborDist,dims)
+
+% convert the inlist of voxels into a matrix where each
+% column contains the voxel number repeated by the 
+% number of voxels that are its neighbors
+inlist = repmat(inlist,length(neighborDist),1);
+% then add the distance to the neighbors, thus we 
+% will have a matrix in which each column contains
+% all the neighbors of each voxel
+neighbors = inlist + repmat(neighborDist,1,size(inlist,2));
+% do a boundary check to make sure that we don't go past the
+% first or last voxel. Note that this does NOT check for
+% whether the neighbor has wrapped around an edge of the image
+boundaryValues = (neighbors < 1) | (neighbors > prod(dims));
+neighbors(boundaryValues) = inlist(boundaryValues);
 
 %%%%%%%%%%%%%%%%%%%%%%
 %    getNeighbors    %
@@ -870,4 +902,4 @@ outlist = mrSub2ind(dims,outlist(1,:),outlist(2,:),outlist(3,:));
 % remove nans (which will be ones outside the volume as computed
 % by mrSub2ind
 outlist = outlist(~isnan(outlist));
-
+outlist = unique(outlist);
