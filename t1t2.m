@@ -82,11 +82,11 @@ end
 
 % now set threshold and divide T1 by T2
 if ~isempty(t2)
-  vol = divideT1byT2(t1,t2,1);
-  if ~isempty(vol),saveNifti(vol,'t1t2',verbose);end
+  [vol processingList] = divideT1byT2(t1,t2,1);
+  if ~isempty(vol),saveNifti(vol,'t1t2',verbose,processingList);end
 else
-  vol = divideT1byT2(t1,t1,3);
-  if ~isempty(vol),saveNifti(vol,'t1t1',verbose);end
+  [vol processingList] = divideT1byT2(t1,t1,3);
+  if ~isempty(vol),saveNifti(vol,'t1t1',verbose,processingList);end
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%
@@ -250,18 +250,22 @@ disppercent(inf);
 %%%%%%%%%%%%%%%%%%%
 %    saveNifti    %
 %%%%%%%%%%%%%%%%%%%
-function saveNifti(im,name,verbose)
+function saveNifti(im,name,verbose,txt)
+
+if nargin < 4,txt = '';end
 
 if verbose,disp(sprintf('(t1t2) Saving %s',name));end
 name = setext(name,'hdr');
 
-% get min and max for normalization of values to between 0 and 256
-mind = min(im.d(:)); 
-maxd = max(im.d(:));
-
 % write out image
-cbiWriteNifti(name,256*(im.d-mind)/(maxd-mind),im.hdr);
+cbiWriteNifti(name,im.d,im.hdr);
 
+% write out processing list
+if ~isempty(txt)
+  f = fopen(setext(name,'txt'),'w');
+  fprintf(f,txt);
+  fclose(f);
+end
 %%%%%%%%%%%%%%%%%%%%%%%
 %    checkCommands    %
 %%%%%%%%%%%%%%%%%%%%%%%
@@ -300,12 +304,16 @@ end
 %%%%%%%%%%%%%%%%%%%%%%
 %    divideT1byT2    %
 %%%%%%%%%%%%%%%%%%%%%%
-function vol = divideT1byT2(t1,t2,blurLevel,verbose)
+function [vol processingList] = divideT1byT2(t1,t2,blurLevel,verbose)
 
 vol = [];
+processingList = '';
 
 % some global variables for displaying
 global gt1t2;
+
+% set range - this is what the output will be scaled to
+gt1t2.range = 256;
 
 % display figure
 gt1t2.f = smartfig('t1t2');
@@ -320,20 +328,31 @@ gt1t2.t2 = t2;
 gt1t2.params = [];
 
 % set mouse handler
-set(gt1t2.f,'WindowButtonDownFcn',@t1t2floodfill);
+set(gt1t2.f,'WindowButtonDownFcn',@setMaxFillCenter);
 
 gt1t2.roiPath = '.';
 
 maxSlice = size(t1.d,3);
 midSlice = round(maxSlice/2);
 
+initThreshold = 10;%round(median(gt1t2.t2.d(:)));
 % set up params
-paramsInfo{1} = {'sliceNum',midSlice,'numeric=1','incdec=[-1 1]',sprintf('minmax=[1 %i]',maxSlice),'callback',@displayT1T2,'passParams=1','Which slice to display'};
-paramsInfo{end+1} = {'threshold',1,'numeric=1','incdec=[-0.1 0.1]','minmax=[0 inf]','callback',@displayT1T2,'passParams=1','Controls the threshold of the T2 image that creates the mask. Set this to make as clean a mask as possible'};
-paramsInfo{end+1} = {'blurLevel',blurLevel,'numeric=1','incdec=[-1 1]','minmax=[0 inf]','round=1','callback',@displayT1T2,'passParams=1','How much to blur the image'};
-paramsInfo{end+1} = {'sliceOrientation',{'saggital','coronal','axial'},'callback',@displayT1T2,'passParams=1','Which slice orientation to display'};
+paramsInfo{1} = {'sliceOrientation',{'saggital','coronal','axial'},'callback',@displayT1T2,'passParams=1','Which slice orientation to display'};
+paramsInfo{end+1} = {'sliceNum',midSlice,'numeric=1','incdec=[-1 1]',sprintf('minmax=[1 %i]',maxSlice),'callback',@displayT1T2,'passParams=1','Which slice to display'};
+paramsInfo{end+1} = {'dispInMlrVol',0,'type=pushbutton','callback',@dispInMlrVol,'passParams=1','buttonString=Display in mlrVol','Display output volume in mlrVol'};
+paramsInfo{end+1} = {'dispProcessing',0,'type=pushbutton','callback',@dispProcessing,'passParams=1','buttonString=Display processing list','Display list of all processing done on T2 volume'};
+paramsInfo{end+1} = {'setRef',0,'type=pushbutton','callback',@setRefVolume,'passParams=1','buttonString=Set reference','Set the current T1/T2 as a reference which can be viewed when you display in mlrVol. Hold shift down and hit button to clear reference.'};
 paramsInfo{end+1} = {'loadROI',0,'type=pushbutton','callback',@loadROI,'passParams=1','buttonString=Load ROI','Load ROI for displaying localized histogram'};
-		
+paramsInfo{end+1} = {'revert',0,'type=pushbutton','passParams=1','callback',@revert,'buttonString=Revert T2','Revert to original T1/T2 without any blur or other filtering applied'};
+paramsInfo{end+1} = {'threshold',initThreshold,'numeric=1','incdec=[-0.1 0.1]','minmax=[0 inf]','callback',@displayT1T2,'passParams=1','Controls the threshold of the T2 image that creates the mask. Set this to make as clean a mask as possible'};
+paramsInfo{end+1} = {'blurLevel',1,'numeric=1','incdec=[-1 1]','minmax=[0 inf]','round=1','How much to blur the image'};
+paramsInfo{end+1} = {'blur',0,'type=pushbutton','callback',@doblur,'passParams=1','buttonString=2D blur T2','Blur T2 image, using blurLevel above'};
+paramsInfo{end+1} = {'blurWidth',1,'numeric=1','incdec=[-1 1]','minmax=[0 inf]','Standard deviation in pixels of the 3D gaussian to blur with when the button below is pressed'};
+paramsInfo{end+1} = {'blurGauss',0,'type=pushbutton','callback',@doGaussianBlur,'passParams=1','buttonString=3D gaussian blur T2','Blur T2 image, using a 3D gaussian with standard deviation as set above'};
+paramsInfo{end+1} = {'maxFill',0,'type=pushbutton','callback',@t1t2MaxFill,'passParams=1','buttonString=Max fill T2','Max fills the volume by replacing each voxel by the maximum of its neighbors within a distance as specified by maxfillRadius. If maxfillMask is set then those voxel outside the current mask will get the maximum of its neighbors from the maxfilled volume - which propogats the max value into the unmasked places. The algorithm starts at the maxFillCenter and moves outward. Click on a point in the T2 volume to set this center point'};
+paramsInfo{end+1} = {'maxFillCenter',round(size(t1.d)/3),'See above','round=1'};
+paramsInfo{end+1} = {'maxFillRadius',1.5,'See above. 1.5 will get all immediate neighbors'};
+paramsInfo{end+1} = {'maxFillMask',1,'type=checkbox','See above'};
 % get default params to display initial image
 params = mrParamsDefault(paramsInfo);
 displayT1T2(params);
@@ -350,13 +369,163 @@ if isfield(gt1t2,'reffig')
 end
 drawnow;
 t2 = gt1t2.t2;
-clear global gt1t2;
 
 % user cancel
 if isempty(params),return,end
 
 % compute T1/T2
 vol = computeT1T2(t1,t2,params);
+
+% return processing list
+if isfield(gt1t2.t2,'processingList')
+  processingList = gt1t2.t2.processingList;
+end
+
+clear global gt1t2;
+
+%%%%%%%%%%%%%%%%%%%%%%
+%    setRefVolume    %
+%%%%%%%%%%%%%%%%%%%%%%
+function retval = setRefVolume(params)
+
+retval = 0;
+global gt1t2;
+
+if any(strcmp(get(gcf,'CurrentModifier'),'shift'))
+  disp(sprintf('(t1t2) Clearing reference volume'));
+  if isfield(gt1t2,'refvol')
+    gt1t2= rmfield(gt1t2,'refvol');
+  end
+else
+  disp(sprintf('(t1t2) Setting reference volume for viewing in mlrVol'));
+  gt1t2.refvol = gt1t2.t1t2;
+  gt1t2.refvol.processingList = sprintf('%sThreshold %0.1f\n',gt1t2.t2.processingList,params.threshold);
+end
+%%%%%%%%%%%%%%%%%%%%%%%%
+%    dispProcessing    %
+%%%%%%%%%%%%%%%%%%%%%%%%
+function retval = dispProcessing(params)
+
+retval = 0;
+global gt1t2;
+disp(repmat('=',1,60));
+if ~isempty(gt1t2.t2.processingList)
+  disp(sprintf('%s',gt1t2.t2.processingList(1:end-1)));
+else
+  disp(sprintf('No processing has been done'));
+end
+disp(repmat('=',1,60));
+
+if isfield(gt1t2,'refvol')
+  disp(sprintf('Reference volume processing'));
+  if ~isempty(gt1t2.refvol.processingList)
+    disp(sprintf('%s',gt1t2.refvol.processingList(1:end-1)));
+  else
+    disp(sprintf('No processing has been done'));
+  end
+  disp(repmat('=',1,60));
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%    doGaussianBlur    %
+%%%%%%%%%%%%%%%%%%%%%%%%
+function retval = doGaussianBlur(params)
+
+
+% get some parameters
+retval = 0;
+global gt1t2;
+dim = size(gt1t2.t2.blurd);
+sigma = params.blurWidth;
+
+disppercent(-inf,sprintf('(t1t2:doGaussianBlur) Computing 3D gaussian blur with standard deviation %0.2f',params.blurWidth));
+
+% compute the gaussian filter
+[x y z] = ndgrid(0:dim(1)-1,0:dim(2)-1,0:dim(3)-1);
+x = x-dim(1)/2;
+y = y-dim(2)/2;
+z = z-dim(3)/2;
+g = exp(-(x.^2 + y.^2 + z.^2)/(sigma^2));
+g = ifftshift(g);
+
+% test
+%uhm = zeros(dim);
+%uhm(2,1,5) = 1; (gaussian should be centered on this point)
+%duh = ifftn(fftn(uhm).*fftn(g));
+
+% compute convolution
+gt1t2.t2.blurd = ifftn(fftn(gt1t2.t2.blurd).*fftn(g));
+
+disppercent(inf);
+
+% redisplay
+[gt1t2.t1t2 gt1t2.mask gt1t2.t2] = computeT1T2(gt1t2.t1,gt1t2.t2,params);
+displayT1T2(params);
+
+% update string of what we have done
+gt1t2.t2.processingList = sprintf('%sGaussian blur with standard deviation %0.2f\n',gt1t2.t2.processingList,params.blurWidth);
+%%%%%%%%%%%%%%
+%    blur    %
+%%%%%%%%%%%%%%
+function retval = doblur(params)
+
+retval = 0;
+global gt1t2;
+
+if params.blurLevel == 0
+  disp(sprintf('(t1t2:doblur) Blur level set to 0, not do anything'));
+  return
+end
+
+% pre allocate memory
+if ~isfield(gt1t2.t2,'blurd')
+  gt1t2.t2.blurd = zeros(size(gt1t2.t2.d));
+end
+
+% do bluring
+verbose = 1;
+if verbose,disppercent(-inf,'(t1t2) Blurring T2 image');end
+for i = 1:size(gt1t2.t2.blurd,3)
+  gt1t2.t2.blurd(:,:,i) = blur(gt1t2.t2.blurd(:,:,i),params.blurLevel);
+  if verbose,disppercent(i/size(gt1t2.t2.blurd,3));end
+end
+if verbose,disppercent(inf);end
+
+% redisplay
+[gt1t2.t1t2 gt1t2.mask gt1t2.t2] = computeT1T2(gt1t2.t1,gt1t2.t2,params);
+displayT1T2(params);
+
+% update string of what we have done
+gt1t2.t2.processingList = sprintf('%sBlur level %i\n',gt1t2.t2.processingList,params.blurLevel);
+
+%%%%%%%%%%%%%%%%
+%    revert    %
+%%%%%%%%%%%%%%%%
+function retval = revert(params)
+
+retval = 0;
+global gt1t2;
+gt1t2.t2.blurd = gt1t2.t2.d;
+[gt1t2.t1t2 gt1t2.mask gt1t2.t2] = computeT1T2(gt1t2.t1,gt1t2.t2,params);
+displayT1T2(params);
+
+% update string to default
+gt1t2.t2.processingList = '';
+
+%%%%%%%%%%%%%%%%%%%%%%
+%    dispInMlrVol    %
+%%%%%%%%%%%%%%%%%%%%%%
+function retval = dispInMlrVol(params)
+
+retval = 0;
+
+global gt1t2;
+vol = computeT1T2(gt1t2.t1,gt1t2.t2,params);
+if isfield(gt1t2,'refvol')
+  mlrVol(vol.d,vol.hdr,gt1t2.refvol.d,gt1t2.refvol.hdr,'toggleOverlay=0');
+else
+  mlrVol(vol.d,vol.hdr);
+end
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %%   paramsChanged   %%
@@ -380,10 +549,7 @@ tf = 0;
 %%%%%%%%%%%%%%%%%%%%%
 function [t1t2 mask t2] = computeT1T2(t1,t2,params,sliceNum)
 
-% see if we have to blur T2
-if ~isfield(t2,'blurLevel') || (params.blurLevel ~= t2.blurLevel)
-  t2 = blurImage(t2,1,params.blurLevel);
-end
+global gt1t2;
 
 % default to all slices
 if ieNotDefined('sliceNum'),sliceNum = 1:size(t1.d,3);end
@@ -401,6 +567,9 @@ t1t2.hdr = t1.hdr;
 % now compute normalization factors
 t1t2.min = min(t1t2.d(mask));
 t1t2.max = max(t1t2.d(mask));
+
+% normalize
+t1t2.d = gt1t2.range*(t1t2.d-t1t2.min)/(t1t2.max-t1t2.min);
 disppercent(inf);
 
 %%%%%%%%%%%%%%%%%%%%
@@ -429,6 +598,12 @@ axis off;
 title('T1');
 drawnow
 
+% set current t2 image
+if ~isfield(gt1t2.t2,'blurd')
+  gt1t2.t2.blurd = gt1t2.t2.d;
+  gt1t2.t2.processingList = '';
+end
+
 % compute division
 if paramsChanged(gt1t2.params,params)
   [gt1t2.t1t2 gt1t2.mask gt1t2.t2] = computeT1T2(gt1t2.t1,gt1t2.t2,params);
@@ -456,12 +631,13 @@ subplot(1,3,3);
 figure(gt1t2.f);
 switch sliceOrientation
  case {1}
-  imagesc(flipud(squeeze(gt1t2.mask(:,:,params.sliceNum))'));
+  maskSlice = flipud(squeeze(gt1t2.mask(:,:,params.sliceNum))');
  case {2}
-  imagesc(flipud(squeeze(gt1t2.mask(:,params.sliceNum,:))'));
+  maskSlice = flipud(squeeze(gt1t2.mask(:,params.sliceNum,:))');
  case {3}
-  imagesc(flipud(squeeze(gt1t2.mask(params.sliceNum,:,:))'));
+  maskSlice = flipud(squeeze(gt1t2.mask(params.sliceNum,:,:))');
 end
+imagesc(maskSlice);
 
 axis square;
 axis off;
@@ -485,7 +661,12 @@ imSlice = squeeze(imSlice);
 figure(gt1t2.histfig);cla;
 
 if ~isfield(gt1t2,'roi') || ~isroi(gt1t2.roi)
-  myhist(imSlice(:),100);
+  vals = imSlice(find(maskSlice));
+  vals = vals(~isnan(vals));
+  vals = vals(~isinf(vals));
+  if ~isempty(vals)
+    myhist(vals,100);
+  end
   imDisplaySlice = imSlice;
 else
   % load the voxels 
@@ -505,14 +686,9 @@ else
   imDisplaySlice = colorMatchingVoxels(imSlice,m(1),s(1));
 end
 % set title for distribution across slice
-title(sprintf('Histogram of values across slice'));
+title(sprintf('Histogram of values across slice in mask'));
 ylabel('N voxels');
 xlabel('Pixel intensity');
-
-
-imDisplaySlice = (imDisplaySlice-gt1t2.t1t2.min)/(gt1t2.t1t2.max-gt1t2.t1t2.min);
-imDisplaySlice(imDisplaySlice<0) = 0;
-imDisplaySlice(imDisplaySlice>1) = 1;
 
 figure(gt1t2.f2);
 imagesc(flipud(imDisplaySlice'));
@@ -520,7 +696,7 @@ title('T1/T2');
 axis square;
 axis off;
 
-colormap(gray);
+colormap(gray(gt1t2.range));
 
 % now display ref image if it exists
 if isfield(gt1t2,'ref') && ~isempty(gt1t2.ref)
@@ -543,41 +719,13 @@ if isfield(gt1t2,'ref') && ~isempty(gt1t2.ref)
   title(gt1t2.refname);
   axis square;
   axis off;
-  colormap(gray);
+  colormap(gray(gt1t2.range));
   subplot(1,2,2);
   plot(imSlice(:),refSlice(:),'k.');
   xlabel('t1t2 pixel intensity');
   ylabel('ref pixel intensity');
   axis square;
 end
-
-%%%%%%%%%%%%%%%%%%%
-%%   blurImage   %%
-%%%%%%%%%%%%%%%%%%%
-function img = blurImage(img,verbose,nIter)
-
-% nIter and blurLevel are same thing
-if ieNotDefined('nIter'),nIter = 1;end
-img.blurLevel = nIter;
-
-% no bluring
-if nIter == 0
-  img.blurd = img.d;
-  return
-end
-
-% pre allocate memory
-if ~isfield(img,'blurd')
-  img.blurd = zeros(size(img.d));
-end
-
-% do bluring
-if verbose,disppercent(-inf,'(t1t2) Blurring T2 image');end
-for i = 1:size(img.d,3)
-  img.blurd(:,:,i) = blur(img.d(:,:,i),nIter);
-  if verbose,disppercent(i/size(img.d,3));end
-end
-if verbose,disppercent(inf);end
 
 %%%%%%%%%%%%%%%
 %%   check   %%
@@ -764,10 +912,10 @@ imOut(:,:,2) = im0;
 imOut(:,:,3) = im0;
 
 
-%%%%%%%%%%%%%%%%%%%%%%%
-%    t1t2floodfill    %
-%%%%%%%%%%%%%%%%%%%%%%%
-function t1t2floodfill(src,eventdata)
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    setMaxFillCenter    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+function setMaxFillCenter(src,eventdata)
 
 global gt1t2;
 
@@ -807,29 +955,49 @@ end
 
 % display coordinates
 disp(sprintf('(t1t2:t1t2floodfill) Pointer at [%i,%i,%i]',x,y,z));
+params.maxFillCenter = [x y z];
+mrParamsSet(params);
+return;
 
-%keyboard
+
+%%%%%%%%%%%%%%%%%%%%%
+%    t1t2Maxfill    %
+%%%%%%%%%%%%%%%%%%%%%
+function retval = t1t2MaxFill(params)
+
+retval = 0;
+
+global gt1t2;
+dims = size(gt1t2.t2.d);
+
 maxfill = nan(dims);
 
 visitedPoints = [];
-currentPoints = [x y z]';
+currentPoints = params.maxFillCenter';
 currentPoints = sub2ind(dims,currentPoints(1,:),currentPoints(2,:),currentPoints(3,:));
 
 % get how the neighbors are spaced in a linear array, using getNeighbors to
-% generate the list of neighbors
-neighborDist = currentPoints-getNeighbors(currentPoints,dims)';
+% generate the list of neighbors. This is for calculating the next set
+% of points to fill
+nextNeighborDist = currentPoints-getNeighbors(currentPoints,dims,1.5)';
+
+% now get another list, this is for checking neighbors for max filling
+maxFillNeighborDist = currentPoints-getNeighbors(currentPoints,dims,params.maxFillRadius)';
 
 disppercent(-inf,'(t1t2) Filling volume');
 while ~isempty(currentPoints)
   % get the neighbors using the fast algorithm (which simply adds the distances
   % between the current points and the neighbors in linear coordinates)
-  currentNeighbors = getNeighborsFast(currentPoints(:)',neighborDist,dims);
+  currentNeighbors = getNeighborsFast(currentPoints(:)',maxFillNeighborDist,dims);
   % get the max across neighbors for each current point in the original
   % and in the current state of the filled image
   maxFromOriginal = max(gt1t2.t2.blurd(currentNeighbors));
   maxFromFilled = max(maxfill(currentNeighbors));
   % find which of the current points are in the mask
   inmask = gt1t2.mask(currentPoints)';
+  if ~params.maxFillMask
+    inmask(:) = 1;
+  end
   % if they are in the mask then take the max from the original
   maxfill(currentPoints(inmask)) = maxFromOriginal(inmask);
   % if not in the mask then use the max from the original and from the filled
@@ -838,7 +1006,7 @@ while ~isempty(currentPoints)
   % update the visitedPoints list
   visitedPoints = union(visitedPoints,currentPoints);
   % get the neighbors of the current point
-  currentPoints = getNeighborsFast(currentPoints(:)',neighborDist,dims);
+  currentPoints = getNeighborsFast(currentPoints(:)',nextNeighborDist,dims);
   % remove any points already visited.
   currentPoints = setdiff(currentPoints(:),visitedPoints);
   % update percent done display
@@ -854,6 +1022,9 @@ displayT1T2(gt1t2.params);
 %gt1t2.t2.blurd(neighbors) = 0;
 
 %keyboard
+
+% update string of what we have done
+gt1t2.t2.processingList = sprintf('%sMaxfill Center: [%s] Radius: %0.2f Mask: %i\n',gt1t2.t2.processingList,num2str(params.maxFillCenter,'%i '),params.maxFillRadius,params.maxFillMask);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %    getNeighborsFast    %
@@ -877,7 +1048,7 @@ neighbors(boundaryValues) = inlist(boundaryValues);
 %%%%%%%%%%%%%%%%%%%%%%
 %    getNeighbors    %
 %%%%%%%%%%%%%%%%%%%%%%
-function outlist = getNeighbors(inlist,dims)
+function outlist = getNeighbors(inlist,dims,dist)
 
 % convert from linear coordinates
 [x y z] = ind2sub(dims,inlist);
@@ -888,10 +1059,12 @@ nVoxels = size(inlist,2);
 % add or subtract 1 in every combination of dimensions to get 
 % all neighbors (will also include voxel itself)
 outlist = [];
-for xOffset = -1:1
-  for yOffset = -1:1
-    for zOffset = -1:1
-      outlist = [outlist [x;y;z]+repmat([xOffset yOffset zOffset]',1,nVoxels)];
+for xOffset = -floor(dist):ceil(dist)
+  for yOffset = -floor(dist):ceil(dist)
+    for zOffset = -floor(dist):ceil(dist)
+      if sqrt(xOffset^2+yOffset^2+zOffset^2) < dist
+	outlist = [outlist [x;y;z]+repmat([xOffset yOffset zOffset]',1,nVoxels)];
+      end
     end
   end
 end
