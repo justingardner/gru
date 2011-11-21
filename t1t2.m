@@ -8,25 +8,22 @@
 %       e.g.: t1t2('t1.fid','t2.fid');
 %
 %             t1_fidname can be a cell array of fid names (or nifti files) that you want to have averaged
+%             e.g.: t1t2({'hires3d01','hires3D03'},'hires3D02')
 %             t2_fidname can be a cell array of fid names (or nifti files) that you want to have averaged
 %
 %             This program will align and average the t1 images and the t2 images
 %             Note that you will have to set a crop region to do the alignments (crop around the brain).
 %
-%             Then it will align using AFNI the t1 and t2 images
+%             Then it will align using AFNI the t1 and t2 images - if you set the argument
+%             t1t2('t1','t2','T1T2alignment=1');
 %
-%             Then it will put up a GUI to set the threshold. Click Ok and it will save the t1t2.hdr
-%             set verbose=0 for no comments.
-%             To not run T1T2alignment:
-%        
-%             t1t2('t1','t2','T1T2alignment=0');
+%             Then it will put up a GUI to set the threshold and do various bluring or filtering
+%             of the T2 image.
 %
 %             Note that you can also do normalization by dividing by a blurred version 
 %             of the same T1. This will save an image called t1t1.hdr
 %
 %             t1t2('t1');
-% 
-% 
 %
 function retval = t1t2(t1_fidname,t2_fidname,varargin)
 
@@ -69,11 +66,18 @@ if isempty(t1),return,end
 t1 = alignImages(t1,verbose);
 t1 = averageImages(t1,verbose);
 %t1ic = t1t2IntensityContrastCorrection(t1,verbose);
+% save to disk if this is an averaged one
+if isfield(t1,'averaged') && t1.averaged
+  saveNifti(t1,'t1.hdr',verbose);
+end
 
 % load t2 files, align images and average
 t2 = loadImageFiles(t2_fidname,verbose);
 t2 = alignImages(t2,verbose);
 t2 = averageImages(t2,verbose);
+if isfield(t2,'averaged') && t2.averaged
+  saveNifti(t2,'t2.hdr',verbose);
+end
 
 % now do T1/T2 alignment using AFNI
 if T1T2alignment && ~isempty(t2)
@@ -131,6 +135,7 @@ filenames = cellArray(filenames);
 
 % load the fids with fid2nifti
 for i = 1:length(filenames)
+  disp(sprintf('(t1t2:loadImageFiles) Loading %s',filenames{i}));
   im{end+1}.filename = filenames{i};
   [im{end}.d im{end}.hdr] = mlrImageLoad(filenames{i},'orient=LPI','nifti=1');
 end
@@ -170,6 +175,7 @@ Minitial = eye(4);
 rotFlag = 1;
 robust = 0;
 phaseFlag = 0;
+disp(sprintf('(t1t2:alignImages) Select crop region around the brain for alignment. This may take a few moments to put up the figure...'));
 im{baseImage}.crop = selectCropRegion(im{1}.d);
 drawnow;
 
@@ -201,7 +207,9 @@ disppercent(inf);
 %%%%%%%%%%%%%%%%%%%%%%%
 function im = averageImages(im,verbose)
 
-if length(im)<=0,return,end
+
+nImages = length(im);
+if nImages<=0,return,end
 
 baseImage = 1;
 restOfImages = setdiff(1:length(im),baseImage);
@@ -217,6 +225,12 @@ im{baseImage}.d = im{baseImage}.d/length(im);
 % remove other images
 im = im{baseImage};
 
+if nImages > 1
+  im.averaged = true;
+else
+  im.averaged = false;
+end
+
 %%%%%%%%%%%%%%%%%%%%
 %    alignT1toT2  %%
 %%%%%%%%%%%%%%%%%%%%
@@ -226,11 +240,12 @@ function t2 = alignT1toT2(t1,t2,verbose)
 AFNIcommand = '3dAllineate';
 
 % filenames
-t1filename = 't1.hdr';
+t1filename = 't1_forAlignment.hdr';
 t2filename = 't2_preAlignment.hdr';
 t2alignedFilename = 't2.hdr';
 
 % write the files out to disk
+disp(sprintf('(t1t2:alignT1toT2) Saving temporary files that are used by AFNI to do alignment'));
 saveNifti(t1,t1filename,verbose);
 saveNifti(t2,t2filename,verbose);
 
@@ -243,8 +258,8 @@ disppercent(inf);
 [t2.d t2.hdr] = cbiReadNifti(t2alignedFilename);
 
 % remove temporary files
-%  delete(setext(t1filename,'*'));
-%  delete(setext(t2filename,'*'));
+delete(setext(t1filename,'*'));
+delete(setext(t2filename,'*'));
 %  delete(setext(t2alignedFilename,'*'));
 
 %%%%%%%%%%%%%%%%%%%
@@ -252,16 +267,32 @@ disppercent(inf);
 %%%%%%%%%%%%%%%%%%%
 function saveNifti(im,name,verbose,txt)
 
-if nargin < 4,txt = '';end
+if nargin < 4,txt = -1;end
 
 if verbose,disp(sprintf('(t1t2) Saving %s',name));end
 name = setext(name,'hdr');
+
+if isfile(name)
+  % ask the user what to do
+  saveMethodTypes = {'Rename','Overwrite',};
+  paramsInfo = {{'saveMethod',saveMethodTypes,'Choose how you want to save the volume'}};
+  params = mrParamsDialog(paramsInfo,sprintf('%s already exists',name));
+  if isempty(params),return,end
+  if strcmp(params.saveMethod,'Rename')
+    % put up a dialog to get new filename
+    [name pathStr] = uiputfile({'*.hdr'},'Enter new name to save volume',name);
+    % user hit cancel
+    if isequal(name,0),return, end
+    % otherwise accept the filename, make sure it has an .hdr extension
+    name = setext(name,'hdr');
+  end
+end
 
 % write out image
 cbiWriteNifti(name,im.d,im.hdr);
 
 % write out processing list
-if ~isempty(txt)
+if ~isequal(txt,-1)
   f = fopen(setext(name,'txt'),'w');
   fprintf(f,txt);
   fclose(f);
