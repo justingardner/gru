@@ -808,7 +808,43 @@ end
 
 % now run mrInit
 disp(sprintf('(dofmrigru1) Setup mrInit for your directory'));
-mrInit([],[],sprintf('subject=%s',subjectID));
+mrInit([],[],sprintf('subject=%s',subjectID),'makeReadme=0');
+
+% set some info in the auxParams about the scane
+v = newView;
+if ~isempty(v)
+  for iScan = 1:length(epiNums)
+    % set fid name
+    v = viewSet(v,'auxParam','fid',fullfile('Pre',fidList{epiNums(iScan)}.filename),iScan);
+    % set tsense field
+    if ~isempty(tsense) && (length(tsense) >= iScan) && ~isempty(tsense{iScan})
+      v = viewSet(v,'auxParam','tSense',tsense{iScan}(1),iScan);
+    end
+    % set framePeriod as recorded in stimfile
+    stimfile = viewGet(v,'stimfile',iScan);
+    if ~isempty(stimfile)
+      if strcmp(stimfile{1}.filetype,'mgl')
+	% get all the volume events
+	volEvents = find(stimfile{1}.myscreen.events.tracenum == 1);
+	if length(volEvents) > 1
+	  % get the framePeriod
+	  framePeriod = median(diff(stimfile{1}.myscreen.events.time(volEvents)));
+	  % now see if we have to accelerate
+	  if ~isempty(tsense) && (length(tsense) >= iScan) && ~isempty(tsense{iScan})
+	    framePeriod = framePeriod/tsense{iScan}(1);
+	  end
+	  disp(sprintf('(dofmrigru) Frame period as recorded in stimfile is: %f',framePeriod));
+  	  % set the frame period
+	  scanParams = viewGet(v,'scanParams',iScan);
+	  scanParams.framePeriod = framePeriod;
+	  v = viewSet(v,'scanParams',scanParams);
+	end
+      end
+    end
+  end
+  saveSession(0);
+  deleteView(v);
+end
 
 % set up motion comp parameters
 for i = 1:numMotionComp
@@ -952,13 +988,15 @@ disp(sprintf('=============================================='));
 
 % move car/ext files into fid directories
 for i = 1:length(carMatchNum)
-  command = sprintf('copyfile %s %s',carList{carMatchNum(i)}.fullfile,fullfile('Pre',fidList{epiNums(i)}.filename));
-  if justDisplay,disp(command),else,eval(command),end
-  if isfield(carList{carMatchNum(i)},'extfilename')
-    disp('ext not found. not being copied...');
-    command = sprintf('copyfile %s %s',fullfile(carList{carMatchNum(i)}.path,carList{carMatchNum(i)}.extfilename),fullfile('Pre',fidList{epiNums(i)}.filename));
+  if carMatchNum(i) ~= -1
+    command = sprintf('copyfile %s %s',carList{carMatchNum(i)}.fullfile,fullfile('Pre',fidList{epiNums(i)}.filename));
+    if justDisplay,disp(command),else,eval(command),end
+    if isfield(carList{carMatchNum(i)},'extfilename')
+      disp('ext not found. not being copied...');
+      command = sprintf('copyfile %s %s',fullfile(carList{carMatchNum(i)}.path,carList{carMatchNum(i)}.extfilename),fullfile('Pre',fidList{epiNums(i)}.filename));
+    end
+    if justDisplay,disp(command),else,eval(command);,end
   end
-  if justDisplay,disp(command),else,eval(command);,end
 end
 
 disp(sprintf('=============================================='));
@@ -1060,11 +1098,17 @@ carMatchNum = [];
 for i = 1:length(carList)
   carNames{i} = carList{i}.filename;
 end
+carNames{end+1} = 'None';
+noneNum = length(carNames);
 
 % get info from scans
 for i = 1:length(epiNums)
   scanNames{i} = stripext(fidList{epiNums(i)}.filename);
-  carMatchNames{i} = putOnTopOfList(carNames{min(i,end)},carNames);
+  if i <= length(carNames)
+    carMatchNames{i} = putOnTopOfList(carNames{i},carNames);
+  else
+    carMatchNames{i} = putOnTopOfList('None',carNames);
+  end
   startTime{i} = fidList{epiNums(i)}.startTimeStr;
   endTime{i} = fidList{epiNums(i)}.endTimeStr;
 end
@@ -1082,9 +1126,9 @@ if isempty(params),return;end
 
 % now get the matching numbers
 for i = 1:length(params.carFile)
-  carMatchNum(i) = find(strcmp(params.carFile(i),carNames));
+  carMatchNum(i) = find(strcmp(params.carFile{i},carNames));
 end
-
+carMatchNum(carMatchNum==noneNum) = -1;
 
 %%%%%%%%%%%%%%%%%%%%%%
 %%   dispScanlist   %%
