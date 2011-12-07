@@ -815,7 +815,7 @@ v = newView;
 if ~isempty(v)
   for iScan = 1:length(epiNums)
     % set fid name
-    v = viewSet(v,'auxParam','fid',fullfile('Pre',fidList{epiNums(iScan)}.filename),iScan);
+    v = viewSet(v,'auxParam','fidFilename',fullfile('Pre',fidList{epiNums(iScan)}.filename),iScan);
     % set tsense field
     if ~isempty(tsense) && (length(tsense) >= iScan) && ~isempty(tsense{iScan})
       v = viewSet(v,'auxParam','volTrigRatio',tsense{iScan}(1),iScan);
