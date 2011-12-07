@@ -818,7 +818,8 @@ if ~isempty(v)
     v = viewSet(v,'auxParam','fid',fullfile('Pre',fidList{epiNums(iScan)}.filename),iScan);
     % set tsense field
     if ~isempty(tsense) && (length(tsense) >= iScan) && ~isempty(tsense{iScan})
-      v = viewSet(v,'auxParam','tSense',tsense{iScan}(1),iScan);
+      v = viewSet(v,'auxParam','volTrigRatio',tsense{iScan}(1),iScan);
+      v = viewSet(v,'auxParam','tSense',tsense{iScan},iScan);
     end
     % set framePeriod as recorded in stimfile
     stimfile = viewGet(v,'stimfile',iScan);
