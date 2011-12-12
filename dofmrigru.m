@@ -636,6 +636,7 @@ function [epiNumsWithPeaks epiNumsWithCarExt] = checkForPeaks(fidList,epiNums)
 
 passedCheckCarExt = ones(1,length(epiNums));
 passedCheckPeaks = ones(1,length(epiNums));
+runForSixtySecs = zeros(1,length(epiNums));
 
 for i = 1:length(epiNums)
   % shortcut
@@ -662,6 +663,10 @@ for i = 1:length(epiNums)
       end
     end
   end
+  % check, if it was run for more than 60 seconds, assume it is real
+  if fid.info.elapsedSecs > 60
+    runForSixtySecs(i) = true;
+  end
 end
 
 scansThatPassedPeaks = find(passedCheckPeaks);
@@ -670,7 +675,8 @@ for i = 1:length(scansThatPassedPeaks)
   epiNumsWithPeaks(end+1) = epiNums(scansThatPassedPeaks(i));
 end
 
-scansThatPassedCarExt = find(passedCheckCarExt);
+% if it had no car/ext, but is longer than sixty seconds, then add here
+scansThatPassedCarExt = find(passedCheckCarExt|runForSixtySecs);
 epiNumsWithCarExt = [];
 for i = 1:length(scansThatPassedCarExt)
   epiNumsWithCarExt(end+1) = epiNums(scansThatPassedCarExt(i));
