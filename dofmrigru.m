@@ -844,7 +844,7 @@ if ~isempty(v)
   	  % set the frame period
 	  scanParams = viewGet(v,'scanParams',iScan);
 	  scanParams.framePeriod = framePeriod;
-	  v = viewSet(v,'scanParams',scanParams);
+	  v = viewSet(v,'scanParams',scanParams,iScan);
 	end
       end
     end
