@@ -809,7 +809,7 @@ exptname = getLastDir(pwd);
 if (length(exptname) > 4) && (exptname(1) == 's')
   subjectID = exptname(1:4);
 else
-  subjectID = '';
+  subjectID = 'sxxx';
 end
 
 % now run mrInit
