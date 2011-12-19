@@ -1229,7 +1229,12 @@ for i = 1:length(fidList)
   end
   % make the display string
   fidList{i}.dispstr = sprintf('%s: ',fidList{i}.filename);
-  fidList{i}.dispstr = sprintf('%s%s->%s',fidList{i}.dispstr,fidList{i}.startTimeStr,fidList{i}.endTimeStr);
+  if isfield(fidList{i},'startTimeStr') && isfield(fidList{i},'endTimeStr')
+    fidList{i}.dispstr = sprintf('%s%s->%s',fidList{i}.dispstr,fidList{i}.startTimeStr,fidList{i}.endTimeStr);
+  else
+    if ~isfield(fidList{i},'startTime'),fidList{i}.startTime = [];end
+    fidList{i}.startTimeStr = '';
+  end
   if ~isempty(fidList{i}.info)
     if fidList{i}.info.isepi && fidList{i}.info.compressedFid
       % unprocessed epi (the phase encodes are set wrong)
