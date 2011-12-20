@@ -123,7 +123,7 @@ for i = 1:length(fidList)
 end
 
 % check for some other files
-otherFiles = {'dofmrigru.log','dofmrigru2.log','logbook'};
+otherFiles = {'dofmrigru2.log','logbook'};
 for i = 1:length(otherFiles)
   filename = fullfile('Pre',otherFiles{i});
   if isfile(filename)
@@ -165,11 +165,11 @@ fidList = getFileList(fiddir,'fid');
 fidList = getFidInfo(fidList);
 fidList = sortFidList(fidList);
 
-% remove any already existing temp files
-%removeTempFiles(fidList);
-
 % get list of epi scans
 epiNums = getEpiScanNums(fidList);
+
+% remove any already existing temp files
+removeTempFiles({fidList{epiNums}});
 
 % set the tsense array
 tsense = setTsense(tsense,length(epiNums));
@@ -275,6 +275,7 @@ elseif length(epiNumsWithPeaks) ~= length(epiNums)
   if ~askuser('You are missing some peak files. Do you still want to continue'),return,end
 end
 
+% disp the scans
 dispList(fidList,epiNumsWithCarExt,sprintf('Epi scans to process'));
 dispList(fidList,anatNums,sprintf('Anatomy files'));
 
