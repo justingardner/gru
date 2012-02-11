@@ -1,17 +1,17 @@
-% checkFlats.m
+% ganatretCheck.m
 %
 %        $Id:$ 
-%      usage: checkFlats()
+%      usage: ganatretCheck()
 %         by: justin gardner
 %       date: 02/10/12
 %    purpose: Checks whether the flats exist in the right place 
 %             for the surfaces in ganatret. S
 %
-function retval = checkFlats(subjectDir)
+function retval = ganatretCheck(subjectDir)
 
 % check arguments
 if ~any(nargin == [0 1])
-  help checkFlats
+  help ganatretCheck
   return
 end
 
@@ -19,7 +19,7 @@ end
 volumeDir = mrGetPref('volumeDirectory');
 % check for volume directory
 if ~isdir(volumeDir)
-  disp(sprintf('(checkFlats) Could not find volumeDir: %s',volumeDir));
+  disp(sprintf('(ganatretCheck) Could not find volumeDir: %s',volumeDir));
   return
 end
 
@@ -30,7 +30,7 @@ if nargin == 0
   % check each directory
   for i = 1:length(volumeDirList)
     if volumeDirList(i).isdir
-      checkFlats(volumeDirList(i).name);
+      ganatretCheck(volumeDirList(i).name);
     end
   end
   return
@@ -39,14 +39,14 @@ end
 % check the called for subjetDir
 subjectDir = fullfile(volumeDir,subjectDir);
 if ~isdir(subjectDir)
-  disp(sprintf('(checkFlats) Could not find subjectDir: %s',subjectDir));
+  disp(sprintf('(ganatretCheck) Could not find subjectDir: %s',subjectDir));
   return
 end
 
 % get baseAnatomy
 baseAnatDir = getSubdir(subjectDir,{'mlrBaseAnatomies','baseAnatomies'});
 if isempty(baseAnatDir)
-  disp(sprintf('(checkFlats) No base anatomies found in %s',getLastDir(subjectDir)));
+  disp(sprintf('(ganatretCheck) No base anatomies found in %s',getLastDir(subjectDir)));
   return
 end
 
@@ -89,8 +89,9 @@ for iExt = 1:length(extList)
       if ~strcmp(stripext(base(iBase).name),stripext(coordMap.flatFileName))
 	base(iBase).resave = true;
 	% change the coord map and put it back in the view
-	coordMap.flatFileName = setext(base(iBase).name,'off');
-	v = viewSet(v,'baseCoordMap',coordMap);
+	coordMapFixed = coordMap;
+	coordMapFixed.flatFileName = setext(base(iBase).name,'off');
+	v = viewSet(v,'baseCoordMap',coordMapFixed);
       end
     elseif base(iBase).type == 2
       base(iBase).filenameFrom = {'innerSurfaceFileName','innerCoordsFileName','outerSurfaceFileName','outerCoordsFileName','curvFileName','anatFileName'};
@@ -163,7 +164,7 @@ for iBase = 1:viewGet(v,'numBase')
       baseType = 'surface';
     end
     fileExists = or(base(iBase).fileExists,base(iBase).fileExistsSurfaceDir);
-    disp(sprintf('(checkFlats) Found %s: %s and %i/%i supporting files',baseType,base(iBase).name,sum(fileExists),length(base(iBase).fileExists)));
+    disp(sprintf('(ganatretCheck) Found %s: %s and %i/%i supporting files',baseType,base(iBase).name,sum(fileExists),length(base(iBase).fileExists)));
     % display what's missing
     if any(~fileExists)
       missingFiles = '';
@@ -172,31 +173,82 @@ for iBase = 1:viewGet(v,'numBase')
 	  missingFiles = sprintf('%s%s, ',missingFiles,base(iBase).filenameFrom{i});
 	end
       end
-      disp(sprintf('(checkFlats) !!! Missing files: %s !!!',missingFiles(1:end-2)));
+      disp(sprintf('(ganatretCheck) !!! Missing files: %s !!!',missingFiles(1:end-2)));
     end
   end
 end
 
-dispHeader('todo');
+% display resave and copy actions
+dispHeader(sprintf('%s: Fix flat off surfaces',getLastDir(subjectDir)));
+numActions = 0;
 for iBase = 1:viewGet(v,'numBase')
   if base(iBase).resave
-    disp(sprintf('(checkFlats) Resave base anatomy: %s',base(iBase).name));
+    numActions = numActions + 1;
+    disp(sprintf('(ganatretCheck) Resave base anatomy: %s',base(iBase).name));
   end
 end
 for iCopy = 1:length(copyFrom)
-  disp(sprintf('(checkFlats) Copy from %s to %s',copyFrom{iCopy},copyTo{iCopy}));
+  numActions = numActions + 1;
+  disp(sprintf('(ganatretCheck) Copy from %s to %s',copyFrom{iCopy},copyTo{iCopy}));
 end
-for iDelete = 1:length(deleteSurfaceFiles)
-  disp(sprintf('(checkFlats) Delete %s',fullfile(surfaceDir,deleteSurfaceFiles{iDelete})));
+if numActions>0
+  dispHeader
+  if ~askuser('(ganatretCheck) Ok to do above actions'),return,end
+else
+  disp(sprintf('(ganatretCheck) No actions to perform for fixing Flats'));
+  dispHeader
 end
-keyboard
 
-% To do
-%  make list of things to do and display
-% change flat name in surface file if necessary
-% copy any files necessary to surface file
-% change filename of flat if necessary
-% give list of unaccounted for files
+% do the actions
+if numActions > 0
+  for iBase = 1:viewGet(v,'numBase')
+    if base(iBase).resave
+      saveAnat(v,iBase,0,0,baseAnatDir);
+      disp(sprintf('(ganatretCheck) Resaved base anatomy: %s',base(iBase).name));
+    end
+  end
+  for iCopy = 1:length(copyFrom)
+    copyfile(copyFrom{iCopy},copyTo{iCopy},'f');
+    disp(sprintf('(ganatretCheck) Copied from %s to %s',copyFrom{iCopy},copyTo{iCopy}));
+  end
+end
+
+% display delete actions
+numActions = 0;
+dispHeader(sprintf('%s: Surface files to delete',getLastDir(subjectDir)));
+for iDelete = 1:length(deleteSurfaceFiles)
+  numActions = numActions + 1;
+  disp(sprintf('(ganatretCheck) Delete %s',fullfile(surfaceDir,deleteSurfaceFiles{iDelete})));
+end
+if numActions>0
+  dispHeader
+  if ~askuser('(ganatretCheck) Ok to delete all above files')
+    if ~askuser('(ganatretCheck) Ask to delete each file one by one')
+      return
+    else
+      deleteType = 'onebyone';
+    end
+  else
+    deleteType = 'all';
+  end
+else
+  disp(sprintf('(ganatretCheck) No files to delete'));
+  dispHeader
+end
+
+% delete the files
+if numActions
+  for iDelete = 1:length(deleteSurfaceFiles)
+    deleteFilename = fullfile(surfaceDir,deleteSurfaceFiles{iDelete});
+    if strcmp(deleteType,'onebyone')
+      if ~askuser(sprintf('(ganatretCheck) Delete file %s',deleteFilename)),continue,end
+    end
+    delete(deleteFilename);
+    disp(sprintf('(ganatretCheck) Deleted %s',deleteFilename));
+  end
+end
+
+% delete the view
 deleteView(v);
 
 %%%%%%%%%%%%%%%%%%%
