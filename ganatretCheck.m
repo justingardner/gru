@@ -167,13 +167,11 @@ for iBase = 1:viewGet(v,'numBase')
     disp(sprintf('(ganatretCheck) Found %s: %s and %i/%i supporting files',baseType,base(iBase).name,sum(fileExists),length(base(iBase).fileExists)));
     % display what's missing
     if any(~fileExists)
-      missingFiles = '';
       for i = 1:length(fileExists)
 	if fileExists(i) == 0
-	  missingFiles = sprintf('%s%s, ',missingFiles,base(iBase).filenameFrom{i});
+	  disp(sprintf('(ganatretCheck) !!! Missing file: %s !!!',fullfile(base(iBase).dir,base(iBase).filenameFrom{i})));
 	end
       end
-      disp(sprintf('(ganatretCheck) !!! Missing files: %s !!!',missingFiles(1:end-2)));
     end
   end
 end
