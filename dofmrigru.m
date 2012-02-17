@@ -1581,9 +1581,10 @@ if ~isempty(tsense)
 	end
       elseif ~isequal(tsense{iEPI},0)
 	if tsense{iEPI} ~= numshots/ilts;
-	  disp(sprintf('(dofmrigru) !!! tSense acceleration must specify shot order. Resetting to default acceleration of %i !!!',numshots/ilts))
-	  tsense{iEPI} = numshots/ilts;
-	  tf = false;
+	  disp(sprintf('(dofmrigru) tSense acceleration set to %i even though optimal is %i',tsense{iEPI},numshots/ilts))
+%	  disp(sprintf('(dofmrigru) !!! tSense acceleration must specify shot order. Resetting to default acceleration of %i !!!',numshots/ilts))
+%	  tsense{iEPI} = numshots/ilts;
+%	  tf = false;
 	end
       end
     % if set to sepecify num shots and shot order, 
