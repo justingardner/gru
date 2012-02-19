@@ -94,6 +94,13 @@ if checkfMRISupportUnitCommands == 0,return,end
 % make sure that MLR is not running
 mrQuit;
 
+% check correct directory
+if strcmp(getLastDir(pwd),'Pre') || isfile(fullfile(fileparts(pwd),'mrSession.mat'))
+  if askuser(sprintf('(dofmrigru) Current path is %s. Did you want to start in %s',pwd,fileparts(pwd)));
+    cd('..');
+  end
+end
+
 % see if this is the first preprocessing or the second one
 if ~isdir('Pre')
   disp(sprintf('(dofmrigru) Running Initial dofmrigru process'));
@@ -305,7 +312,7 @@ if ~justDisplay
   openLogfile('dofmrigru2.log');
 end
 
-% convert anatomy files into nifti
+% copy anatomy files
 for i = 1:length(anatNums)
   disp(sprintf('=============================================='));
   disp(sprintf('Copy processed anatomy into Anatomy directory'));
@@ -415,6 +422,10 @@ for i = 1:length(epiNumsWithCarExt)
     % convert to epr
     command = sprintf('mysystem(''%s %s %s -outtype 1 %s.edt'');',postproc,ppoptions,fidname,stripext(fidname));
     if justDisplay,disp(command),else,eval(command),end
+    if ~justDisplay && ~isfile(edtname)
+      disp(sprintf('(dofmrigru) File %s not exists. Postproc failed?',edtname));
+      keyboard
+    end
     % see if there is a mask file
     if ~isempty(tSenseMaskNums) && (tSenseMaskNums(i) ~= 0)
       maskStr = sprintf('-mask %s',stripext(tSenseMaskList{tSenseMaskNums(i)}.filename));
@@ -594,13 +605,13 @@ paramsInfo{2} = {'scanName',scanNames,'group=scanNum','type=String','editable=0'
 paramsInfo{3} = {'startTime',startTime,'group=scanNum','type=String','editable=0'};
 paramsInfo{4} = {'endTime',endTime,'group=scanNum','type=String','editable=0'};
 if ~isempty(maskList)
-  paramsInfo{5} = {'maskFile',maskNamesMatch,'group=scanNum'};
+  paramsInfo{end+1} = {'maskFile',maskNamesMatch,'group=scanNum'};
 end
 if ~isempty(noiseList)
-  paramsInfo{6} = {'noiseFile',noiseNamesMatch,'group=scanNum'};
+  paramsInfo{end+1} = {'noiseFile',noiseNamesMatch,'group=scanNum'};
 end
 if ~isempty(refList)
-  paramsInfo{7} = {'refFile',refNamesMatch,'group=scanNum'};
+  paramsInfo{end+1} = {'refFile',refNamesMatch,'group=scanNum'};
 end
 
 % put up the dialog
@@ -892,7 +903,7 @@ for i = 1:length(senseRefNums)
   disp(sprintf('=============================================='));
   % convert ref to nifti
   if ~justDisplay
-    fid2nifti(fidList{senseRefNums(i)}.filename);
+    fid2nifti(fidList{senseRefNums(i)}.filename,setext(fidList{senseRefNums(i)}.filename,'hdr'));
   end
   
   % move into emptyMLR directory for mask
@@ -1105,6 +1116,13 @@ carMatchNum = [];
 % get the names of the car files
 for i = 1:length(carList)
   carNames{i} = carList{i}.filename;
+  if isfield(carList{i},'date')
+    carNames{i} = sprintf('%s (%s)',carNames{i},carList{i}.date);
+  end
+  if isequal(exist('getedges'),2) && isfield(carList{i},'car')  && isfield(carList{i}.car,'acq')
+    numAcq = getedges(carList{i}.car.acq,0.5);
+    carNames{i} = sprintf('%s %i',carNames{i},numAcq.n);
+  end
 end
 carNames{end+1} = 'None';
 noneNum = length(carNames);
@@ -1581,10 +1599,9 @@ if ~isempty(tsense)
 	end
       elseif ~isequal(tsense{iEPI},0)
 	if tsense{iEPI} ~= numshots/ilts;
-	  disp(sprintf('(dofmrigru) tSense acceleration set to %i even though optimal is %i',tsense{iEPI},numshots/ilts))
-%	  disp(sprintf('(dofmrigru) !!! tSense acceleration must specify shot order. Resetting to default acceleration of %i !!!',numshots/ilts))
-%	  tsense{iEPI} = numshots/ilts;
-%	  tf = false;
+	  disp(sprintf('(dofmrigru) tSense acceleration set to %i even though optimal is %i. Setting shot order to 1:%i',tsense{iEPI},numshots/ilts,numshots))
+	  % set the number shots
+	  tsense{iEPI} = [tsense{iEPI} 1:numshots];
 	end
       end
     % if set to sepecify num shots and shot order, 
@@ -1594,17 +1611,15 @@ if ~isempty(tsense)
       % first get accerleation
       tSenseAcc = tsense{iEPI}(1);
       % now make sure we have enough arguments to speify the shot order
-      if ~isequal(1:tSenseAcc,sort(tSense{iEPI}(2:end)))
-	disp(sprintf('(dofmrigru) !!! tSense acceleration must specify shot order for all shots. Resetting to default acceleration of %i !!!',numshots/ilts))
-	tsense{iEPI} = numshots/ilts;
-	tf = false;
-      else
-	% otherwise check whether this is optimal or not
-	if tSenseAcc ~= numshots/ilts
-	  disp(sprintf('(dofmrigru) Using tSense acceleration factor of %s which is not optimal for numshots: %i ilts: %i',tSenseAcc,numshots,ilts));
-	  tf = false;
-	end
-      end
+%      if ~isequal(1:tSenseAcc,sort(tsense{iEPI}(2:end)))
+%	disp(sprintf('(dofmrigru) !!! tSense acceleration must specify shot order for all shots. Resetting to default acceleration of %i !!!',numshots/ilts))
+%	tsense{iEPI} = numshots/ilts;
+%	tf = false;
+%      else
+       % otherwise check whether this is optimal or not
+       if tSenseAcc ~= numshots/ilts
+	 disp(sprintf('(dofmrigru) Using tSense acceleration factor of %s which is not optimal for numshots: %i ilts: %i',tSenseAcc,numshots,ilts));
+       end
     end
     if tsense{iEPI}(1)
       % set the display string
