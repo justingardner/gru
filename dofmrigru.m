@@ -62,6 +62,15 @@
 %             all of these files in the correct directories on your local
 %             computer.
 %
+%             If you are running the second pass again and want to grab the
+%             acq/respir/cardio peak bit files and the mask files from an
+%             already run directory (this usually happens if you need to change
+%             something in the processing and are running again from scratch)
+%             You can specify getFiles, and it will copy over those files
+%             on the second pass:
+%
+%             dofmrigru('getFiles=~/s00620120216_old')
+%
 function retval = dofmrigru(varargin)
 
 % check arguments
@@ -83,7 +92,7 @@ global epibsiArgs;
 global postproc;
 global senseCommand;
 global tsenseCommand;
-getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epibsi=epibsi6.1','postproc=pp37','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=1','dcCorrect=[]','navCorrectMag=[]','navCorrectPhase=[]','refScan=[]'});
+getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epibsi=epibsi6.1','postproc=pp37','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=1','dcCorrect=[]','navCorrectMag=[]','navCorrectPhase=[]','refScan=[]','getFiles=[]'});
 
 % interpert the arguments for epibsiArgs
 epibsiArgs = setEpibsiArgs(navCorrectMag,navCorrectPhase,dcCorrect,refScan);
@@ -107,7 +116,7 @@ if ~isdir('Pre')
   dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp,tsense);
 else
   disp(sprintf('(dofmrigru) Running Second dofmrigru process'));
-  dofmrigru2(movepro,tsense);
+  dofmrigru2(movepro,tsense,getFiles);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -164,7 +173,7 @@ end
 %%%%%%%%%%%%%%%%%%%%
 %%   dofmrigru2   %%
 %%%%%%%%%%%%%%%%%%%%
-function dofmrigru2(movepro,tsense)
+function dofmrigru2(movepro,tsense,getFiles)
 
 % get fid file list
 fiddir = 'Pre';
@@ -179,20 +188,30 @@ epiNums = getEpiScanNums(fidList);
 removeTempFiles({fidList{epiNums}});
 
 % set the tsense array
-tsense = setTsense(tsense,length(epiNums));
+if tsense == 1
+  tsense = setTsense(tsense,length(epiNums));
+else
+  tsense = setTsense(tsense,length(epiNums));
+  % check the tsense settings, to fill out the parameters if user passed in
+  [tf fidList tsense] = checkTsense(fidList,epiNums,tsense);
+  if ~tf && ~askuser('(dofmrigru) Continue?')
+    return
+  end
+end
+
 
 % load up tsense info if it exist
 if isfile('tsense.mat')
   tsenseLoaded = load('tsense');
   % check for match
   if ~isempty(tsense) && ~all(cell2mat(tsense)==1) && ~isequal(tsense,tsenseLoaded.tsense)
-    disp(sprintf('(dofmrigru2) Tsense acceleration factor from pass 1 are different from pass 2'));
+    disp(sprintf('(dofmrigru2) Tsense acceleration factor from pass 1 (%s) are different from pass 2 (%s)',num2str(cell2mat(tsenseLoaded.tsense),'%i '),num2str(cell2mat(tsense),'%i ')));
     if ~askuser('Continue'),return,end
   end
   tsense = tsenseLoaded.tsense;
 end
 
-% check the tsense settings
+% check the tsense settings again, to make sure
 [tf fidList tsense] = checkTsense(fidList,epiNums,tsense);
 if ~tf && ~askuser('(dofmrigru) Continue?')
   return
@@ -200,6 +219,80 @@ end
 
 % check for sense processing
 senseProcessing = isSenseProcessing(fidList,epiNums);
+
+% if getFiles was set, then check in the directory specified by getFiles
+% for the peak files and the mask files (if any any copy them.
+if ~isempty(getFiles) 
+  getFiles = mlrExplicitPath(fullfile(getFiles,'Pre'));
+  dispHeader(sprintf('Get files from %s',getFiles));
+  if ~isdir(getFiles)
+    disp(sprintf('(dofmrigru) Could not find direcotry %s from which to get files',getFiles));
+    return
+  end
+  % now check for epis
+  getFilesFidList = getFileList(getFiles,'fid');
+  getFilesFidList = getFidInfo(getFilesFidList);
+  getFilesFidList = sortFidList(getFilesFidList);
+  % get list of epi scans
+  getFilesEpiNums = getEpiScanNums(getFilesFidList);
+  % check to make sure that all epi runs are processed
+  [getFilesEpiNumsWithPeaks getFilesEpiNumsWithCarExt] = checkForPeaks(getFilesFidList,getFilesEpiNums);
+  % now check to see if we have matching epis
+  toEPI = {fidList{epiNums}};
+  fromEPI = {getFilesFidList{getFilesEpiNums}};
+  % check length
+  if length(toEPI) ~= length(fromEPI)
+    disp(sprintf('(dofmrigru) Found %i epi directories in %s, but there should be %i',length(fromEPI),getFiles,length(toEPI)));
+    return
+  end
+  peakFileNames = {'acq.peak.bit','cardio.peak.bit','respir.peak.bit'};
+  % display what bit files are going to be copied
+  for i = 1:length(fromEPI)
+    % check matching epi name
+    if ~strcmp(fromEPI{i}.filename,toEPI{i}.filename)
+      disp(sprintf('(dofmrigru) !!!! EPI filename from %s is %s, does not match %s !!!!',getFiles,fromEPI{i}.filename,toEPI{i}.filename));
+      return
+    end
+    % look for bit files
+    if sum(fromEPI{i}.hasPeakFiles) == 0
+      disp(sprintf('(dofmrigru) No peak files in %s',fullfile(getFiles,fromEPI{i}.filename)));
+    else
+      % has some bit files, display what will be copied
+      for iPeak = 1:3
+	if fromEPI{i}.hasPeakFiles(iPeak)
+	  disp(sprintf('copyfile %s %s',fullfile(getFiles,fromEPI{i}.filename,peakFileNames{iPeak}),toEPI{i}.fullfile));
+	end
+      end
+    end
+  end
+  % look for mask files
+  getFilesMaskList = getFileList(getFiles,'hdr','img','mask'); 
+  for i = 1:length(getFilesMaskList)
+    disp(sprintf('copyfile %s Pre',fullfile(getFiles,getFilesMaskList{i}.hdrfilename)));
+    disp(sprintf('copyfile %s Pre',fullfile(getFiles,getFilesMaskList{i}.imgfilename)));
+  end
+  % now do it
+  if askuser('Copy above files')
+    for i = 1:length(fromEPI)
+      % has some bit files, display what will be copied
+      for iPeak = 1:3
+	if fromEPI{i}.hasPeakFiles(iPeak)
+	  eval(sprintf('copyfile %s %s',fullfile(getFiles,fromEPI{i}.filename,peakFileNames{iPeak}),toEPI{i}.fullfile));
+	end
+      end
+    end
+    % copy mask files
+    for i = 1:length(getFilesMaskList)
+      eval(sprintf('copyfile %s Pre',fullfile(getFiles,getFilesMaskList{i}.hdrfilename)));
+      eval(sprintf('copyfile %s Pre',fullfile(getFiles,getFilesMaskList{i}.imgfilename)));
+    end
+    % now reget fid list
+    fidList = getFidInfo(fidList);
+    fidList = sortFidList(fidList);
+  else
+    return
+  end
+end
 
 % get mask and noise for tsense
 tSenseMaskList = [];tSenseNoiseList = [];
@@ -440,7 +533,7 @@ for i = 1:length(epiNumsWithCarExt)
     end
     % run tsense 
     if length(tsense{i}) > 1
-      command = sprintf('mysystem(''%s -full %s -recon %s -accf %s -remove %s %s'');',tsenseCommand,stripext(fidname),stripext(fidname),mlrnum2str(tsense{i}),maskStr,noiseStr);
+      command = sprintf('mysystem(''%s -full %s -recon %s -accf %s -remove %s %s'');',tsenseCommand,stripext(fidname),stripext(fidname),num2str(tsense{i},'%i '),maskStr,noiseStr);
     else
       command = sprintf('mysystem(''%s -full %s -recon %s -remove %s %s'');',tsenseCommand,stripext(fidname),stripext(fidname),maskStr,noiseStr);
     end
@@ -1097,7 +1190,7 @@ for i = 1:length(anatNums)
   disp(sprintf('Convert %s to nifti  ',fidList{anatNums(i)}.filename));
   disp(sprintf('=========================='));
   % convert anatomy to nifti
-  command = sprintf('fid2nifti %s;',fullfile('Pre',fidList{anatNums(i)}.filename));
+  command = sprintf('fid2nifti %s %s;',fullfile('Pre',fidList{anatNums(i)}.filename),setext(fidList{anatNums(i)}.filename,'hdr'));
   if justDisplay,disp(command),else,eval(command);end
 end
 
@@ -1599,9 +1692,9 @@ if ~isempty(tsense)
 	end
       elseif ~isequal(tsense{iEPI},0)
 	if tsense{iEPI} ~= numshots/ilts;
-	  disp(sprintf('(dofmrigru) tSense acceleration set to %i even though optimal is %i. Setting shot order to 1:%i',tsense{iEPI},numshots/ilts,numshots))
 	  % set the number shots
-	  tsense{iEPI} = [tsense{iEPI} 1:numshots];
+	  tsense{iEPI} = [tsense{iEPI} 1:(numshots/tsense{iEPI}(1))];
+	  disp(sprintf('(dofmrigru) tSense acceleration set to %i even though optimal is %i. Setting shot order to %s',tsense{iEPI}(1),numshots/ilts,num2str(tsense{iEPI}(2:end),'%i ')));
 	end
       end
     % if set to sepecify num shots and shot order, 
@@ -1611,15 +1704,19 @@ if ~isempty(tsense)
       % first get accerleation
       tSenseAcc = tsense{iEPI}(1);
       % now make sure we have enough arguments to speify the shot order
-%      if ~isequal(1:tSenseAcc,sort(tsense{iEPI}(2:end)))
-%	disp(sprintf('(dofmrigru) !!! tSense acceleration must specify shot order for all shots. Resetting to default acceleration of %i !!!',numshots/ilts))
-%	tsense{iEPI} = numshots/ilts;
-%	tf = false;
-%      else
-       % otherwise check whether this is optimal or not
-       if tSenseAcc ~= numshots/ilts
-	 disp(sprintf('(dofmrigru) Using tSense acceleration factor of %s which is not optimal for numshots: %i ilts: %i',tSenseAcc,numshots,ilts));
-       end
+      if length(tsense{iEPI}) == 1
+	tsense{iEPI} = [tsense{iEPI} 1:(numshots/tsense{iEPI})];
+	disp(sprintf('(dofmrigru) tSense acceleration setting shot order to %s',num2str(tsense{iEPI}(2:end),'%i ')));
+      elseif ~isequal(1:tSenseAcc,sort(tsense{iEPI}(2:end)))
+	disp(sprintf('(dofmrigru) !!! tSense acceleration must specify shot order for all shots. Resetting to default acceleration of %i !!!',numshots/ilts))
+	tsense{iEPI} = numshots/ilts;
+	tf = false;
+      else
+	% otherwise check whether this is optimal or not
+	if tSenseAcc ~= numshots/ilts
+	  disp(sprintf('(dofmrigru) Using tSense acceleration factor of %i which is not optimal for numshots: %i ilts: %i',tSenseAcc,numshots,ilts));
+	end
+      end
     end
     if tsense{iEPI}(1)
       % set the display string
