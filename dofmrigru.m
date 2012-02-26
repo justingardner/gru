@@ -410,10 +410,16 @@ for i = 1:length(anatNums)
   disp(sprintf('=============================================='));
   disp(sprintf('Copy processed anatomy into Anatomy directory'));
   disp(sprintf('=============================================='));
-  command = sprintf('copyfile %s ../Anatomy',setext(fixBadChars(stripext(fidList{anatNums(i)}.filename),{'.','_'}),'hdr'));
-  if justDisplay,disp(command),else,eval(command),end
-  command = sprintf('copyfile %s ../Anatomy',setext(fixBadChars(stripext(fidList{anatNums(i)}.filename),{'.','_'}),'img'));
-  if justDisplay,disp(command),else,eval(command),end
+  if isfile(setext(fixBadChars(stripext(fidList{anatNums(i)}.filename),{'.','_'}),'hdr'))
+    command = sprintf('copyfile %s ../Anatomy',setext(fixBadChars(stripext(fidList{anatNums(i)}.filename),{'.','_'}),'hdr'));
+    if justDisplay,disp(command),else,eval(command),end
+    command = sprintf('copyfile %s ../Anatomy',setext(fixBadChars(stripext(fidList{anatNums(i)}.filename),{'.','_'}),'img'));
+    if justDisplay,disp(command),else,eval(command),end
+  end
+  if isfile(setext(fixBadChars(stripext(fidList{anatNums(i)}.filename),{'.','_'}),'nii'))
+    command = sprintf('copyfile %s ../Anatomy',setext(fixBadChars(stripext(fidList{anatNums(i)}.filename),{'.','_'}),'nii'));
+    if justDisplay,disp(command),else,eval(command),end
+  end
 end
 
 if senseProcessing
@@ -1676,7 +1682,6 @@ end
 function [tf fidList tsense] = checkTsense(fidList,epiNums,tsense)
 
 tf = true;
-
 if ~isempty(tsense)
   for iEPI = 1:length(epiNums)
     % get some things about the scan
