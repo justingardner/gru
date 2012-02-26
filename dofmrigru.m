@@ -1697,8 +1697,13 @@ if ~isempty(tsense)
 	end
       elseif ~isequal(tsense{iEPI},0)
 	if tsense{iEPI} ~= numshots/ilts;
+	  % check to make sure tsense acceleration divides nicely into numshots
+	  if rem(numshots,tsense{iEPI}) ~= 0
+	    disp(sprintf('(dofmrigru) tSense acceleration set to %i which does not divide evenly into number of shots'));
+	    keyboard
+	  end
 	  % set the number shots
-	  tsense{iEPI} = [tsense{iEPI} 1:(numshots/tsense{iEPI}(1))];
+	  tsense{iEPI} = [tsense{iEPI} getTSenseShotOrder(fidList{epiNums(iEPI)},tsense{iEPI})];
 	  disp(sprintf('(dofmrigru) tSense acceleration set to %i even though optimal is %i. Setting shot order to %s',tsense{iEPI}(1),numshots/ilts,num2str(tsense{iEPI}(2:end),'%i ')));
 	end
       end
@@ -1725,7 +1730,7 @@ if ~isempty(tsense)
     end
     if tsense{iEPI}(1)
       % set the display string
-      fidList{epiNums(iEPI)}.dispstr = sprintf('%s tSense: %ix tr=%s nShots=%i nVols=%i',fidList{epiNums(iEPI)}.dispstr,tsense{iEPI}(1),mlrnum2str(fidList{epiNums(iEPI)}.info.tr/tsense{iEPI}(1)),numshots/tsense{iEPI}(1),fidList{epiNums(iEPI)}.info.dim(4)*tsense{iEPI}(1));
+      fidList{epiNums(iEPI)}.dispstr = sprintf('%s tSense: %s tr=%s nShots=%i nVols=%i',fidList{epiNums(iEPI)}.dispstr,num2str(tsense{iEPI},'%i '),mlrnum2str(fidList{epiNums(iEPI)}.info.tr/tsense{iEPI}(1)),numshots/tsense{iEPI}(1),fidList{epiNums(iEPI)}.info.dim(4)*tsense{iEPI}(1));
     end
   end
 end
@@ -1820,3 +1825,30 @@ end
 
 epibsiArgs = sprintf('%i %i %i 0 %i -1',navCorrectMag, navCorrectPhase, dcCorrect,refScan);
 disp(sprintf('(dofmrigru) epibsiArgs set to: %s (mag correct, phase correct, dc correct, print nav data, ref scan, data type)',epibsiArgs));
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    getTSenseShotOrder    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function shotOrderForAccFactor = getTSenseShotOrder(fidInfo,accFactor)
+
+% get pelist
+pelist = fidInfo.info.procpar.pelist;
+% get num shots
+numShots = fidInfo.info.procpar.numshots;
+
+% find the most negative values in the pelist
+[pelist shotOrder] = sort(pelist);
+
+% get the ordering of the most negative values
+[temp shotOrder] = sort(shotOrder(1:numShots));
+
+% now shotOrder should have the ordering of the shots from most negative
+% line of k-space to most positive
+
+% next we group into the number of shots in each accelerated image
+% and find the ordering of the shots
+shotsPerAcceleratedImage = numShots/accFactor;
+for i = 1:accFactor
+  shotOrderForAccFactor(i) = min(shotOrder((i-1)*shotsPerAcceleratedImage+1:i*shotsPerAcceleratedImage));
+end
+
