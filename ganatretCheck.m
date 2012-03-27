@@ -51,11 +51,21 @@ if isempty(baseAnatDir)
 end
 
 % get surface directory
-surfaceDir = getSubdir(subjectDir,{'surface','surfaces','surfRelax'});
+altSurfaceFolders = {'surface','surfaces','surfRelax',fullfile('Freesurfer','surfRelax'),fullfile('freesurfer','surfRelax')};;
+surfaceDir = getSubdir(subjectDir,altSurfaceFolders);
 if isempty(surfaceDir)
   % make a surface direcotry
   surfaceDir = fullfile(subjectDir,'surfaces');
   mkdir(surfaceDir);
+end
+
+% get alternate surface dirs, these are alternate places to go look for surfaces
+altSurfaceDir = {};
+for i = 1:length(altSurfaceFolders)
+  thisAltSurfaceDir = fullfile(subjectDir,altSurfaceFolders{i});
+  if isdir(thisAltSurfaceDir) && ~strcmp(surfaceDir,thisAltSurfaceDir)
+    altSurfaceDir{end+1} = thisAltSurfaceDir;
+  end
 end
 
 % make empty view for loading the anatomies
@@ -111,11 +121,19 @@ for iExt = 1:length(extList)
       else
 	base(iBase).fileExists(iFilename) = false;
       end
-      % check for file existence
+      % check for file existence surfaceDir
       if isfile(fullfile(surfaceDir,base(iBase).filenameFrom{iFilename}))
 	base(iBase).fileExistsSurfaceDir(iFilename) = true;
       else
 	base(iBase).fileExistsSurfaceDir(iFilename) = false;
+      end
+      % check for file existence in altSurfaceDir
+      for iAlt = 1:length(altSurfaceDir)
+	if isfile(fullfile(altSurfaceDir{iAlt},base(iBase).filenameFrom{iFilename}))
+	  base(iBase).fileExistsAltSurfaceDir = iAlt;
+	else
+	  base(iBase).fileExistsAltSurfaceDir = false;
+	end
       end
       % set the to filename
       if length(base(iBase).filenameTo) < iFilename
@@ -129,6 +147,9 @@ for iExt = 1:length(extList)
 	  copyTo{end+1} = fullfile(surfaceDir,base(iBase).filenameTo{iFilename});
 	elseif base(iBase).fileExistsSurfaceDir(iFilename)
 	  copyFrom{end+1} = fullfile(surfaceDir,base(iBase).filenameFrom{iFilename});
+	  copyTo{end+1} = fullfile(surfaceDir,base(iBase).filenameTo{iFilename});
+	elseif base(iBase).fileExistsAltSurfaceDir
+	  copyFrom{end+1} = fullfile(altSurfaceDir{base(iBase).fileExistsAltSurfaceDir},base(iBase).filenameFrom{iFilename});
 	  copyTo{end+1} = fullfile(surfaceDir,base(iBase).filenameTo{iFilename});
 	end
       end
