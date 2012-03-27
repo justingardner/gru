@@ -173,7 +173,12 @@ end
 % find which ones are not in the surfaceFiles list from above
 isSurfaceFile = ismember(surfaceDirList,surfaceFiles);
 % delete files are neither surface or canonical
-deleteSurfaceFiles = {surfaceDirList{~(isCanonical|isSurfaceFile)}};
+if ~isempty(surfaceDirList)
+  deleteSurfaceFiles = {surfaceDirList{~(isCanonical|isSurfaceFile)}};
+else
+  deleteSurfaceFiles = {};
+end
+ 
 
 % display info about what was found
 dispHeader(getLastDir(subjectDir));
