@@ -4,8 +4,9 @@
 %      usage: epibsi()
 %         by: justin gardner
 %       date: 02/16/12
-%    purpose: 
-%
+%    purpose: Will copy the raw epi to the Desktop, run epibsi and display with mlrVol
+%      usage: cd /usr1/justin/data/sxxx
+%             epibsi epi01.fid;
 function retval = epibsi(filename)
 
 % check arguments
