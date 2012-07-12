@@ -57,6 +57,8 @@
 %                'numMotionComp=1': Set to 0 if you don't want to run MLR motion comp. Set to > 1 if you want
 %                    to set multiple motionComp parameters (e.g. for motionComping two sets of scans taken at
 %                    different resolutions)
+%                'anatFilename=[]': Set this to a filename if you want to specify a particular name for the
+%                    anatomy file (e.g. 'anatFilename=myanat'), you can also set to a cell array of filenames
 %
 %             First pass will sort through the specified datadir and copy
 %             all of these files in the correct directories on your local
@@ -92,7 +94,7 @@ global epibsiArgs;
 global postproc;
 global senseCommand;
 global tsenseCommand;
-getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epibsi=epibsi6.1','postproc=pp37','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=1','dcCorrect=[]','navCorrectMag=[]','navCorrectPhase=[]','refScan=[]','getFiles=[]'});
+getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epibsi=epibsi6.1','postproc=pp37','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=1','dcCorrect=[]','navCorrectMag=[]','navCorrectPhase=[]','refScan=[]','getFiles=[]','anatFilename=[]'});
 
 % interpert the arguments for epibsiArgs
 epibsiArgs = setEpibsiArgs(navCorrectMag,navCorrectPhase,dcCorrect,refScan);
@@ -113,7 +115,7 @@ end
 % see if this is the first preprocessing or the second one
 if ~isdir('Pre')
   disp(sprintf('(dofmrigru) Running Initial dofmrigru process'));
-  dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp,tsense);
+  dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp,tsense,anatFilename);
 else
   disp(sprintf('(dofmrigru) Running Second dofmrigru process'));
   dofmrigru2(movepro,tsense,getFiles);
@@ -796,7 +798,7 @@ end
 %%%%%%%%%%%%%%%%%%%%
 %%   dofmrigru1   %%
 %%%%%%%%%%%%%%%%%%%%
-function dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp,tsense)
+function dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp,tsense,anatFilename)
 
 global dataDir;
 
@@ -846,10 +848,9 @@ if ~tf && ~askuser('(dofmrigru) Continue?')
 end
 
 % get anatomy scan nums
-anatNums = getAnatScanNums(fidList);
+anatNums = getAnatScanNums(fidList,anatFilename);
 if isempty(anatNums)
   disp(sprintf('(dofmrigru1) Could not find any non-raw anatomies in %s',fidDir));
-  return
 end
 
 % get sense noise/ref scans
@@ -1457,12 +1458,21 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %%   getAnatScanNums   %%
 %%%%%%%%%%%%%%%%%%%%%%%%%
-function anatNums = getAnatScanNums(fidList)
+function anatNums = getAnatScanNums(fidList,anatFilename)
+
+% set the extension of the anatFilenames to search for to fid
+anatFilename = cellArray(anatFilename);
+for i = 1:length(anatFilename)
+  anatFilename{i} = lower(setext(anatFilename{i},'fid'));
+end
 
 anatNums = [];
-% look for 3D scans
+% look for 3D scans or one that matches anatFilename
 for i = 1:length(fidList)
-  if ~isempty(fidList{i}.info)
+  % check for matching name
+  if ~isempty(anatFilename) && any(strcmp(lower(fidList{i}.filename),anatFilename))
+    anatNums(end+1) = i;
+  elseif ~isempty(fidList{i}.info)
     % check for 3d scan
     if fidList{i}.info.acq3d
       % make sure it is not a raw scan
