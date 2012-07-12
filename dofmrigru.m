@@ -118,7 +118,7 @@ if ~isdir('Pre')
   dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp,tsense,anatFilename);
 else
   disp(sprintf('(dofmrigru) Running Second dofmrigru process'));
-  dofmrigru2(movepro,tsense,getFiles);
+  dofmrigru2(movepro,tsense,getFiles,anatFilename);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -175,7 +175,7 @@ end
 %%%%%%%%%%%%%%%%%%%%
 %%   dofmrigru2   %%
 %%%%%%%%%%%%%%%%%%%%
-function dofmrigru2(movepro,tsense,getFiles)
+function dofmrigru2(movepro,tsense,getFiles,anatFilename)
 
 % get fid file list
 fiddir = 'Pre';
@@ -344,7 +344,7 @@ if senseProcessing
 end
 
 % get anatomy scan nums
-anatNums = getAnatScanNums(fidList);
+anatNums = getAnatScanNums(fidList,anatFilename);
 
 % check to make sure that all epi runs are processed
 [epiNumsWithPeaks epiNumsWithCarExt] = checkForPeaks(fidList,epiNums);
