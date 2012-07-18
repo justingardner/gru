@@ -37,7 +37,7 @@
 %                'navCorrectPhase=1': use navigator phase correction with epibsi
 %                'dcCorrect=[]': use DC correction with epibsi and postproc. Set to 1 to use, defaults to not use
 %                'refScan=1': do reference scan correction
-%                'postproc=pp38': set which postproc program to use
+%                'postproc=pp': set which postproc program to use
 %                'tsenseCommand=tsense_test': set which tsense recon program to use
 %                'tsense=1': set to 0 to turn off using tsense. If you want to
 %                   set particular acceleration factor set the acc factor
@@ -96,7 +96,7 @@ global epibsiArgs;
 global postproc;
 global senseCommand;
 global tsenseCommand;
-getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epibsi=epibsi','postproc=pp38','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=1','dcCorrect=[]','navCorrectMag=[]','navCorrectPhase=[]','refScan=[]','getFiles=[]','anatFilename=[]','tsenseUseMask=1','tsenseUseNoise=1'});
+getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epibsi=epibsi','postproc=pp','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=1','dcCorrect=[]','navCorrectMag=[]','navCorrectPhase=[]','refScan=[]','getFiles=[]','anatFilename=[]','tsenseUseMask=1','tsenseUseNoise=1'});
 
 % interpert the arguments for epibsiArgs
 epibsiArgs = setEpibsiArgs(navCorrectMag,navCorrectPhase,dcCorrect,refScan);
