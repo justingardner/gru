@@ -32,12 +32,12 @@
 %             dofmrigru('dataDir=/usr1/justin/data')
 %
 %             Other options:
-%                'epibsi=epibsi6.1': set which epibsi processing function to use
+%                'epibsi=epibsi': set which epibsi processing function to use
 %                'navCorrectMag=1': use navigator magnitude correction with epibsi
 %                'navCorrectPhase=1': use navigator phase correction with epibsi
-%                'dcCorrect=1': use DC correction with epibsi
+%                'dcCorrect=[]': use DC correction with epibsi and postproc. Set to 1 to use, defaults to not use
 %                'refScan=1': do reference scan correction
-%                'postproc=pp37': set which postproc program to use
+%                'postproc=pp38': set which postproc program to use
 %                'tsenseCommand=tsense_test': set which tsense recon program to use
 %                'tsense=1': set to 0 to turn off using tsense. If you want to
 %                   set particular acceleration factor set the acc factor
@@ -59,6 +59,8 @@
 %                    different resolutions)
 %                'anatFilename=[]': Set this to a filename if you want to specify a particular name for the
 %                    anatomy file (e.g. 'anatFilename=myanat'), you can also set to a cell array of filenames
+%                'tsenseUseMask=1': Set this to 0 if you want to suppress using the mask with tSense processing
+%                'tsenseUseNoise=1': Set this to 0 if you want to suppress using the noise with tSense processing
 %
 %             First pass will sort through the specified datadir and copy
 %             all of these files in the correct directories on your local
@@ -94,7 +96,7 @@ global epibsiArgs;
 global postproc;
 global senseCommand;
 global tsenseCommand;
-getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epibsi=epibsi6.1','postproc=pp37','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=1','dcCorrect=[]','navCorrectMag=[]','navCorrectPhase=[]','refScan=[]','getFiles=[]','anatFilename=[]'});
+getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epibsi=epibsi','postproc=pp38','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=1','dcCorrect=[]','navCorrectMag=[]','navCorrectPhase=[]','refScan=[]','getFiles=[]','anatFilename=[]','tsenseUseMask=1','tsenseUseNoise=1'});
 
 % interpert the arguments for epibsiArgs
 epibsiArgs = setEpibsiArgs(navCorrectMag,navCorrectPhase,dcCorrect,refScan);
@@ -118,7 +120,7 @@ if ~isdir('Pre')
   dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp,tsense,anatFilename);
 else
   disp(sprintf('(dofmrigru) Running Second dofmrigru process'));
-  dofmrigru2(movepro,tsense,getFiles,anatFilename);
+  dofmrigru2(movepro,tsense,getFiles,anatFilename,tsenseUseMask,tsenseUseNoise,dcCorrect);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -175,7 +177,10 @@ end
 %%%%%%%%%%%%%%%%%%%%
 %%   dofmrigru2   %%
 %%%%%%%%%%%%%%%%%%%%
-function dofmrigru2(movepro,tsense,getFiles,anatFilename)
+function dofmrigru2(movepro,tsense,getFiles,anatFilename,tsenseUseMask,tsenseUseNoise,dcCorrect)
+
+% dc correct defaults to falst
+if isempty(dcCorrect),dcCorrect = 0;end
 
 % get fid file list
 fiddir = 'Pre';
@@ -299,24 +304,30 @@ end
 % get mask and noise for tsense
 tSenseMaskList = [];tSenseNoiseList = [];
 if ~isempty(tsense)
-  tSenseMaskList = getFileList(fiddir,'hdr','img','mask'); 
-  if isempty(tSenseMaskList)
-    disp(sprintf('(dofrmigru2) Could not find any mask files for tSense processing'));
-  else
-    % load headers for each mask
-    for i = 1:length(tSenseMaskList)
-      % load header
-      tSenseMaskList{i}.h = mlrImageHeaderLoad(tSenseMaskList{i}.fullfile);
-      tSenseMaskList{i}.dispstr = sprintf('%s [%s]',tSenseMaskList{i}.filename,num2str(tSenseMaskList{i}.h.dim,'%i '));
+  % go look for masks if we are using masks
+  if tsenseUseMask
+    tSenseMaskList = getFileList(fiddir,'hdr','img','mask'); 
+    if isempty(tSenseMaskList)
+      disp(sprintf('(dofrmigru2) Could not find any mask files for tSense processing'));
+    else
+      % load headers for each mask
+      for i = 1:length(tSenseMaskList)
+	% load header
+	tSenseMaskList{i}.h = mlrImageHeaderLoad(tSenseMaskList{i}.fullfile);
+	tSenseMaskList{i}.dispstr = sprintf('%s [%s]',tSenseMaskList{i}.filename,num2str(tSenseMaskList{i}.h.dim,'%i '));
+      end
+      % display list of mask files
+      dispList(tSenseMaskList,1:length(tSenseMaskList),'Mask files for tSense');
     end
-    % display list of mask files
-    dispList(tSenseMaskList,1:length(tSenseMaskList),'Mask files for tSense');
   end
-  tSenseNoiseList = getFileList(fiddir,'edt','epr','noise');
-  if isempty(tSenseNoiseList)
-    disp(sprintf('(dofrmigru2) Could not find any noise files for tSense processing'));
-  else
-    dispList(tSenseNoiseList,1:length(tSenseNoiseList),'Noise files for tSense');
+  % go look for noise scans if we are using noise
+  if tsenseUseNoise
+    tSenseNoiseList = getFileList(fiddir,'edt','epr','noise');
+    if isempty(tSenseNoiseList)
+      disp(sprintf('(dofrmigru2) Could not find any noise files for tSense processing'));
+    else
+      dispList(tSenseNoiseList,1:length(tSenseNoiseList),'Noise files for tSense');
+    end
   end
 end
 
@@ -382,18 +393,18 @@ dispList(fidList,epiNumsWithCarExt,sprintf('Epi scans to process'));
 dispList(fidList,anatNums,sprintf('Anatomy files'));
 
 % display the commands for processing
-processFiles(1,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums);
+processFiles(1,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect);
 
 % now ask the user if they want to continue, because now we'll actually copy the files and set everything up.
 if ~askuser('OK to run above commands?'),return,end
 
 % now do it
-processFiles(0,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums);
+processFiles(0,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect);
 
 %%%%%%%%%%%%%%%%%%%%%%
 %%   processFiles   %%
 %%%%%%%%%%%%%%%%%%%%%%
-function processFiles(justDisplay,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums)
+function processFiles(justDisplay,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect)
 
 global postproc;
 global senseCommand;
@@ -474,15 +485,15 @@ for i = 1:length(epiNumsWithCarExt)
   hdrname = setext(fidList{epiNumsWithCarExt(i)}.filename,'hdr');
   imgname = setext(fidList{epiNumsWithCarExt(i)}.filename,'img');
 
+  % check if we should run with pp with dc correction
+  ppoptions = '';
+  if dcCorrect,ppoptions = '-dc';end
   %check to see if this epi has peaks. if so run postproc with physiofix
   if any(epiNumsWithCarExt(i) == epiNumsWithPeaks)
     % run with physiofix correction
-    ppoptions = '-dc -physiofix';
-  else
-    % run without phsyiofix corrections
-    ppoptions = '-dc';
+    ppoptions = sprintf('%s -physiofix',ppoptions);
   end
-  
+
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   %    sense processing
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -497,14 +508,8 @@ for i = 1:length(epiNumsWithCarExt)
     noisename = noiseList{noiseNum}.filename;
     refname = refList{refNum}.filename;
     if movepro~=0,disp('(dofmrigru) movepro not implemented yet for sense processing');keyboard;end
-    %check to see if this epi has peaks. if so run postproc with physiofix
-    if any(epiNumsWithCarExt(i) == epiNumsWithPeaks)
-      % convert to epis to edt file, doing physiofix and dc correction
-      command = sprintf('mysystem(''%s -outtype 1 -dc -physiofix %s %s'');',postproc,fidname,edtname);
-    else
-      % convert to epis to edt file, don't do physiofix but dc correction
-      command = sprintf('mysystem(''%s -outtype 1 -dc %s %s'');',postproc,fidname,edtname);
-    end
+    % run postproc
+    command = sprintf('mysystem(''%s -outtype 1 %s %s %s'');',postproc,ppoptions,fidname,edtname);
     if justDisplay,disp(command),else,eval(command),end
     % run the sense processing for this file
     command = sprintf('mysystem(''%s -data %s -full %s -noise %s -mask %s -remove -recon %s'');',senseCommand,stripext(fidname),stripext(refname),stripext(noisename),stripext(maskname),stripext(fidname));
@@ -1796,7 +1801,7 @@ epibsiArgs = '';
 % defaults
 defaultNavCorrectMag = 1;
 defaultNavCorrectPhase = 1;
-defaultDcCorrect = 1;
+defaultDcCorrect = 0;
 defaultRefScan = 1;
 
 % default arguments
