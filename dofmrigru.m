@@ -206,7 +206,6 @@ else
   end
 end
 
-
 % load up tsense info if it exist
 if isfile('tsense.mat')
   tsenseLoaded = load('tsense');
@@ -847,9 +846,21 @@ tsense = setTsense(tsense,length(epiNums));
 % accelerating make sure the setting's are correct
 % otherwise if the scan looks like it should be accelerated
 % then give warning
-[tf fidList tsense] = checkTsense(fidList,epiNums,tsense);
+[tf fidList tsense volTrigRatio] = checkTsense(fidList,epiNums,tsense);
 if ~tf && ~askuser('(dofmrigru) Continue?')
   return
+end
+
+% if this is not a tsense run, then get volTrigRatio independently
+if isempty(volTrigRatio)
+  for iEPI = 1:length(epiNums)
+    volTrigRatio(iEPI) = getVolTrigRatio(fidList{epiNums(iEPI)},0);
+  end
+end
+
+% update fidList so that it will display getVolTrigRatio
+for iEPI = 1:length(epiNums)
+  fidList{epiNums(iEPI)}.dispstr = sprintf('%s volTrigRatio=%s',fidList{epiNums(iEPI)}.dispstr,mlrnum2str(volTrigRatio(iEPI),'compact',true));
 end
 
 % get anatomy scan nums
@@ -881,6 +892,7 @@ pdfList = getFileList(pdfDir,'pdf');
 
 % get stimfile list
 stimfileList = getFileList(stimfileDir,'mat');
+stimfileList = setStimfileListDispStr(stimfileList);
 
 % display what we found
 dispList(fidList,epiNums,sprintf('Epi scans: %s',fidDir));
@@ -889,13 +901,13 @@ if senseProcessing
   dispList(fidList,senseRefNums,sprintf('Sense reference scan: %s',fidDir));
   dispList(fidList,senseNoiseNums,sprintf('Sense noise scan: %s',fidDir));
 end
-dispList(carList,nan,sprintf('Car/Ext files: %s',carextDir));
 dispList(pdfList,nan,sprintf('PDF files: %s',pdfDir));
 dispList(stimfileList,nan,sprintf('Stimfiles: %s',stimfileDir));
+dispList(carList,nan,sprintf('Car/Ext files: %s',carextDir));
 
 % go find the matching car files for each scan
 if ~isempty(carList)
-  carMatchNum = getCarMatch(carList,fidList,epiNums);
+  [carMatchNum carList] = getCarMatch(carList,fidList,epiNums);
   if isempty(carMatchNum),return,end
 else
   carMatchNum = [];
@@ -939,9 +951,12 @@ if ~isempty(v)
   for iScan = 1:length(epiNums)
     % set fid name
     v = viewSet(v,'auxParam','fidFilename',fidList{epiNums(iScan)}.filename,iScan);
+    % set volTrigRatio (onyl if different from 1)
+    if volTrigRatio(iScan) ~= 1
+      v = viewSet(v,'auxParam','volTrigRatio',volTrigRatio(iScan),iScan);
+    end
     % set tsense field
     if ~isempty(tsense) && (length(tsense) >= iScan) && ~isempty(tsense{iScan})
-      v = viewSet(v,'auxParam','volTrigRatio',tsense{iScan}(1),iScan);
       v = viewSet(v,'auxParam','tSense',tsense{iScan},iScan);
     end
     % set framePeriod as recorded in stimfile
@@ -1061,6 +1076,14 @@ if ~justDisplay
   cd('Pre');
   openLogfile('dofmrigru.log');
   cd('..');
+  % write info about various scans
+  dispList(fidList,epiNums,'Epi scans',true);
+  dispList(fidList,anatNums,'Anatomy scans',true);
+  if ~isempty(senseRefNums) dispList(fidList,senseRefNums,'Sense reference scan',true);end
+  if ~isempty(senseNoiseNums) dispList(fidList,senseNoiseNums,'Sense noise scan',true);end
+  dispList(carList,nan,'Car/Ext files',true);
+  dispList(pdfList,nan,'PDF files',true);
+  dispList(stimfileList,nan,'Stimfiles',true);
 end
 
 disp(sprintf('=============================================='));
@@ -1168,7 +1191,7 @@ for i = 1:length(epiNums)
     % now, grab the data
     if ~isempty(tsense) && (tsense{i}(1) > 1)
       % load the file
-      d = fid2nifti(srcName);
+      d = fid2nifti(srcName,1);
       % now we have to create data as if it has gone through
       % tsense processing
       d = repmat(d,[1 1 1 tsense{i}(1)]);
@@ -1176,14 +1199,30 @@ for i = 1:length(epiNums)
       h.pixdim(5) = h.pixdim(5)/tsense{i}(1);
       h.dim(5) = h.dim(5)*tsense{i}(1);
     elseif info.accFactor == 1
-      d = fid2nifti(srcName);
+      d = fid2nifti(srcName,1);
       % for a sense file we are going to have to grab the reference scan data
     else
-      d = fid2nifti(fullfile('Pre',fidList{senseRefNums(1)}.filename));
+      d = fid2nifti(fullfile('Pre',fidList{senseRefNums(1)}.filename),1);
       % now make the data info a single volume
       d = mean(d(:,:,:,2:end),4);
       % and replicate for the correct number of frames
       d = repmat(d,[1 1 1 h.dim(5)]);
+    end
+    % draw x's into image to indicate they are only temporary
+    xSize = 3;
+    x = zeros(min(xSize,size(d,1)),min(xSize,size(d,2)));
+    for i = 1:xSize
+      x(i,i) = 1;
+      x(i,xSize-i+1) = 1;
+    end
+    % draw x, scaling to each slice, each volume
+    for iSlice = 1:size(d,3)
+      for iVol = 2:size(d,4)
+	% get min and max
+	minVal = min(min(d(:,:,iSlice,iVol)));
+	maxVal = max(max(d(:,:,iSlice,iVol)));
+	d(1:xSize,1:xSize,iSlice,iVol) = x*(maxVal-minVal)+minVal;
+      end
     end
     % write as a nifti file
     cbiWriteNifti(destName,d,h);
@@ -1214,20 +1253,13 @@ end
 %%%%%%%%%%%%%%%%%%%%%
 %%   getCarmatch   %%
 %%%%%%%%%%%%%%%%%%%%%
-function carMatchNum = getCarMatch(carList,fidList,epiNums);
+function [carMatchNum carList] = getCarMatch(carList,fidList,epiNums);
 
 carMatchNum = [];
 
 % get the names of the car files
 for i = 1:length(carList)
-  carNames{i} = carList{i}.filename;
-  if isfield(carList{i},'date')
-    carNames{i} = sprintf('%s (%s)',carNames{i},carList{i}.date);
-  end
-  if isequal(exist('getedges'),2) && isfield(carList{i},'car')  && isfield(carList{i}.car,'acq')
-    numAcq = getedges(carList{i}.car.acq,0.5);
-    carNames{i} = sprintf('%s %i',carNames{i},numAcq.n);
-  end
+  carNames{i} = carList{i}.dispstr;
 end
 carNames{end+1} = 'None';
 noneNum = length(carNames);
@@ -1264,13 +1296,16 @@ carMatchNum(carMatchNum==noneNum) = -1;
 %%%%%%%%%%%%%%%%%%%%%%
 %%   dispScanlist   %%
 %%%%%%%%%%%%%%%%%%%%%%
-function dispStr = dispList(fidList,nums,name)
+function dispStr = dispList(fidList,nums,name,toLog)
+
+if nargin < 4,toLog = false;end
 
 dispStr = {};
-disp(sprintf('============================='));
-disp(sprintf('%s',name));
-disp(sprintf('============================='));
+dispConOrLog(sprintf('============================='),toLog);
+dispConOrLog(sprintf('%s',name),toLog);
+dispConOrLog(sprintf('============================='),toLog);
 
+  
 % if nums is nan, show all files
 if isnan(nums),nums = 1:length(fidList);end
 
@@ -1282,7 +1317,7 @@ for i = 1:length(nums)
     dispstr = fidList{nums(i)}.filename;
   end
   % display the string
-  disp(dispstr);
+  dispConOrLog(dispstr,toLog);
 end
 
 % empty nums means to display all
@@ -1310,6 +1345,9 @@ end
 %%%%%%%%%%%%%%%%%%%%
 function carList = getCarInfo(carList)
 
+% channel which has the stimulus trigger trace on it
+trigChannel = 14;
+
 disppercent(-inf,'(dofmrigru1) Get car info');
 for i = 1:length(carList)
   disppercent(i/length(carList));
@@ -1318,8 +1356,29 @@ for i = 1:length(carList)
     disp('ext not found. skipping...');
     carList{i}.ext = readext(fullfile(carList{i}.path,carList{i}.extfilename));
   end
-  carList{i}.dispstr = sprintf('%s',carList{i}.filename);
+  
+  % make the display string
+  dispstr = sprintf('%s',carList{i}.filename);
+
+  % get number of triggers
+  if isequal(exist('getedges'),2) && isfield(carList{i},'car')  && isfield(carList{i}.car,'channels') && (size(carList{i}.car.channels,1) >= trigChannel)
+    numTrig = getedges(carList{i}.car.channels(trigChannel,:),max(carList{i}.car.channels(trigChannel,:))/2);
+    dispstr = sprintf('%s %i',dispstr,length(numTrig.rising)+length(numTrig.falling));
+  end
+  
+  % get save date
+  if isfield(carList{i},'date')
+    dispstr = sprintf('%s (%s end)',dispstr,carList{i}.date);
+  end
+  % get number of acq pulses
+  if isequal(exist('getedges'),2) && isfield(carList{i},'car')  && isfield(carList{i}.car,'acq')
+    numAcq = getedges(carList{i}.car.acq,0.5);
+    dispstr = sprintf('%s %i',dispstr,numAcq.n);
+  end
+  % add this to the carList so it gets printed out later
+  carList{i}.dispstr = dispstr;
 end
+
 disppercent(inf);
 %%%%%%%%%%%%%%%%%%%%
 %%   getFidInfo   %%
@@ -1563,7 +1622,8 @@ for i = 1:length(dirList)
 	  stemName = stripext(fullfile(dirname,dirList(i).name));
 	  for k = 1:length(matchExtList)
 	    if ~isfile(setext(stemName,matchExtList{j}))
-	      disp(sprintf('(dofmrigru1:getFileList) No matching %s file for %s',matchExtList{j},dirList(i).name));
+	      % new system does not require matching ext files (everything stored in car)
+	      %disp(sprintf('(dofmrigru1:getFileList) No matching %s file for %s',matchExtList{j},dirList(i).name));
 	    else
 	      fileList{end}.(sprintf('%sfilename',matchExtList{j})) = setext(dirList(i).name,matchExtList{j});
 	    end
@@ -1592,11 +1652,11 @@ disp(result);
 
 
 % write into the logfile
-writeLogfile('\n=================================================================\n');
-writeLogfile(sprintf('%s\n',datestr(now)));
-writeLogfile(sprintf('%s\n',commandName));
-writeLogfile('=================================================================\n');
-writeLogfile(result);
+writeLogFile('\n=================================================================\n');
+writeLogFile(sprintf('%s\n',datestr(now)));
+writeLogFile(sprintf('%s\n',commandName));
+writeLogFile('=================================================================\n');
+writeLogFile(result);
 
 %%%%%%%%%%%%%%%%%%%%%
 %%   openLogfile   %%
@@ -1628,9 +1688,9 @@ if isfield(gLogfile,'fid') && (gLogfile.fid ~= -1)
 end
 
 %%%%%%%%%%%%%%%%%%%%%%
-%%   writeLogfile   %%
+%%   writeLogFile   %%
 %%%%%%%%%%%%%%%%%%%%%%
-function writeLogfile(text)
+function writeLogFile(text)
 
 global gLogfile;
 
@@ -1638,6 +1698,17 @@ if isfield(gLogfile,'fid') && (gLogfile.fid ~= -1)
   fprintf(gLogfile.fid,text);
 end
 
+%%%%%%%%%%%%%%%%%%%%%%%
+%    dispConeOrLog    %
+%%%%%%%%%%%%%%%%%%%%%%%
+function dispConOrLog(textStr,toLog)
+
+if nargin < 2,toLog = false;end
+if toLog
+  writeLogFile(sprintf('%s\n',textStr));
+else
+  disp(textStr);
+end
 %%%%%%%%%%%%%%%%%%%%%%%
 %    checkCommands    %
 %%%%%%%%%%%%%%%%%%%%%%%
@@ -1691,12 +1762,49 @@ for i = epiNums
   end
 end
 
+%%%%%%%%%%%%%%%%%%%%%%%%%
+%    getVolTrigRatio    %
+%%%%%%%%%%%%%%%%%%%%%%%%%
+function volTrigRatio = getVolTrigRatio(fidList,tsenseAcc)
+
+% default return value
+volTrigRatio = [];
+
+% if no acceleration then just set this to one so the code below
+% calculates volTrigRation appropriately
+if isempty(tsenseAcc)||(tsenseAcc==0),tsenseAcc = 1;end
+
+% get number of shots
+numshots = fidList.procpar.numshots;
+
+if ~isfield(fidList.procpar,'image')
+  disp(sprintf('(dofmrigru:getVolTrigRatio) !!! Could not find image field in procpar for scan %s - assuming one trigger per volume !!!',fidList.filename));
+else
+  % get the "image" field, which contains how the triggers work for each volume
+  procparImage = fidList.procpar.image;
+  % check its length
+  if length(procparImage)<fidList.info.dim(4)
+    disp(sprintf('(dofmrigru:getVolTrigRatio) !!! Image field for scan %s does not have enough volumes (%i but should be > %i) !!!',fidList.filename,length(procparImage),fidList.info.dim(4)));
+  end
+  % find unique values other than 0 (which is the steady-state image
+  procparImage = unique(procparImage(procparImage~=0));
+  % these should all be the same, and either 3 or 4
+  if (length(procparImage) > 1) || ~any(procparImage == [3 4])
+    disp(sprintf('(dofmrigru:getVolTrigRatio) !!! Image field for scan %s has strange values in it (%s) !!!',fidList.filename,num2str(procparImage,'%i ')));
+  elseif procparImage == 3
+    volTrigRatio = tsenseAcc/numshots;
+  elseif procparImage == 4
+    volTrigRatio = numshots;
+  end
+end
+
 %%%%%%%%%%%%%%%%%%%%%
 %    checkTsense    %
 %%%%%%%%%%%%%%%%%%%%%
-function [tf fidList tsense] = checkTsense(fidList,epiNums,tsense)
+function [tf fidList tsense volTrigRatio] = checkTsense(fidList,epiNums,tsense)
 
 tf = true;
+volTrigRatio = [];
 if ~isempty(tsense)
   for iEPI = 1:length(epiNums)
     % get some things about the scan
@@ -1747,6 +1855,8 @@ if ~isempty(tsense)
       % set the display string
       fidList{epiNums(iEPI)}.dispstr = sprintf('%s tSense: %s tr=%s nShots=%i nVols=%i',fidList{epiNums(iEPI)}.dispstr,num2str(tsense{iEPI},'%i '),mlrnum2str(fidList{epiNums(iEPI)}.info.tr/tsense{iEPI}(1)),numshots/tsense{iEPI}(1),fidList{epiNums(iEPI)}.info.dim(4)*tsense{iEPI}(1));
     end
+    % figure out if we had a trigger every shot or not
+    volTrigRatio(iEPI) = getVolTrigRatio(fidList{epiNums(iEPI)},tsense{iEPI}(1));
   end
 end
 
@@ -1865,5 +1975,34 @@ numShots = fidInfo.info.procpar.numshots;
 shotsPerAcceleratedImage = numShots/accFactor;
 for i = 1:accFactor
   shotOrderForAccFactor(i) = min(shotOrder((i-1)*shotsPerAcceleratedImage+1:i*shotsPerAcceleratedImage));
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    setStimfileListDispStr    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function stimfileList = setStimfileListDispStr(stimfileList)
+
+for i = 1:length(stimfileList);
+  % try to load it
+  if isfile(stimfileList{i}.fullfile)
+    stimfile = load(stimfileList{i}.fullfile);
+    if ~isfield(stimfile,'myscreen')
+      stimfileList{i}.dispstr = sprintf('%s (!!!No myscreen variable!!!)',stimfileList{i}.filename);
+      continue;
+    end
+    myscreen = stimfile.myscreen;
+    % make a string of some info myscreen
+    stimfileStr = stimfileList{i}.filename;
+    if isfield(myscreen,'volnum')
+      stimfileStr = sprintf('%s [%i vols] ',stimfileStr,myscreen.volnum);
+    end
+    if isfield(myscreen,'starttime')
+      stimfileStr = sprintf('%s%s ',stimfileStr,myscreen.starttime);
+    end
+    if isfield(myscreen,'endtime')
+      stimfileStr = sprintf('%s(End: %s) ',stimfileStr,myscreen.endtime);
+    end
+    stimfileList{i}.dispstr = stimfileStr;
+  end
 end
 
