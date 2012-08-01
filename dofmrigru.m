@@ -951,7 +951,7 @@ if ~isempty(v)
   for iScan = 1:length(epiNums)
     % set fid name
     v = viewSet(v,'auxParam','fidFilename',fidList{epiNums(iScan)}.filename,iScan);
-    % set volTrigRatio (onyl if different from 1)
+    % set volTrigRatio (only if different from 1)
     if volTrigRatio(iScan) ~= 1
       v = viewSet(v,'auxParam','volTrigRatio',volTrigRatio(iScan),iScan);
     end
@@ -968,11 +968,13 @@ if ~isempty(v)
 	if length(volEvents) > 1
 	  % get the framePeriod
 	  framePeriod = median(diff(stimfile{1}.myscreen.events.time(volEvents)));
-	  % now see if we have to accelerate
-	  if ~isempty(tsense) && (length(tsense) >= iScan) && ~isempty(tsense{iScan})
-	    framePeriod = framePeriod/tsense{iScan}(1);
+	  % now see if there are more volumes than acquisition triggers
+	  if volTrigRatio(iScan)>1
+	    framePeriod = framePeriod/volTrigRatio(iScan);
 	  end
-	  disp(sprintf('(dofmrigru) Frame period as recorded in stimfile is: %f',framePeriod));
+	  % round to nearest 1/1000 of a second
+	  framePeriod = round(framePeriod*1000)/1000;
+	  disp(sprintf('(dofmrigru) Frame period as recorded in stimfile is: %0.3f',framePeriod));
   	  % set the frame period
 	  scanParams = viewGet(v,'scanParams',iScan);
 	  scanParams.framePeriod = framePeriod;
@@ -1794,7 +1796,7 @@ else
   elseif procparImage == 3
     volTrigRatio = tsenseAcc/numshots;
   elseif any(procparImage == [4 1])
-    volTrigRatio = numshots;
+    volTrigRatio = tsenseAcc;
   end
 end
 
