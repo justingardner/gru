@@ -1768,7 +1768,7 @@ end
 function volTrigRatio = getVolTrigRatio(fidList,tsenseAcc)
 
 % default return value
-volTrigRatio = [];
+volTrigRatio = 1;
 
 % if no acceleration then just set this to one so the code below
 % calculates volTrigRation appropriately
@@ -1789,11 +1789,11 @@ else
   % find unique values other than 0 (which is the steady-state image
   procparImage = unique(procparImage(procparImage~=0));
   % these should all be the same, and either 3 or 4
-  if (length(procparImage) > 1) || ~any(procparImage == [3 4])
+  if (length(procparImage) > 1) || ~any(procparImage == [1 3 4])
     disp(sprintf('(dofmrigru:getVolTrigRatio) !!! Image field for scan %s has strange values in it (%s) !!!',fidList.filename,num2str(procparImage,'%i ')));
   elseif procparImage == 3
     volTrigRatio = tsenseAcc/numshots;
-  elseif procparImage == 4
+  elseif any(procparImage == [4 1])
     volTrigRatio = numshots;
   end
 end
