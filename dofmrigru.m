@@ -1365,7 +1365,7 @@ for i = 1:length(carList)
   % get number of triggers
   if isequal(exist('getedges'),2) && isfield(carList{i},'car')  && isfield(carList{i}.car,'channels') && (size(carList{i}.car.channels,1) >= trigChannel)
     numTrig = getedges(carList{i}.car.channels(trigChannel,:),max(carList{i}.car.channels(trigChannel,:))/2);
-    dispstr = sprintf('%s %i',dispstr,length(numTrig.rising)+length(numTrig.falling));
+    dispstr = sprintf('%s %i',dispstr,length(setdiff([numTrig.rising numTrig.falling],1)));
   end
   
   % get save date
@@ -1790,8 +1790,25 @@ else
   end
   % find unique values other than 0 (which is the steady-state image
   procparImage = unique(procparImage(procparImage~=0));
-  % these should all be the same, and either 3 or 4
-  if (length(procparImage) > 1) || ~any(procparImage == [1 3 4])
+  % in some cases you can have 1 followed by 2 - this triggers only on the first volume of the run
+  % so we handle that case here.
+  if isequal(procparImage,[1 2])
+    % go back to original image setting
+    procparImage = fidList.procpar.image;
+    % remove the zeros
+    procparImage = procparImage(procparImage>0);
+    % find the distance between every 1 (that is when there was a volume acq)
+    volPerTrig = unique(diff(find(procparImage == 1)));
+    % if there is more than one value here it means that there is not a fixed
+    % ratio of triggers to volumes which will be a problem. So provide feedback
+    if length(volPerTrig) ~= 1
+      disp(sprintf('(dofmrigru:getVolTrigRatio) !!! Scan %s has non-unique number of triggers per volume (volPerTrig: %s)!!!',fidList.filename,num2str(volPerTrig,'%i ')))
+      return
+    end
+    % set the volTrigRatio accordingly
+    volTrigRatio = volPerTrig*tsenseAcc;
+    % otherwise these should all be the same, and either 1, 3 or 4
+  elseif (length(procparImage) > 1) || ~any(procparImage == [1 3 4])
     disp(sprintf('(dofmrigru:getVolTrigRatio) !!! Image field for scan %s has strange values in it (%s) !!!',fidList.filename,num2str(procparImage,'%i ')));
   elseif procparImage == 3
     volTrigRatio = tsenseAcc/numshots;
