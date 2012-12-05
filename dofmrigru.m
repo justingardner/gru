@@ -1514,7 +1514,7 @@ if ieNotDefined('nVolsCutoff'),nVolsCutoff = 10;end
 epiNums = [];
 for i = 1:length(fidList)
   if ~isempty(fidList{i}.info)
-    if fidList{i}.info.dim(4) > nVolsCutoff
+    if fidList{i}.info.isepi && (fidList{i}.info.dim(4) > nVolsCutoff)
       epiNums(end+1) = i;
     end
   end
