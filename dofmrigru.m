@@ -890,6 +890,9 @@ end
 % find pdf files
 pdfList = getFileList(pdfDir,'pdf');
 
+% find edf files
+edffileList = getFileList(stimfileDir,'edf');
+
 % get stimfile list
 stimfileList = getFileList(stimfileDir,'mat');
 stimfileList = setStimfileListDispStr(stimfileList);
@@ -903,6 +906,7 @@ if senseProcessing
 end
 dispList(pdfList,nan,sprintf('PDF files: %s',pdfDir));
 dispList(stimfileList,nan,sprintf('Stimfiles: %s',stimfileDir));
+dispList(edffileList,nan,sprintf('EDFfiles: %s',stimfileDir))
 dispList(carList,nan,sprintf('Car/Ext files: %s',carextDir));
 
 % go find the matching car files for each scan
@@ -914,7 +918,7 @@ else
 end
 
 % setup directories etc.
-doMoveFiles(1,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums,tsense);
+doMoveFiles(1,fidList,carList,pdfList,stimfileList,edffileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums,tsense);
 
 % make mask dir
 if senseProcessing,makeMaskDir(1,fidList,anatNums,senseRefNums);end
@@ -923,7 +927,7 @@ if senseProcessing,makeMaskDir(1,fidList,anatNums,senseRefNums);end
 if ~askuser('OK to run above commands?'),return,end
 
 % now do it
-fidList = doMoveFiles(0,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums,tsense);
+fidList = doMoveFiles(0,fidList,carList,pdfList,stimfileList,edffileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums,tsense);
 
 % make mask dir
 if senseProcessing,makeMaskDir(0,fidList,anatNums,senseRefNums);end
@@ -1051,7 +1055,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%
 %%   doMoveFiles   %%
 %%%%%%%%%%%%%%%%%%%%%
-function fidList = doMoveFiles(justDisplay,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums,tsense)
+function fidList = doMoveFiles(justDisplay,fidList,carList,pdfList,stimfileList,edffileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums,tsense)
 
 % some command names
 global epibsi;
@@ -1086,6 +1090,7 @@ if ~justDisplay
   dispList(carList,nan,'Car/Ext files',true);
   dispList(pdfList,nan,'PDF files',true);
   dispList(stimfileList,nan,'Stimfiles',true);
+  dispList(edffileList,nan,'EDFfiles',true);
 end
 
 disp(sprintf('=============================================='));
@@ -1098,6 +1103,18 @@ for i = 1:length(pdfList)
   if justDisplay,disp(command),else,eval(command);,end
 end
 
+disp(sprintf('=============================================='));
+disp(sprintf('Copying edf files'));
+disp(sprintf('=============================================='));
+
+% move edffiles
+if ~isempty(edffileList)
+    for i = 1:length(edffileList)
+        command = sprintf('copyfile %s %s',edffileList{i}.fullfile,fullfile('Etc',edffileList{i}.filename));
+        if justDisplay,disp(command),else,eval(command);disp(command);,end
+    end
+end
+    
 disp(sprintf('=============================================='));
 disp(sprintf('Copying stimfiles'));
 disp(sprintf('=============================================='));
