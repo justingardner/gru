@@ -45,6 +45,7 @@
 %                   with the acc factor/shot order array for each epi in your scan. If
 %                   set to 1, will use the ideal tsense acceleration factor 
 %                   according to the number of shots and interleaving
+%                'notchFilter=1': set to 0 if you don't want to notch filter the tsense data
 %                'senseCommand=sense_mac_intel': set which sense reconstruction to use
 %                'fidDir=/usr1/justin/data/s00620101001/Pre': Set this if you want to load the first pass
 %                    fid files form a specific directory.
@@ -96,7 +97,7 @@ global epibsiArgs;
 global postproc;
 global senseCommand;
 global tsenseCommand;
-getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epibsi=epibsi','postproc=pp','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=1','dcCorrect=[]','navCorrectMag=[]','navCorrectPhase=[]','refScan=[]','getFiles=[]','anatFilename=[]','tsenseUseMask=1','tsenseUseNoise=1'});
+getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epibsi=epibsi','postproc=pp','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=1','dcCorrect=[]','navCorrectMag=[]','navCorrectPhase=[]','refScan=[]','getFiles=[]','anatFilename=[]','tsenseUseMask=1','tsenseUseNoise=1','notchFilter=1'});
 
 % interpert the arguments for epibsiArgs
 epibsiArgs = setEpibsiArgs(navCorrectMag,navCorrectPhase,dcCorrect,refScan);
@@ -117,10 +118,10 @@ end
 % see if this is the first preprocessing or the second one
 if ~isdir('Pre')
   disp(sprintf('(dofmrigru) Running Initial dofmrigru process'));
-  dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp,tsense,anatFilename);
+  dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp,tsense,anatFilename,notchFilter);
 else
   disp(sprintf('(dofmrigru) Running Second dofmrigru process'));
-  dofmrigru2(movepro,tsense,getFiles,anatFilename,tsenseUseMask,tsenseUseNoise,dcCorrect);
+  dofmrigru2(movepro,tsense,getFiles,anatFilename,tsenseUseMask,tsenseUseNoise,dcCorrect,notchFilter);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -177,7 +178,7 @@ end
 %%%%%%%%%%%%%%%%%%%%
 %%   dofmrigru2   %%
 %%%%%%%%%%%%%%%%%%%%
-function dofmrigru2(movepro,tsense,getFiles,anatFilename,tsenseUseMask,tsenseUseNoise,dcCorrect)
+function dofmrigru2(movepro,tsense,getFiles,anatFilename,tsenseUseMask,tsenseUseNoise,dcCorrect,notchFilter)
 
 % dc correct defaults to falst
 if isempty(dcCorrect),dcCorrect = 0;end
@@ -392,18 +393,18 @@ dispList(fidList,epiNumsWithCarExt,sprintf('Epi scans to process'));
 dispList(fidList,anatNums,sprintf('Anatomy files'));
 
 % display the commands for processing
-processFiles(1,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect);
+processFiles(1,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect,notchFilter);
 
 % now ask the user if they want to continue, because now we'll actually copy the files and set everything up.
 if ~askuser('OK to run above commands?'),return,end
 
 % now do it
-processFiles(0,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect);
+processFiles(0,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect,notchFilter);
 
 %%%%%%%%%%%%%%%%%%%%%%
 %%   processFiles   %%
 %%%%%%%%%%%%%%%%%%%%%%
-function processFiles(justDisplay,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect)
+function processFiles(justDisplay,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect,notchFilter)
 
 global postproc;
 global senseCommand;
@@ -604,8 +605,31 @@ end
 command = sprintf('cd ..');
 if justDisplay,disp(command),else,eval(command),end
 
+if ~isempty(tsense) && notchFilter
+  disp(sprintf('=============================================='));
+  disp(sprintf('Run notch filtering for tSense data'));
+  disp(sprintf('=============================================='));
+  if ~justDisplay
+    % load notch params
+    notchParams = load('tSenseNotchParams');
+    if ~isfield(notchParams,'params') || isempty(notchParams.params)
+      disp(sprintf('(dofmrigru:processFiles) No notch settings, skipping notch filtering'));
+      notchFilter = 0;
+    else
+      % run the notch filter.
+      v = newView;
+      v = tSenseNotch(v,notchParams.params);
+      deleteView(v);
+    end
+  end
+end
+
 disp(sprintf('=============================================='));
-disp(sprintf('Run motion comp'));
+if ~isempty(tsense) && notchFilter
+  disp(sprintf('Run motion comp on notch filtered data'));
+else
+  disp(sprintf('Run motion comp'));
+end
 disp(sprintf('=============================================='));
 if ~justDisplay
   motionCompFilenameNum = 1;
@@ -613,13 +637,82 @@ if ~justDisplay
   while isfile(motionCompFilename)
     % load the params
     eval(sprintf('load %s',motionCompFilename));
-		       % run the motion comp
-		       v = newView;
-		       v = motionComp(v,params);
-		       deleteView(v);
-		       % get the next motionCompParams to run
-		       motionCompFilenameNum = motionCompFilenameNum+1;
-		       motionCompFilename = sprintf('motionCompParams%i.mat',motionCompFilenameNum);
+    % see if we need to modify the parameters if notch filtering
+    % has been run
+    if ~isempty(tsense) && notchFilter
+      % go into notch group to find out which scans correspond to the ones
+      % initially set in the raw group
+      v = newView;
+      notchGroupNum = viewGet(v,'groupNum',notchParams.params.newGroupName);
+      % if the notch group has been created
+      if ~isempty(notchGroupNum)
+	% set the group to the notch group
+	v = viewSet(v,'curGroup',notchParams.params.newGroupName);
+	nScans = viewGet(v,'numScans');
+	% get the original scan names
+	notchScan = [];
+	for iScan = 1:nScans
+	  thisOriginalGroup = viewGet(v,'originalGroupName',iScan);
+	  thisOriginalFilename = viewGet(v,'originalFilename',iScan);
+	  % check if the scan comes from single group and scan (if it doesn't then we can't do motionComp, so will skip)
+	  % Also must come from Raw group
+	  if iscell(thisOriginalGroup) && (length(thisOriginalGroup)==1) && iscell(thisOriginalFilename) && (length(thisOriginalFilename) == 1) && isequal(thisOriginalGroup{1},'Raw')
+	    notchScan(end+1).scanNum = iScan;
+	    notchScan(end).originalFilename = thisOriginalFilename{1};
+	    notchScan(end).tseriesFilename = viewGet(v,'tseriesfile',iScan);
+	    notchScan(end).description = viewGet(v,'description',iScan);
+	  end
+	end
+	% now make a new structure to run the motin comp from the notch group
+	if ~isempty(notchScan)
+	  % set up a motion comp params structure same as the desired one but with no scans
+	  notchMotionParams = params;
+	  notchMotionParams.targetScans = [];
+	  notchMotionParams.tseriesfiles =  {};
+	  notchMotionParams.descriptions = {};
+	  notchMotionParams.groupName = notchParams.params.newGroupName;
+	  % for each scan if it matches a notch scan then move it into the notchMotionParams
+	  for iNotchScan = 1:length(notchScan)
+	    % see if it exists in the motionComp params
+	    notchMatchScan = find(strcmp(stripext(notchScan(iNotchScan).originalFilename),stripext(params.tseriesfiles)));
+	    if length(notchMatchScan) == 1
+	      % move it to the notch params
+	      notchMotionParams.targetScans(end+1) = notchScan(iNotchScan).scanNum;
+	      notchMotionParams.tseriesfiles{end+1} = notchScan(iNotchScan).tseriesFilename;
+	      notchMotionParams.descriptions{end+1} = sprintf('motionComp of %s',notchScan(iNotchScan).description);
+	      % remove it from the regular motionComp
+	      keepScans = setdiff(1:length(params.targetScans),notchMatchScan);
+	      params.targetScans = params.targetScans(keepScans);
+	      params.tseriesfiles = {params.tseriesfiles{keepScans}};
+	      params.descriptions = {params.descriptions{keepScans}};
+	    end
+	  end
+	  % run it if not empty
+	  if length(notchMotionParams.targetScans) > 0
+	    v = motionComp(v,notchMotionParams);
+	    deleteView(v);
+	    writeLogFile(sprintf('(dofmrigru) motionComp run on Notch for scans: %s',num2str(notchMotionParams.targetScans)))
+	  end
+	  if length(params.targetscans) > 0
+	    % warn if there are still left over scans in params
+	    dispMessage = sprintf('(dofmrigru) Not all scans have been notch filtered. Running motionComp on %s',num2str(params.targetScans));
+	    disp(dispMessage);
+	    writeLogFile(dispMessage);
+	  end
+	end
+      end
+    end
+    % end changing of parameters of motionComp for running with notch filtered data
+
+    % run the motion comp
+    if isfield(params,'targetScans') && (length(params.targetScans)>0)
+      v = newView;
+      v = motionComp(v,params);
+      deleteView(v);
+    end
+    % get the next motionCompParams to run
+    motionCompFilenameNum = motionCompFilenameNum+1;
+    motionCompFilename = sprintf('motionCompParams%i.mat',motionCompFilenameNum);
   end
 end
 
@@ -802,7 +895,7 @@ end
 %%%%%%%%%%%%%%%%%%%%
 %%   dofmrigru1   %%
 %%%%%%%%%%%%%%%%%%%%
-function dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp,tsense,anatFilename)
+function dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp,tsense,anatFilename,notchFilter)
 
 global dataDir;
 
@@ -949,7 +1042,7 @@ end
 disp(sprintf('(dofmrigru1) Setup mrInit for your directory'));
 mrInit([],[],sprintf('subject=%s',subjectID),'makeReadme=0');
 
-% set some info in the auxParams about the scane
+% set some info in the auxParams about the scan
 v = newView;
 if ~isempty(v)
   for iScan = 1:length(epiNums)
@@ -991,10 +1084,24 @@ if ~isempty(v)
   deleteView(v);
 end
 
+% set up notch filter parameters
+if ~isempty(tsense) && notchFilter
+  v = newView;
+  if ~isempty(v);
+    [v params] = tSenseNotch(v,[],'justGetParams=1');
+    deleteView(v);
+    save('tSenseNotchParams','params');
+  end
+end
+
 % set up motion comp parameters
 for i = 1:numMotionComp
   v = newView;
   if ~isempty(v)
+    % tell user that motion comp will be run from notch filter
+    if ~isempty(tsense) && notchFilter
+      disp(sprintf('(dofmrigru) Note that motion comp will be run from the Notch group (i.e. after notch filtering has been processed for tsense data). This is because we dont want the motionComp to get confused by the tsense artifacts that are present in the time series before notch filtering has been run.'));
+    end
     [v params] = motionComp(v,[],'justGetParams=1');
     deleteView(v);
     eval(sprintf('save motionCompParams%i params',i));
@@ -1531,7 +1638,13 @@ if ieNotDefined('nVolsCutoff'),nVolsCutoff = 10;end
 epiNums = [];
 for i = 1:length(fidList)
   if ~isempty(fidList{i}.info)
+<<<<<<< .mine
+    % check that it is an epi and that it has more than the cutoff number of volumes
+    % cutoff is set just to discard any false-starts
     if fidList{i}.info.isepi && (fidList{i}.info.dim(4) > nVolsCutoff)
+=======
+    if fidList{i}.info.isepi && (fidList{i}.info.dim(4) > nVolsCutoff)
+>>>>>>> .r128
       epiNums(end+1) = i;
     end
   end
