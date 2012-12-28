@@ -1638,13 +1638,9 @@ if ieNotDefined('nVolsCutoff'),nVolsCutoff = 10;end
 epiNums = [];
 for i = 1:length(fidList)
   if ~isempty(fidList{i}.info)
-<<<<<<< .mine
     % check that it is an epi and that it has more than the cutoff number of volumes
     % cutoff is set just to discard any false-starts
     if fidList{i}.info.isepi && (fidList{i}.info.dim(4) > nVolsCutoff)
-=======
-    if fidList{i}.info.isepi && (fidList{i}.info.dim(4) > nVolsCutoff)
->>>>>>> .r128
       epiNums(end+1) = i;
     end
   end
