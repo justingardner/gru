@@ -693,7 +693,7 @@ if ~justDisplay
 	    deleteView(v);
 	    writeLogFile(sprintf('(dofmrigru) motionComp run on Notch for scans: %s',num2str(notchMotionParams.targetScans)))
 	  end
-	  if length(params.targetscans) > 0
+	  if length(params.targetScans) > 0
 	    % warn if there are still left over scans in params
 	    dispMessage = sprintf('(dofmrigru) Not all scans have been notch filtered. Running motionComp on %s',num2str(params.targetScans));
 	    disp(dispMessage);
