@@ -493,7 +493,7 @@ for i = 1:length(epiNumsWithCarExt)
     % run with physiofix correction
     ppoptions = sprintf('%s -physiofix',ppoptions);
   end
-
+  
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   %    sense processing
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -570,12 +570,13 @@ for i = 1:length(epiNumsWithCarExt)
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % if we don't have to movepro, then just use postproc to read
     % the fid directly
-    if 0 %movepro==0
+    if movepro==0
 	 % convert epis to sdt file, doing physiofix and dc correction
 	 command = sprintf('mysystem(''%s -outtype 3 %s %s %s'');',postproc,ppoptions,fidname,imgname);
     else
       % if we have to movepro, then convert the file to sdt using
       % fid2nifti.
+      disp(sprintf('(dofmrigru) Moving pro - this will extraact using fid2nifti and convert to SDT before running pp - thus there will be no k-space data for running phsyiofix'));
       command = sprintf('[d h] = fid2nifti(''%s'',''movepro=%f'',''keepref=1'');writesdt(''%s'',d);mysystem(''%s -intype 2 -outtype 3 %s %s %s'');',fidname,movepro,setext(fidname,'sdt'),postproc,ppoptions,setext(fidname,'sdt'),imgname);
     end
 
