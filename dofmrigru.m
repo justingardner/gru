@@ -494,6 +494,8 @@ for i = 1:length(epiNumsWithCarExt)
     ppoptions = sprintf('%s -physiofix',ppoptions);
   end
   
+  if movepro~=0,disp('(dofmrigru) movepro not implemented - need to read fid directly using fid2nifiti and movepro');keyboard;end
+  
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   %    sense processing
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -507,7 +509,6 @@ for i = 1:length(epiNumsWithCarExt)
     %covarname = covarList{covarNum}.filename;
     noisename = noiseList{noiseNum}.filename;
     refname = refList{refNum}.filename;
-    if movepro~=0,disp('(dofmrigru) movepro not implemented yet for sense processing');keyboard;end
     % run postproc
     command = sprintf('mysystem(''%s -outtype 1 %s %s %s'');',postproc,ppoptions,fidname,edtname);
     if justDisplay,disp(command),else,eval(command),end
@@ -568,37 +569,30 @@ for i = 1:length(epiNumsWithCarExt)
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   %    normal processing
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % if we don't have to movepro, then just use postproc to read
-    % the fid directly
-    if movepro==0
-	 % convert epis to sdt file, doing physiofix and dc correction
-	 command = sprintf('mysystem(''%s -outtype 3 %s %s %s'');',postproc,ppoptions,fidname,imgname);
-    else
-      % if we have to movepro, then convert the file to sdt using
-      % fid2nifti.
-      disp(sprintf('(dofmrigru) Moving pro - this will extraact using fid2nifti and convert to SDT before running pp - thus there will be no k-space data for running phsyiofix'));
-      command = sprintf('[d h] = fid2nifti(''%s'',''movepro=%f'',''keepref=1'');writesdt(''%s'',d);mysystem(''%s -intype 2 -outtype 3 %s %s %s'');',fidname,movepro,setext(fidname,'sdt'),postproc,ppoptions,setext(fidname,'sdt'),imgname);
-    end
-
+    % use postproc to read the fid, run physiofix and dc correction and output to sdt
+    command = sprintf('mysystem(''%s -outtype 2 %s %s %s'');',postproc,ppoptions,fidname,sdtname);
     if justDisplay,disp(command),else,eval(command),end
-    % then convert the output of postproc to a valid nifti file, by
-    % pasting on the header from fid2niftihdr
+    % load sdt
+    command = sprintf('sdt = readsdt(''%s'');',sdtname);
+    if justDisplay,disp(command),else,eval(command),end
+    % convert the sdt file into a nifti by getting the header info from fid2niftihdr
     command = sprintf('[hdr info] = fid2niftihdr(''%s'',1,''movepro=%f'');',fidname,movepro);
     if justDisplay,disp(command),else,eval(command),end
-    % add back reference volume to header
-    command = sprintf('if info.nRefVolumes,hdr.dim(5) = hdr.dim(5) + info.nRefVolumes;end');
-    if justDisplay,disp(command),else,eval(command),end
-    % save header
-    command = sprintf('cbiWriteNiftiHeader(hdr,''%s'');',hdrname);
-    if justDisplay,disp(command),else,eval(command),end
-    % now load completed nifti file for saving into Raw/TSeries
-    command = sprintf('[d h] = cbiReadNifti(''%s'');',hdrname);
-    if justDisplay,disp(command),else,eval(command),end
-    % now, remove reference volumes from nifti file if necessary, 
-    command = sprintf('if info.nRefVolumes,d = d(:,:,:,info.nRefVolumes+1:end);h.dim(5) = h.dim(5)-info.nRefVolumes;end',hdrname,hdrname);
-    if justDisplay,disp(command),else,eval(command),end
+    % combine coils
+    disp(sprintf('(dofmrigru) Take sum-of-squares of coils and remove ref scans'));
+    if ~justDisplay && info.numReceivers > 1
+      % reshape data to make receivers last dimension
+      sdt.data = reshape(sdt.data,info.dim(1),info.dim(2),info.dim(3),info.numReceivers,info.dim(4)+info.nRefVolumes);
+      % take sum of squares
+      sdt.data = sqrt(sum(sdt.data(:,:,:,:,:).^2,4)),
+      % squeeze out the receivers dimension - but dont use squeeze
+      % cause this would squeeze out the slice dim if you only have one slice
+      sdt.data = reshape(sdt.data,info.dim(1),info.dim(2),info.dim(3),info.dim(4)+info.nRefVolumes);
+      % remove reference
+      sdt.data = sdt.data(:,:,:,info.nRefVolumes+1:end);
+    end
     % save nifti to Raw/TSeries
-    command = sprintf('cbiWriteNifti(''%s'',d,h);',fullfile('..','Raw','TSeries',hdrname));
+    command = sprintf('cbiWriteNifti(''%s'',sdt.data,hdr);',fullfile('..','Raw','TSeries',hdrname));
     if justDisplay,disp(command),else,eval(command),end
   end
 end
