@@ -1061,9 +1061,7 @@ if ~isempty(v)
 	  % get the framePeriod
 	  framePeriod = median(diff(stimfile{1}.myscreen.events.time(volEvents)));
 	  % now see if there are more volumes than acquisition triggers
-	  if volTrigRatio(iScan)>1
-	    framePeriod = framePeriod/volTrigRatio(iScan);
-	  end
+	  framePeriod = framePeriod/volTrigRatio(iScan);
 	  % round to nearest 1/1000 of a second
 	  framePeriod = round(framePeriod*1000)/1000;
 	  disp(sprintf('(dofmrigru) Frame period as recorded in stimfile is: %0.3f',framePeriod));
