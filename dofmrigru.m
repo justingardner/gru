@@ -62,6 +62,8 @@
 %                    anatomy file (e.g. 'anatFilename=myanat'), you can also set to a cell array of filenames
 %                'tsenseUseMask=1': Set this to 0 if you want to suppress using the mask with tSense processing
 %                'tsenseUseNoise=1': Set this to 0 if you want to suppress using the noise with tSense processing
+%                'tsenseRef=[]': set to a number to specify which volume to calculate the sensitivity profile for
+%                     tSense to. Default will use each full volume as it comes the way tSense is supposed to (pass 2)
 %
 %             First pass will sort through the specified datadir and copy
 %             all of these files in the correct directories on your local
@@ -97,7 +99,7 @@ global epibsiArgs;
 global postproc;
 global senseCommand;
 global tsenseCommand;
-getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epibsi=epibsi','postproc=/usr4/local/mac_bin2/pp','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=1','dcCorrect=[]','navCorrectMag=[]','navCorrectPhase=[]','refScan=[]','getFiles=[]','anatFilename=[]','tsenseUseMask=1','tsenseUseNoise=1','notchFilter=1'});
+getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epibsi=epibsi','postproc=/usr4/local/mac_bin2/pp','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=1','dcCorrect=[]','navCorrectMag=[]','navCorrectPhase=[]','refScan=[]','getFiles=[]','anatFilename=[]','tsenseUseMask=1','tsenseUseNoise=1','notchFilter=1','tsenseRef=[]'});
 
 % interpert the arguments for epibsiArgs
 epibsiArgs = setEpibsiArgs(navCorrectMag,navCorrectPhase,dcCorrect,refScan);
@@ -121,7 +123,7 @@ if ~isdir('Pre')
   dofmrigru1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp,tsense,anatFilename,notchFilter);
 else
   disp(sprintf('(dofmrigru) Running Second dofmrigru process'));
-  dofmrigru2(movepro,tsense,getFiles,anatFilename,tsenseUseMask,tsenseUseNoise,dcCorrect,notchFilter);
+  dofmrigru2(movepro,tsense,getFiles,anatFilename,tsenseUseMask,tsenseUseNoise,dcCorrect,notchFilter,tsenseRef);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -178,7 +180,7 @@ end
 %%%%%%%%%%%%%%%%%%%%
 %%   dofmrigru2   %%
 %%%%%%%%%%%%%%%%%%%%
-function dofmrigru2(movepro,tsense,getFiles,anatFilename,tsenseUseMask,tsenseUseNoise,dcCorrect,notchFilter)
+function dofmrigru2(movepro,tsense,getFiles,anatFilename,tsenseUseMask,tsenseUseNoise,dcCorrect,notchFilter,tsenseRef)
 
 % dc correct defaults to falst
 if isempty(dcCorrect),dcCorrect = 0;end
@@ -393,18 +395,18 @@ dispList(fidList,epiNumsWithCarExt,sprintf('Epi scans to process'));
 dispList(fidList,anatNums,sprintf('Anatomy files'));
 
 % display the commands for processing
-processFiles(1,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect,notchFilter);
+processFiles(1,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect,notchFilter,tsenseRef);
 
 % now ask the user if they want to continue, because now we'll actually copy the files and set everything up.
 if ~askuser('OK to run above commands?'),return,end
 
 % now do it
-processFiles(0,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect,notchFilter);
+processFiles(0,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect,notchFilter,tsenseRef);
 
 %%%%%%%%%%%%%%%%%%%%%%
 %%   processFiles   %%
 %%%%%%%%%%%%%%%%%%%%%%
-function processFiles(justDisplay,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect,notchFilter)
+function processFiles(justDisplay,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect,notchFilter,tsenseRef)
 
 global postproc;
 global senseCommand;
@@ -545,11 +547,18 @@ for i = 1:length(epiNumsWithCarExt)
     else
       noiseStr = '';
     end
+    % set the reference for tsense (this usually defaults to 0 which means use each volume
+    % but you can pass in the argument tsenseRef to set which volume to use for the reference
+    % for caluclating the sensitivity map
+    tsenseRefStr = '';
+    if ~isempty(tsenseRef)
+      tsenseRefStr = sprintf('-ref %i',tsenseRef);
+    end
     % run tsense 
     if length(tsense{i}) > 1
-      command = sprintf('mysystem(''%s -full %s -recon %s -accf %s -remove %s %s'');',tsenseCommand,stripext(fidname),stripext(fidname),num2str(tsense{i},'%i '),maskStr,noiseStr);
+      command = sprintf('mysystem(''%s -full %s -recon %s -accf %s -remove %s %s %s'');',tsenseCommand,stripext(fidname),stripext(fidname),num2str(tsense{i},'%i '),maskStr,noiseStr,tsenseRefStr);
     else
-      command = sprintf('mysystem(''%s -full %s -recon %s -remove %s %s'');',tsenseCommand,stripext(fidname),stripext(fidname),maskStr,noiseStr);
+      command = sprintf('mysystem(''%s -full %s -recon %s -remove %s %s %s'');',tsenseCommand,stripext(fidname),stripext(fidname),maskStr,noiseStr,tsenseRefStr);
     end
     if justDisplay,disp(command),else,eval(command),end
     % load the created file
