@@ -32,7 +32,7 @@ s = dispSessionInfo(s);
 % fix it
 if any(s.needsFix)
   % display what the fix will do
-  [tf s] = dispFixedVsOld(s)
+  [tf s] = dispFixedVsOld(s);
   if ~tf,return,end
   % ask user if they want to fix
   if askuser('Fix')
@@ -50,6 +50,10 @@ tf = false;
 filename = fullfile(s.sessionDir,'Raw','TSeries',s.tseriesFilename{1});
 disppercent(-inf,sprintf('Reading %s',filename));
 [data hdr] = mlrImageLoad(filename);
+if isempty(data)
+  disp(sprintf('(fixBadXform) Could not read %s',filename));
+  return
+end
 
 % remove all but one volume
 data = data(:,:,:,1);
