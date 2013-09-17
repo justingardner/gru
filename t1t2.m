@@ -389,7 +389,7 @@ params = mrParamsDefault(paramsInfo);
 displayT1T2(params);
 
 % now put up dialog box 
-params = mrParamsDialog(paramsInfo,'T1T2 controls','modal=0');
+params = mrParamsDialog(paramsInfo,'T1T2 controls','modal=1');
 
 % clean up
 close(gt1t2.f);
@@ -553,9 +553,9 @@ retval = 0;
 global gt1t2;
 vol = computeT1T2(gt1t2.t1,gt1t2.t2,params);
 if isfield(gt1t2,'refvol')
-  mlrVol(vol.d,vol.hdr,gt1t2.refvol.d,gt1t2.refvol.hdr,'toggleOverlay=0');
+  mlrVol(vol.d,vol.hdr,gt1t2.refvol.d,gt1t2.refvol.hdr,'toggleOverlay=0','showControls=0');
 else
-  mlrVol(vol.d,vol.hdr);
+  mlrVol(vol.d,vol.hdr,'showControls=0');
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%
