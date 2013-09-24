@@ -62,8 +62,9 @@
 %                    anatomy file (e.g. 'anatFilename=myanat'), you can also set to a cell array of filenames
 %                'tsenseUseMask=1': Set this to 0 if you want to suppress using the mask with tSense processing
 %                'tsenseUseNoise=1': Set this to 0 if you want to suppress using the noise with tSense processing
-%                'tsenseRef=[]': set to a number to specify which volume to calculate the sensitivity profile for
-%                     tSense to. Default will use each full volume as it comes the way tSense is supposed to (pass 2)
+%                'tsenseRef=-1': set to a number to specify which volume to calculate the sensitivity profile for
+%                     tSense to. Default (-1) will compute the average sensitivity profile across all volumes. Set
+%                     to 0 if you want the sensitivity profile computed every full volume.
 %
 %             First pass will sort through the specified datadir and copy
 %             all of these files in the correct directories on your local
@@ -99,7 +100,7 @@ global epibsiArgs;
 global postproc;
 global senseCommand;
 global tsenseCommand;
-getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epibsi=epibsi','postproc=/usr4/local/mac_bin2/pp','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=1','dcCorrect=[]','navCorrectMag=[]','navCorrectPhase=[]','refScan=[]','getFiles=[]','anatFilename=[]','tsenseUseMask=1','tsenseUseNoise=1','notchFilter=1','tsenseRef=[]'});
+getArgs(varargin,{'dataDir=/usr1/justin/data','fidDir=[]','carextDir=[]','pdfDir=[]','stimfileDir=[]','epibsi=epibsi','postproc=/usr4/local/mac_bin2/pp','tsenseCommand=/usr4/local/mac_bin2/tsense_test','senseCommand=/usr1/mauro/SenseProj/command_line/current/executables/sense_mac_intel','numMotionComp=1','movepro=0','tsense=1','dcCorrect=[]','navCorrectMag=[]','navCorrectPhase=[]','refScan=[]','getFiles=[]','anatFilename=[]','tsenseUseMask=1','tsenseUseNoise=1','notchFilter=1','tsenseRef=-1'});
 
 % interpert the arguments for epibsiArgs
 epibsiArgs = setEpibsiArgs(navCorrectMag,navCorrectPhase,dcCorrect,refScan);
