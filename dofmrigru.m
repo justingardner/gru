@@ -973,7 +973,7 @@ if isempty(senseRefNums) && senseProcessing
   disp(sprintf('(dofmrigru1) Could not find any sense ref files in %s',fidDir));
   return
 end
-if isempty(senseNoiseNums) && senseProcessing
+if isempty(senseNoiseNums) && (senseProcessing || ~isempty(tsense))
   disp(sprintf('(dofmrigru1) Could not find any sense noise files in %s',fidDir));
   return
 end
@@ -1000,11 +1000,13 @@ dispList(fidList,epiNums,sprintf('Epi scans: %s',fidDir));
 dispList(fidList,anatNums,sprintf('Anatomy scans: %s',fidDir));
 if senseProcessing
   dispList(fidList,senseRefNums,sprintf('Sense reference scan: %s',fidDir));
-  dispList(fidList,senseNoiseNums,sprintf('Sense noise scan: %s',fidDir));
+end
+if senseProcessing || ~isempty(tsense)
+  dispList(fidList,senseNoiseNums,sprintf('Noise scan: %s',fidDir));
 end
 dispList(pdfList,nan,sprintf('PDF files: %s',pdfDir));
 dispList(stimfileList,nan,sprintf('Stimfiles: %s',stimfileDir));
-dispList(edffileList,nan,sprintf('EDFfiles: %s',stimfileDir))
+dispList(edffileList,nan,sprintf('EDFfiles: %s',stimfileDir));
 dispList(carList,nan,sprintf('Car/Ext files: %s',carextDir));
 
 % go find the matching car files for each scan
