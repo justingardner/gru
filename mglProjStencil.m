@@ -19,8 +19,6 @@ if length(eccArray) ~= length(angles)
     error('Eccentricity array has incorrect length.');
 end
 
-mglOpen
-
 mglClearScreen;
 mglStencilCreateBegin(stencil);
 
@@ -52,14 +50,7 @@ mglGluPartialDisk(xs,ys,zeros(size(xs)),eccs,sAs,-ones(size(xs))*2,ones(3,size(x
 mglFlush
 
 mglStencilCreateEnd;
-mglClearScreen(0);
-
-mglStencilSelect(1);
-mglClearScreen(.5);
-mglStencilSelect(0);
-mglFlush
-
-stop=1
+mglClearScreen();
 
 
 end
