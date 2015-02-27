@@ -5,14 +5,25 @@ function stencil = mglProjStencil()
 % use by adding mglStencilSelect(1); and then mglStencilSelect(0); to turn
 % off
 
-eccArray = [5.5, 7.5, 17, 18, 19, 11, 8, 6,14 , 15, 11, 8, 7.5];
+% This approximates the full screen (needs to be adjusted):
+
+botangs1 = [-15 -30];
+botangs2 = [-45 -60 -75];
+transEccs = [20./cos(deg2rad(abs(botangs1))) 15./cos(deg2rad(90+botangs2))];
+eccArray = [20,15,20,20,20,20,20,20, transEccs];
+eccArray = eccArray;
+
+% This is the actual recordings we made for what you can see in the 32
+% channel coil:
+
+% eccArray = [5.5, 7.5, 17, 18, 19, 11, 8, 6,14 , 15, 11, 8, 7.5];
 
 stencil = 99;
 
 angles = [90, -90, 0, 15, 30, 45, 60, 75, -15, -30, -45, -60, -75];
 angles2 = [180-angles(3:8) angles(9:end)-90];
 angles = [angles angles2];
-angles = mod(angles+90,360);
+angles = mod(angles-90,360);
 eccArray = [eccArray eccArray(3:8) fliplr(eccArray(9:end))];
 
 if length(eccArray) ~= length(angles)
