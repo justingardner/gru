@@ -2,12 +2,20 @@ function success = mlrGetSurf(project,password)
 %   mlrGetSurf(project)
 %
 % GOAL:
-% You should have already run mlrReconAll for your volumes. Now we're
-% going to recover the actual data with the same rP settings. The data will
-% get saved into the same directory structure that it was pulled out of
-% NIMS on, in this subject's folder.
+%   You should have already run mlrReconAll for your volumes. Now we're
+%   going to recover the actual data with the same rP settings. Note that
+%   the data will go into the folder on your computer: ~/data/retinotopy/
+%   which you should have already initialized with mrInit.
+%
+% USAGE:
+%   success = mlrGetSurf(project,password)
 %
 % project       Current project, e.g. 'retinotopy'
+% password      Your suid password
+%
+% RETURNS:
+%   success     1 when your files were successfully moved onto this local
+%               computer. 0 otherwise.
 
 %% Build up our collection of files
 possibleFiles = dir(fullfile('~/data/',project,'rP*.mat'));
@@ -98,6 +106,17 @@ if mrInitFlag
 else
     warning('mlrImportFreeSurfer was not run, did you run mrInit?');
 end
+
+%% Cleanup the server, get rid of the /subj and /fs_subj directories
+if success
+    if strcmp(input('Do you want to remove the folders on the LXC server? y/n: ','s'),'y')
+        ssh2_conn = ssh2_command(ssh2_conn,sprintf('rm -rf %s',reconParams.tempPath));
+        ssh2_conn = ssh2_command(ssh2_conn,sprintf('rm -rf %s',reconParams.fstempPath));
+    end
+end
+
+%% Close lxc
+ssh2_close(ssh2_conn);
 
 function success = checkForSurfFiles(dir)
 dirs = {'surf','mri'};

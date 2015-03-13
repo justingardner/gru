@@ -6,13 +6,12 @@ function mlrReconAll(project,examNum,subjectName,username)
 %   entire freesurfer recon process in the background.
 %
 % USAGE:
-%   rP = mlrReconAll('retinotopy','9077','s300','dbirman','PASSW');
-%   succ = mlrGetSurf(rP);
+%   mlrReconAll('retinotopy','9077','s300','dbirman','PASSW');
 %
 % project       The current project, should be: /retinotopy/
 % examNum       Exam number, you can find this on NIMS (cni.stanford.edu/nims/)
 % subjectName   who is this person, e.g. s300 or dan
-% username      Your Stanford suid, dbirman
+% username      Your Stanford suid, e.g. dbirman
 % password      Your Stanford suid password
 
 %% Check if we are at Stanford in GRU lab (171.64.40.***)
