@@ -30,9 +30,13 @@ end
 for fi = 1:length(doFiles)
     cFile = doFiles{fi};
     cFile = fullfile('~/data/',project,cFile);
-    mlrGetSurfHelper(cFile,password);
-end
+    if mlrGetSurfHelper(cFile,password);
+        delete(cFile);
+    else
+        disp(sprintf('Surfaces for %s failed to copy, you should have already gotten a more verbose explanation',cFile));
+    end
 
+end
 %% Helpers
 
 function success = mlrGetSurfHelper(file,password)
@@ -86,7 +90,7 @@ warning('Specific file checking is not implemented yet... if freesurfer didn''t 
 
 %% SCP Files to /data/
 localFullPath = reconParams.localDataPath;
-scpCommand = sprintf('scp -r %s@%s:%s/* %s',reconParams.user,reconParams.LXCServer,reconParams.fstempPath,localFullPath);
+scpCommand = sprintf('scp -r %s@%s:%s %s',reconParams.user,reconParams.LXCServer,reconParams.fstempPath,localFullPath);
 
 disp(sprintf('\nPlease copy and paste the following into a terminal:\n\n%s\n\nWhen the commands finish, type ''dbcont'' to keep going',scpCommand));
 
