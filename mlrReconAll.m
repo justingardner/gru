@@ -1,4 +1,4 @@
-function reconParams = mlrReconAll(project,examNum,subjectName,username,password)
+function mlrReconAll(project,examNum,subjectName,username)
 %   rP = mlrReconAll(proj,exam,subj,user,pass)
 %
 % GOAL:
@@ -28,16 +28,26 @@ reconParams = struct;
 reconParams.LXCServer = 'cnic7.stanford.edu';
 reconParams.nimsDataPath = fullfile('/nimsfs','jlg',project);
 reconParams.tempPath = fullfile('/data/freesurfer/subjects/',subjectName);
-reconParams.localDataPath = fullfile('/data',project,'Anatomy',subjectName);
+reconParams.localDataPath = fullfile('~','/data',project,'Anatomy',subjectName);
+reconParams.localProjPath = fullfile('~','/data',project);
 reconParams.subj = subjectName;
 reconParams.fs_subj = strcat('fs_',subjectName);
 reconParams.fstempPath = fullfile('/data/freesurfer/subjects/',reconParams.fs_subj);
 reconParams.user = username;
-reconParams.pass = password;
+
+
+%% Build missing folder
+if ~isdir(reconParams.localDataPath)
+    mkdir(reconParams.localDataPath);
+end
 
 %% Connect to LXC Server
 try
-    ssh2_conn = ssh2_config(reconParams.LXCServer,reconParams.user,reconParams.pass);
+    curDir = pwd;
+    cd('~/proj/gru');
+    addpath(genpath('~/proj/gru/ssh2_v2_m1_r6'));
+    ssh2_conn = ssh2_config(reconParams.LXCServer,reconParams.user,password);
+    cd(curDir);
 catch e
     warning('Something went wrong with ssh2, are you sure you have the ssh2 folder on your path?');
     error(e);
@@ -91,3 +101,9 @@ disp(sprintf('\n\nAll of your files are now organized.\nPlease execute the follo
 
 %% Close the LXC Server
 ssh2_conn = ssh2_close(ssh2_conn);
+
+%% Save file
+cdate = datestr(now,'YYMMDDhhmm');
+outFileName = strcat('rP_',cdate,'.mat');
+save(fullfile(reconParams.localProjPath,outFileName),'reconParams');
+disp(sprintf('Your file was printed to: %s, when FreeSurfer finishes call mlrGetSurf and choose this file.',outFileName);
