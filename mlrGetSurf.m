@@ -30,12 +30,12 @@ end
 for fi = 1:length(doFiles)
     cFile = doFiles{fi};
     cFile = fullfile('~/data/',project,cFile);
-    mlrGetSurfHelper(cFile);
+    mlrGetSurfHelper(cFile,password);
 end
 
 %% Helpers
 
-function success = mlrGetSurfHelper(file)
+function success = mlrGetSurfHelper(file,password)
     
 %% Load our file
 load(file);
@@ -71,7 +71,10 @@ catch e
 end
 
 %% Check if FreeSurfer is finished
+reconParams.fstempPath = '/data/freesurfer/subjects/fs_dan';
+
 ssh2_conn = ssh2_command(ssh2_conn,sprintf('ls %s',fullfile(reconParams.fstempPath,'surf')));
+
 if isempty(ssh2_conn.command_result{1})
     warning('FreeSurfer didn''t finish running. Be patient!');
     success = 0;
@@ -85,7 +88,9 @@ warning('Specific file checking is not implemented yet... if freesurfer didn''t 
 localFullPath = reconParams.localDataPath;
 scpCommand = sprintf('scp -r %s@%s:%s/* %s',reconParams.user,reconParams.LXCServer,reconParams.fstempPath,localFullPath);
 
-disp(sprintf('\nPlease copy and paste the following into a terminal:\n\n%s',scpCommand));
+disp(sprintf('\nPlease copy and paste the following into a terminal:\n\n%s\n\nWhen the commands finish, type ''dbcont'' to keep going',scpCommand));
+
+keyboard
 
 %% Check that SCP succeeded
 success = checkForSurfFiles(reconParams.localDataPath);
@@ -112,6 +117,7 @@ if success
     if strcmp(input('Do you want to remove the folders on the LXC server? y/n: ','s'),'y')
         ssh2_conn = ssh2_command(ssh2_conn,sprintf('rm -rf %s',reconParams.tempPath));
         ssh2_conn = ssh2_command(ssh2_conn,sprintf('rm -rf %s',reconParams.fstempPath));
+        disp('Files removed...');
     end
 end
 
@@ -120,18 +126,16 @@ ssh2_close(ssh2_conn);
 
 function success = checkForSurfFiles(dir)
 dirs = {'surf','mri'};
-files = {['lh.pial' 'rh.pial' 'lh.smoothwm' 'rh.smoothwm' 'lh.inflated' 'rh.inflated'], ['T1.mgz']};
+files = {{'lh.pial' 'rh.pial' 'lh.smoothwm' 'rh.smoothwm' 'lh.inflated' 'rh.inflated'}, {'T1.mgz'}};
 for di = 1:length(dirs)
     cdir = dirs{di};
-    for fi = 1:length(files)
-        cfiles = files{fi};
-        for fii = 1:length(cfiles)
-            cfile = cfiles(fii);
-            % check for file
-            if ~isfile(fullfile(dir,cdir,cfile))
-                success = 0;
-                return
-            end
+    cfiles = files{di};
+    for fi = 1:length(cfiles)
+        cfile = cfiles{fi};
+        % check for file
+        if ~isfile(fullfile(dir,cdir,cfile))
+            success = 0;
+            return
         end
     end
 end

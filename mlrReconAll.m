@@ -1,4 +1,4 @@
-function mlrReconAll(project,examNum,subjectName,username)
+function mlrReconAll(project,examNum,subjectName,username,password)
 %   rP = mlrReconAll(proj,exam,subj,user,pass)
 %
 % GOAL:
@@ -96,7 +96,7 @@ reconCommand = sprintf('recon-all -subject %s -i %s -all',reconParams.fs_subj,re
 
 % I don't have this working, so for now you have to do the next step by
 % hand.
-disp(sprintf('\n\nAll of your files are now organized.\nPlease execute the following commands in the terminal:\n\nssh -XY %s@cnic7.stanford.edu\n%s\n\nThat''s it! When FreeSurfer finishes call\n\nmlrGetSurf(reconParams);',username,reconCommand));
+disp(sprintf('\n\nAll of your files are now organized.\nPlease execute the following commands in the terminal:\n\nssh -XY %s@cnic7.stanford.edu\n%s\n\nThat''s it!',username,reconCommand));
 
 %% Close the LXC Server
 ssh2_conn = ssh2_close(ssh2_conn);
@@ -105,4 +105,4 @@ ssh2_conn = ssh2_close(ssh2_conn);
 cdate = datestr(now,'YYMMDDhhmm');
 outFileName = strcat('rP_',cdate,'.mat');
 save(fullfile(reconParams.localProjPath,outFileName),'reconParams');
-disp(sprintf('Your file was printed to: %s, when FreeSurfer finishes call mlrGetSurf and choose this file.',outFileName);
+disp(sprintf('Your file was printed to: %s, when FreeSurfer finishes call mlrGetSurf and choose this file.',outFileName));
