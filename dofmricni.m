@@ -1,224 +1,267 @@
-% dofmricns.m
+% dofmricni.m
 %
 %        $Id:$ 
-%      usage: dofmricns
+%      usage: dofmricni
 %         by: justin gardner
 %       date: 03/17/2015
 %    purpose: do initial processing stream for Stanford data brought down
 %             from NIMS. Based on dofmrigru code.
 %
-%             To use this, first make a directory where you want
-%             all the data saved on your local machine. This should
-%             be of the format sXXXXYYYYMMDD eg. for subject s0012
-%             taken on 20150312 you would do
-%
-%             cd ~/data
-%             mkdir s001220150312
-%             cd s001220150312
+%             To use this, just call dofmricni and select the session you
+%             want to bring to your local computer. It will connect to the
+%             cniComputer (you can change computer name with cniComputerName)
+%             You must put in your password. You will see a list of sessions
+%             When you have selected which one you want to load then
+%             you will need to put your password in again so that it can 
+%             copy the files locally. It will put files into the correct directories
+%             for mlr (and decompress the niftis). It will also put the dicomInfo
+%             into the scan
 %
 %                'stimfileDir=/usr1/justin/data/s00620101001/stimfile': Set this if you want to load the first pass
 %                    stimfiles form a specific directory.
-%                'pdfDir=/usr1/justin/data/s00620101001/stimfile': Set this if you want to load the first pass
-%                    pdf files form a specific directory.
 %                'numMotionComp=1': Set to 0 if you don't want to run MLR motion comp. Set to > 1 if you want
 %                    to set multiple motionComp parameters (e.g. for motionComping two sets of scans taken at
 %                    different resolutions)
-%                'anatFilename=[]': Set this to a filename if you want to specify a particular name for the
-%                    anatomy file (e.g. 'anatFilename=myanat'), you can also set to a cell array of filenames
 %
-%             This will sort through the specified datadir and copy
-%             all of these files in the correct directories on your local
-%             computer.
 %
 function retval = dofmricni(varargin)
 
-% Default arguments
-pdfDir = [];
-stimfileDir = [];
-numMotionComp = [];
-getArgs(varargin,{'pdfDir=[]','stimfileDir=[]','numMotionComp=1','anatFilename=[]'});
+% todo: stimfile processing. Also would be nice to default motionComp parameters to
+% what we are using these days
 
+% Default arguments
+getArgs(varargin,{'stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data'});
+
+clc;
 % check to make sure we have the computer setup correctly to run epibsi, postproc and sense
 if checkCommands == 0,return,end
+
+% set up system variable (which gets passed around with important system info)
+s.cniComputerName = cniComputerName;
+s.localDataDir = mlrReplaceTilde(localDataDir);
+s.stimfileDir = stimfileDir;
+s.numMotionComp = numMotionComp;
+s.dispNiftiHeaderInfo = false;
+% range for te to be considered a BODL scan
+s.teLower = 25;
+s.teHigher = 35;
+
+% choose which directory to download from cni
+s = getCNIDir(s);
+if isempty(s.cniDir),return,end
+
+% now move data into temporary directory on local machine so that we can analyze it
+[tf s] = getCNIData(s);
+if ~tf,return,end
 
 % make sure that MLR is not running
 mrQuit;
 
-% check correct directory
-if strcmp(getLastDir(pwd),'Pre') || isfile(fullfile(fileparts(pwd),'mrSession.mat'))
-  if askuser(sprintf('(dofmricni) Current path is %s. Did you want to start in %s',pwd,fileparts(pwd)));
-    cd('..');
+% check the data
+[tf s] = examineData(s);
+if ~tf,return,end
+
+% now propose a move
+[tf s] = moveData(true,s);
+if ~tf,return,end
+
+% and do it
+[tf s] = moveData(false,s);
+if ~tf,return,end
+
+% now run mrInit
+runMrInit(s);
+
+%%%%%%%%%%%%%%%%%%%%%
+%%   examineData   %%
+%%%%%%%%%%%%%%%%%%%%%
+function [tf s] = examineData(s);
+
+tf = false;
+% get the list of filest that we have
+fileList = getFileList(s.localDir);
+
+% get dicom info
+disppercent(-inf,'(dofmricni) Getting dicom info');
+s.subjectID = [];
+s.magnet = [];
+s.operatorName = [];
+s.receiveCoilName = [];
+s.studyDate = '';
+for i = 1:length(fileList)
+  fileList(i).dicomInfo = getDicomInfo(fileList(i).dicom);
+  fileList(i).tr = nan;
+  fileList(i).te = nan;
+  % pull out info from dicom header
+  if ~isempty(fileList(i).dicomInfo) 
+    % pull out tr
+    if isfield(fileList(i).dicomInfo,'RepetitionTime')
+      fileList(i).tr = fileList(i).dicomInfo.RepetitionTime;
+    end
+    % pull out TE
+    if isfield(fileList(i).dicomInfo,'EchoTime')
+      fileList(i).te = fileList(i).dicomInfo.EchoTime;
+    end
+    % pull out subjectID
+    if isfield(fileList(i).dicomInfo,'subjectID') && ~isempty(fileList(i).dicomInfo.subjectID)
+      s.subjectID = fileList(i).dicomInfo.subjectID;
+    end
+    % pull out date
+    if isfield(fileList(i).dicomInfo,'StudyDate')
+      s.studyDate = fileList(i).dicomInfo.StudyDate;
+    end
+    % pull out magnet
+    if isempty(s.magnet)
+      if isfield(fileList(i).dicomInfo,'Manufacturer')
+	s.magnet = fileList(i).dicomInfo.Manufacturer;
+      end
+      if isfield(fileList(i).dicomInfo,'ManufacturerModelName')
+	s.magnet = sprintf('%s %s',s.magnet,fileList(i).dicomInfo.ManufacturerModelName);
+      end
+      if isfield(fileList(i).dicomInfo,'MagneticFieldStrength')
+	s.magnet = sprintf('%s %iT',s.magnet,fileList(i).dicomInfo.MagneticFieldStrength);
+      end
+      if isfield(fileList(i).dicomInfo,'ImagingFrequency')
+	s.magnet = sprintf('%s %sMhz',s.magnet,mlrnum2str(fileList(i).dicomInfo.ImagingFrequency,'compact=1'));
+      end
+      if isfield(fileList(i).dicomInfo,'InstitutionName')
+	s.magnet = sprintf('%s %s',s.magnet,fileList(i).dicomInfo.InstitutionName);
+      end
+    end
+    % pull out operator
+    if isfield(fileList(i).dicomInfo,'OperatorName')
+      s.operatorName = fileList(i).dicomInfo.OperatorName;
+      if ~isempty(s.operatorName) && isfield(s.operatorName,'FamilyName') && isfield(s.operatorName,'GivenName')
+	s.operatorName = strtrim(sprintf('%s %s',s.operatorName.GivenName,s.operatorName.FamilyName));
+      end
+    end
+    % pull out coil
+    if isfield(fileList(i).dicomInfo,'ReceiveCoilName')
+      if ~isempty(fileList(i).dicomInfo.ReceiveCoilName)
+	s.receiveCoilName = fileList(i).dicomInfo.ReceiveCoilName;
+      end
+    end
+  end
+  disppercent(i/length(fileList));
+end
+disppercent(inf);
+
+% get scan start time
+for i = 1:length(fileList)
+  if all(isfield(fileList(i).dicomInfo,{'AcquisitionTime','AcquisitionDate'}))
+    fileList(i).startTime = str2num(fileList(i).dicomInfo.AcquisitionTime);
+  else
+    fileList(i).startTime = inf;
+  end
+  fileList(i).startHour = floor(fileList(i).startTime/10000);
+  fileList(i).startMin = floor(fileList(i).startTime/100)-fileList(i).startHour*100;
+end
+
+% sort by start time
+fileList = sortFileList(fileList);
+
+% read nifti headers
+if s.dispNiftiHeaderInfo
+  disppercent(-inf,'(dofmricni) Reading nifti headers');
+  for i = 1:length(fileList)
+    if ~isempty(fileList(i).nifti)
+      system(sprintf('chmod 644 %s',fileList(i).nifti));
+      fileList(i).h = mlrImageHeaderLoad(fileList(i).nifti);
+    else
+      fileList(i).h = [];
+    end
+    disppercent(i/length(fileList));
+  end
+  disppercent(inf);
+else
+  for i = 1:length(fileList)
+    fileList(i).h = [];
   end
 end
 
-% see if this is the first preprocessing or the second one
-if ~isdir('Pre')
-  disp(sprintf('(dofmricni) Running Initial dofmricni process'));
-  dofmricni1(stimfileDir,pdfDir,numMotionComp,anatFilename);
-else
-  disp(sprintf('(dofmricni) Running Second dofmricni process'));
-  dofmricni2(anatFilename);
-end
-
-%%%%%%%%%%%%%%%%%%%%
-%%   dofmricni1   %%
-%%%%%%%%%%%%%%%%%%%%
-function dofmricni1(fidDir,carextDir,stimfileDir,pdfDir,numMotionComp,tsense,anatFilename)
-
-global dataDir;
-
-% get the current directory
-expdir = getLastDir(pwd);
-
-% location of all directories. Should be a directory
-% in there that has the same name as the current directory
-% i.e. s00120090706 that contains the fid files and the
-% car/ext files
-if isempty(fidDir),fidDir = fullfile(dataDir,expdir,'raw');end
-if isempty(carextDir),carextDir = fullfile(dataDir,expdir,'aux');end
-if isempty(stimfileDir), stimfileDir = fullfile(dataDir,expdir,'aux');end
-if isempty(pdfDir),pdfDir = fullfile(dataDir,expdir,'aux');end
-
-% check the fiddir
-if ~isdir(fidDir)
-  disp(sprintf('(dofmricni1) Could not find fid directory %s',fidDir));
-  return
-end
-
-% now get info about fids
-[fidList fidListArray] = getFileList(fidDir,'fid');
-fidList = getFidInfo(fidList);
-fidList = sortFidList(fidList);
-
-% get list of epi scans
-epiNums = getEpiScanNums(fidList);
-if isempty(epiNums)
-  disp(sprintf('(dofmricni1) Could not find any epi files in %s',fidDir));
-  return
-end
-
-% check to see if any of the epi scans have acceleration greater than 1
-senseProcessing = isSenseProcessing(fidList,epiNums);
-
-% set the tsense array
-tsense = setTsense(tsense,length(epiNums));
-
-% check the tsense scans, for ones in which we are
-% accelerating make sure the setting's are correct
-% otherwise if the scan looks like it should be accelerated
-% then give warning
-[tf fidList tsense volTrigRatio] = checkTsense(fidList,epiNums,tsense);
-if ~tf && ~askuser('(dofmricni) Continue?')
-  return
-end
-
-% if this is not a tsense run, then get volTrigRatio independently
-if isempty(volTrigRatio)
-  for iEPI = 1:length(epiNums)
-    volTrigRatio(iEPI) = getVolTrigRatio(fidList{epiNums(iEPI)},0);
+% get list of bold scans
+boldNum = 0;
+s.seriesDescription = [];
+for i = 1:length(fileList)
+  % check by whether name contains BOLD or TR is in range
+  if ~isempty(findstr('bold',lower(fileList(i).filename))) || (~isempty(fileList(i).te) && (fileList(i).te >= s.teLower) && fileList(i).te <= s.teHigher)
+    fileList(i).bold = true;
+    boldNum = boldNum+1;
+    % name to be copied to
+    fileList(i).toName = setext(sprintf('bold%02i_%s',boldNum,fileList(i).filename),fileList(i).niftiExt);
+    % also get receiverCoilName and sequence type info
+    if isfield(fileList(i).dicomInfo,'SeriesDescription')
+      if isempty(s.seriesDescription)
+	s.seriesDescription = fileList(i).dicomInfo.SeriesDescription;
+      end
+    end
+    
+  else
+    fileList(i).bold = false;
+    fileList(i).toName = '';
   end
 end
 
-% update fidList so that it will display getVolTrigRatio
-for iEPI = 1:length(epiNums)
-  fidList{epiNums(iEPI)}.dispstr = sprintf('%s volTrigRatio=%s',fidList{epiNums(iEPI)}.dispstr,mlrnum2str(volTrigRatio(iEPI),'compact',true));
+% get list of anat scans
+anatNum = 0;
+for i = 1:length(fileList)
+  % check by whether name contains BOLD or TR is in range
+  if ~isempty(findstr('t1w',lower(fileList(i).filename))) 
+    fileList(i).anat = true;
+    anatNum = anatNum+1;
+    fileList(i).toName = setext(sprintf('anat%02i_%s',anatNum,fileList(i).filename),fileList(i).niftiExt);
+  else
+    fileList(i).anat = false;
+  end
 end
 
-% get anatomy scan nums
-anatNums = getAnatScanNums(fidList,anatFilename);
-if isempty(anatNums)
-  disp(sprintf('(dofmricni1) Could not find any non-raw anatomies in %s',fidDir));
+% get the subject id
+if isempty(s.subjectID)
+  mrParams = {{'subjectID',0,'incdec=[-1 1]','minmax=[0 inf]','Subject ID'}};
+  params = mrParamsDialog(mrParams,'Set subject ID');
+  if isempty(params),return,end
+  s.subjectID = sprintf('s%04i',params.subjectID);
 end
 
-% get sense noise/ref scans
-[senseNoiseNums senseRefNums] = getSenseNums(fidList);
-if isempty(senseRefNums) && senseProcessing
-  disp(sprintf('(dofmricni1) Could not find any sense ref files in %s',fidDir));
-  return
-end
-if isempty(senseNoiseNums) && senseProcessing
-  disp(sprintf('(dofmricni1) Could not find any sense noise files in %s',fidDir));
-  return
-end
+% get name of directory to copy
+s.localSessionDir = fullfile(s.localDataDir,fileparts(s.cniDir),sprintf('%s%s',s.subjectID,s.studyDate));
 
-% find car/ext files
-carList = getFileList(carextDir,'car','ext');
-carList = getCarInfo(carList);
-if isempty(carList)
-  disp(sprintf('(dofmricni1) Could not find any car/ext files in %s',carextDir));
-end
+% confirm with user
+mrParams = {{'localSessionDir',s.localSessionDir,'Where your data will get stored'}};
+params = mrParamsDialog(mrParams,'Confirm where you want the data stored on your local computer');
+if isempty(params),return,end
+s.localSessionDir = params.localSessionDir;
 
-% find pdf files
-pdfList = getFileList(pdfDir,'pdf');
+% return true
+tf = true;
+s.fileList = fileList;
 
-% get stimfile list
-stimfileList = getFileList(stimfileDir,'mat');
-stimfileList = setStimfileListDispStr(stimfileList);
+%%%%%%%%%%%%%%%%%%%
+%%   runMrInit   %%
+%%%%%%%%%%%%%%%%%%%
+function tf = runMrInit(s)
 
-% display what we found
-dispList(fidList,epiNums,sprintf('Epi scans: %s',fidDir));
-dispList(fidList,anatNums,sprintf('Anatomy scans: %s',fidDir));
-if senseProcessing
-  dispList(fidList,senseRefNums,sprintf('Sense reference scan: %s',fidDir));
-  dispList(fidList,senseNoiseNums,sprintf('Sense noise scan: %s',fidDir));
-end
-dispList(pdfList,nan,sprintf('PDF files: %s',pdfDir));
-dispList(stimfileList,nan,sprintf('Stimfiles: %s',stimfileDir));
-dispList(carList,nan,sprintf('Car/Ext files: %s',carextDir));
-
-% go find the matching car files for each scan
-if ~isempty(carList)
-  [carMatchNum carList] = getCarMatch(carList,fidList,epiNums);
-  if isempty(carMatchNum),return,end
-else
-  carMatchNum = [];
-end
-
-% setup directories etc.
-doMoveFiles(1,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums,tsense);
-
-% make mask dir
-if senseProcessing,makeMaskDir(1,fidList,anatNums,senseRefNums);end
-
-% now ask the user if they want to continue, because now we'll actually copy the files and set everything up.
-if ~askuser('OK to run above commands?'),return,end
-
-% now do it
-fidList = doMoveFiles(0,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums,tsense);
-
-% make mask dir
-if senseProcessing,makeMaskDir(0,fidList,anatNums,senseRefNums);end
-
-% save tsense settings
-if ~isempty(tsense)
-  save tsense tsense
-end
-
-% get subject id
-exptname = getLastDir(pwd);
-if (length(exptname) > 4) && (exptname(1) == 's')
-  subjectID = exptname(1:4);
-else
-  subjectID = 'sxxx';
-end
+tf = false;
+curpwd = pwd;
+cd(s.localSessionDir);
+[sessionParams groupParams] = mrInit([],[],'justGetParams=1','magnet',s.magnet,'operator',s.operatorName,'subject',s.subjectID,'coil',s.receiveCoilName,'pulseSequence',s.seriesDescription);
+if isempty(sessionParams),return,end
 
 % now run mrInit
 disp(sprintf('(dofmricni1) Setup mrInit for your directory'));
-mrInit([],[],sprintf('subject=%s',subjectID),'makeReadme=0');
+mrInit(sessionParams,groupParams,'makeReadme=0');
 
-% set some info in the auxParams about the scane
+% now set the dicom info
 v = newView;
+nScans = viewGet(v,'nScans');
 if ~isempty(v)
-  for iScan = 1:length(epiNums)
-    % set fid name
-    v = viewSet(v,'auxParam','fidFilename',fidList{epiNums(iScan)}.filename,iScan);
-    % set volTrigRatio (only if different from 1)
-    if volTrigRatio(iScan) ~= 1
-      v = viewSet(v,'auxParam','volTrigRatio',volTrigRatio(iScan),iScan);
-    end
-    % set tsense field
-    if ~isempty(tsense) && (length(tsense) >= iScan) && ~isempty(tsense{iScan})
-      v = viewSet(v,'auxParam','tSense',tsense{iScan},iScan);
+  for iScan = 1:nScans
+    scanName = viewGet(v,'tseriesFile',iScan);
+    % look for matching scan in fileList
+    fileListNum = find(strcmp(scanName,{s.fileList(:).toUncompressedName}));
+    if ~isempty(fileListNum)
+      % and store it
+      v = viewSet(v,'auxParam','dicomInfo',s.fileList(fileListNum).dicomInfo,iScan);
     end
     % set framePeriod as recorded in stimfile
     stimfile = viewGet(v,'stimfile',iScan);
@@ -236,10 +279,6 @@ if ~isempty(v)
 	  % round to nearest 1/1000 of a second
 	  framePeriod = round(framePeriod*1000)/1000;
 	  disp(sprintf('(dofmricni) Frame period as recorded in stimfile is: %0.3f',framePeriod));
-  	  % set the frame period
-	  scanParams = viewGet(v,'scanParams',iScan);
-	  scanParams.framePeriod = framePeriod;
-	  v = viewSet(v,'scanParams',scanParams,iScan);
 	end
       end
     end
@@ -249,14 +288,14 @@ if ~isempty(v)
 end
 
 % set up motion comp parameters
-for i = 1:numMotionComp
-  v = newView;
-  if ~isempty(v)
-    [v params] = motionComp(v,[],'justGetParams=1');
-    deleteView(v);
-    eval(sprintf('save motionCompParams%i params',i));
-  end
-end
+%for i = 1:numMotionComp
+%  v = newView;
+%  if ~isempty(v)
+%    [v params] = motionComp(v,[],'justGetParams=1');
+%    deleteView(v);
+%    eval(sprintf('save motionCompParams%i params',i));
+%  end
+%end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %    removeTempFiles    %
@@ -309,121 +348,6 @@ if ~isempty(deleteList)
   end
 end
 
-%%%%%%%%%%%%%%%%%%%%
-%%   dofmricni2   %%
-%%%%%%%%%%%%%%%%%%%%
-function dofmricni2(movepro,tsense,getFiles,anatFilename,tsenseUseMask,tsenseUseNoise,dcCorrect)
-
-% dc correct defaults to falst
-if isempty(dcCorrect),dcCorrect = 0;end
-
-% get fid file list
-fiddir = 'Pre';
-fidList = getFileList(fiddir,'fid');
-fidList = getFidInfo(fidList);
-fidList = sortFidList(fidList);
-
-% get list of epi scans
-epiNums = getEpiScanNums(fidList);
-
-% remove any already existing temp files
-removeTempFiles({fidList{epiNums}});
-
-% get anatomy scan nums
-anatNums = getAnatScanNums(fidList,anatFilename);
-
-% check for something to do
-if isempty(epiNumsWithCarExt)
-  if ~askuser('(dofmricni) No epi scans with car/ext files. Process anyway?'),return,end
-  epiNumsWithCarExt = epiNums;
-% check to see if we should quit given that some of the peak files are missing
-elseif length(epiNumsWithPeaks) ~= length(epiNums)
-  if ~askuser('You are missing some peak files. Do you still want to continue'),return,end
-end
-
-% disp the scans
-dispList(fidList,epiNumsWithCarExt,sprintf('Epi scans to process'));
-dispList(fidList,anatNums,sprintf('Anatomy files'));
-
-% display the commands for processing
-processFiles(1,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect);
-
-% now ask the user if they want to continue, because now we'll actually copy the files and set everything up.
-if ~askuser('OK to run above commands?'),return,end
-
-% now do it
-processFiles(0,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect);
-
-%%%%%%%%%%%%%%%%%%%%%%
-%%   processFiles   %%
-%%%%%%%%%%%%%%%%%%%%%%
-function processFiles(justDisplay,fidList,maskList,noiseList,refList,epiNumsWithPeaks,epiNumsWithCarExt,senseScanNums,anatNums,maskNums,noiseNums,refNums,senseProcessing,movepro,tsense,tSenseMaskList,tSenseMaskNums,tSenseNoiseList,tSenseNoiseNums,dcCorrect)
-
-global postproc;
-global senseCommand;
-global tsenseCommand;
-
-command = sprintf('cd Pre');
-if justDisplay,disp(command),else,eval(command),end
-
-% open the logfile
-if ~justDisplay
-  openLogfile('dofmricni2.log');
-end
-
-% copy anatomy files
-for i = 1:length(anatNums)
-  disp(sprintf('=============================================='));
-  disp(sprintf('Copy processed anatomy into Anatomy directory'));
-  disp(sprintf('=============================================='));
-  if isfile(setext(fixBadChars(stripext(fidList{anatNums(i)}.filename),{'.','_'}),'hdr'))
-    command = sprintf('copyfile %s ../Anatomy',setext(fixBadChars(stripext(fidList{anatNums(i)}.filename),{'.','_'}),'hdr'));
-    if justDisplay,disp(command),else,eval(command),end
-    command = sprintf('copyfile %s ../Anatomy',setext(fixBadChars(stripext(fidList{anatNums(i)}.filename),{'.','_'}),'img'));
-    if justDisplay,disp(command),else,eval(command),end
-  end
-  if isfile(setext(fixBadChars(stripext(fidList{anatNums(i)}.filename),{'.','_'}),'nii'))
-    command = sprintf('copyfile %s ../Anatomy',setext(fixBadChars(stripext(fidList{anatNums(i)}.filename),{'.','_'}),'nii'));
-    if justDisplay,disp(command),else,eval(command),end
-  end
-end
-
-% and delete headers
-disp(sprintf('=============================================='));
-disp(sprintf('Remove temporary nifti files'));
-disp(sprintf('=============================================='));
-command = 'mysystem(''rm -f ../Raw/TSeries/*.hdr'');';
-if justDisplay,disp(command),else,eval(command);end
-command = 'mysystem(''rm -f ../Raw/TSeries/*.img'');';
-if justDisplay,disp(command),else,eval(command);end
-
-disp(sprintf('=============================================='));
-disp(sprintf('Run motion comp'));
-disp(sprintf('=============================================='));
-if ~justDisplay
-  motionCompFilenameNum = 1;
-  motionCompFilename = sprintf('motionCompParams1.mat');
-  while isfile(motionCompFilename)
-    % load the params
-    eval(sprintf('load %s',motionCompFilename));
-		       % run the motion comp
-		       v = newView;
-		       v = motionComp(v,params);
-		       deleteView(v);
-		       % get the next motionCompParams to run
-		       motionCompFilenameNum = motionCompFilenameNum+1;
-		       motionCompFilename = sprintf('motionCompParams%i.mat',motionCompFilenameNum);
-  end
-end
-
-disp(sprintf('=============================================='));
-disp(sprintf('DONE'));
-disp(sprintf('=============================================='));
-
-if ~justDisplay
-  closeLogfile;
-end
-
 %%%%%%%%%%%%
 %% myeval %%
 %%%%%%%%%%%%
@@ -433,219 +357,151 @@ if justDisplay
   disp(command);
 else
   eval(command);
+  dispConOrLog(command,justDisplay,true);
 end  
-%%%%%%%%%%%%%%%%%%%%%
-%%   doMoveFiles   %%
-%%%%%%%%%%%%%%%%%%%%%
-function fidList = doMoveFiles(justDisplay,fidList,carList,pdfList,stimfileList,carMatchNum,epiNums,anatNums,senseNoiseNums,senseRefNums,tsense)
 
-disp(sprintf('=============================================='));
-disp(sprintf('Making directories'));
-disp(sprintf('=============================================='));
+%%%%%%%%%%%%%%%%%%
+%%   moveData   %%
+%%%%%%%%%%%%%%%%%%
+function [tf s] = moveData(justDisplay,s)
+
+clc;
+
+% open the logfile
+if ~justDisplay
+  % make the local session direcotry
+  if ~isdir(s.localSessionDir)
+    mkdir(s.localSessionDir);
+  end
+  % change to that directory
+  curpwd = pwd;
+  cd(s.localSessionDir);
+  % and start a log there
+  openLogfile('dofmricni.log');
+end
+
+% now display all the files in the order they were acquired
+dispConOrLog(sprintf('=============================================='),justDisplay);
+dispConOrLog(sprintf('File list'),justDisplay);
+dispConOrLog(sprintf('=============================================='),justDisplay);
+
+dispList(s,justDisplay);
+
+dispConOrLog(sprintf('=============================================='),justDisplay,true);
+dispConOrLog(sprintf('Make Directories'),justDisplay,true);
+dispConOrLog(sprintf('=============================================='),justDisplay,true);
 
 % list of directories to make
-dirList = {'Etc','Pre','Doc','Pre/Aux','Raw','Raw/TSeries','Anatomy','Anal'};
+dirList = {'Etc','Raw','Raw/TSeries','Anatomy'};
 
 % make them
 for i = 1:length(dirList)
   if ~isdir(dirList{i})
-    command = sprintf('mkdir(''%s'');',dirList{i});
-    if justDisplay,disp(command),else,eval(command);,end
+    command = sprintf('mkdir(''%s'');',fullfile(s.localSessionDir,dirList{i}));
+    myeval(command,justDisplay);
   end
 end
 
-% open the logfile
-if ~justDisplay
-  cd('Pre');
-  openLogfile('dofmricni.log');
-  cd('..');
-  % write info about various scans
-  dispList(fidList,epiNums,'Epi scans',true);
-  dispList(fidList,anatNums,'Anatomy scans',true);
-  if ~isempty(senseRefNums) dispList(fidList,senseRefNums,'Sense reference scan',true);end
-  if ~isempty(senseNoiseNums) dispList(fidList,senseNoiseNums,'Sense noise scan',true);end
-  dispList(carList,nan,'Car/Ext files',true);
-  dispList(pdfList,nan,'PDF files',true);
-  dispList(stimfileList,nan,'Stimfiles',true);
-end
+dispConOrLog(sprintf('=============================================='),justDisplay,true);
+dispConOrLog(sprintf('Move Files'),justDisplay,true);
+dispConOrLog(sprintf('=============================================='),justDisplay,true);
 
-disp(sprintf('=============================================='));
-disp(sprintf('Copying pdf files'));
-disp(sprintf('=============================================='));
-
-% move all the pdf files into the directory
-for i = 1:length(pdfList)
-  command = sprintf('copyfile %s %s',pdfList{i}.fullfile,fullfile('Doc',pdfList{i}.filename));
-  if justDisplay,disp(command),else,eval(command);,end
-end
-
-disp(sprintf('=============================================='));
-disp(sprintf('Copying stimfiles'));
-disp(sprintf('=============================================='));
-
-% move stimfiles
-for i = 1:length(stimfileList)
-  command = sprintf('copyfile %s %s',stimfileList{i}.fullfile,fullfile('Etc',stimfileList{i}.filename));
-  if justDisplay,disp(command),else,eval(command);disp(command);,end
-end
-
-if justDisplay,disp(sprintf('+++++++'));end
-
-disp(sprintf('=============================================='));
-disp(sprintf('Copying fid files'));
-disp(sprintf('=============================================='));
-
-% move fid directories
-allUsefulFids = [epiNums anatNums senseNoiseNums senseRefNums];
-for i = 1:length(fidList)
-  % fix name in our fidList as any . will be replaced by _ in our Pre
-  % directory but not in /usr1 or wherever the files were copied from,
-  fidList{i}.filename = setext(fixBadChars(stripext(fidList{i}.filename),{'.','_'}),'fid');
-  % not a useful scan, put it in Pre/Aux
-  if ~any(i==allUsefulFids)
-    command = sprintf('copyfile %s %s',fidList{i}.fullfile,fullfile('Pre/Aux',fidList{i}.filename));
-    if justDisplay,disp(command);else,eval(command);,end
-    %otherwise put it in Pre
-  else
-    command = sprintf('copyfile %s %s',fidList{i}.fullfile,fullfile('Pre',fidList{i}.filename));
-    if justDisplay,disp(command),else,eval(command);,end
+commandNum = 0;
+for i = 1:length(s.fileList)
+  % BOLD scan
+  if s.fileList(i).bold
+    % make full path
+    s.fileList(i).toFullfile = fullfile(s.localSessionDir,'Raw/TSeries',s.fileList(i).toName);
+    % make command to copy
+    command = sprintf('copyfile %s %s f',s.fileList(i).nifti,s.fileList(i).toFullfile);
+    if justDisplay,commandNum=commandNum+1;disp(sprintf('%i: %s',commandNum,command)),else,myeval(command,justDisplay);,end
+  % anat scan
+  elseif s.fileList(i).anat
+    s.fileList(i).toFullfile = fullfile(s.localSessionDir,'Anatomy',s.fileList(i).toName);
+    % make command to copy
+    command = sprintf('copyfile %s %s f',s.fileList(i).nifti,s.fileList(i).toFullfile);
+    if justDisplay,commandNum=commandNum+1;disp(sprintf('%i: %s',commandNum,command)),else,myeval(command,justDisplay);,end
   end
 end
 
-disp(sprintf('=============================================='));
-disp(sprintf('DONE moving files.'));
-disp(sprintf('=============================================='));
+dispConOrLog(sprintf('=============================================='),justDisplay,true);
+dispConOrLog(sprintf('Uncompress and set permission of files'),justDisplay,true);
+dispConOrLog(sprintf('=============================================='),justDisplay,true);
 
-% convert anatomy scans
-for i = 1:length(anatNums)
-  disp(sprintf('=========================='));
-  disp(sprintf('Convert %s to nifti  ',fidList{anatNums(i)}.filename));
-  disp(sprintf('=========================='));
-  % convert anatomy to nifti
-  command = sprintf('fid2nifti %s %s;',fullfile('Pre',fidList{anatNums(i)}.filename),setext(fidList{anatNums(i)}.filename,'hdr'));
-  if justDisplay,disp(command),else,eval(command);end
+commandNum = 0;
+for i = 1:length(s.fileList)
+  % BOLD scan or anat scans may need to be uncompressed
+  if s.fileList(i).bold || s.fileList(i).anat
+    % check if compressed
+    if (length(s.fileList(i).niftiExt)>2) && strcmp(s.fileList(i).niftiExt(end-1:end),'gz')
+      % make command to gunzip
+      command = sprintf('gunzip -f %s',s.fileList(i).toFullfile);
+      s.fileList(i).toUncompressedName = stripext(s.fileList(i).toName);
+      if justDisplay,commandNum=commandNum+1;disp(sprintf('%i: %s',commandNum,command)),else,mysystem(command);,end
+      command = sprintf('chmod 644 %s',fullfile(fileparts(s.fileList(i).toFullfile),s.fileList(i).toUncompressedName));
+      if justDisplay,commandNum=commandNum+1;disp(sprintf('%i: %s',commandNum,command)),else,mysystem(command);,end
+    else
+      s.fileList(i).toUncompressedName = s.fileList(i).toName;
+    end
+  end
 end
+dispConOrLog(sprintf('=============================================='),justDisplay,true);
+dispConOrLog(sprintf('Clean up'),justDisplay,true);
+dispConOrLog(sprintf('=============================================='),justDisplay,true);
 
+command = sprintf('rm -rf %s',s.localDir);
+if justDisplay,commandNum=commandNum+1;disp(sprintf('%i: %s',commandNum,command)),else,mysystem(command);,end
+
+dispConOrLog(sprintf('=============================================='),justDisplay,true);
+dispConOrLog(sprintf('Done'),justDisplay,true);
+dispConOrLog(sprintf('=============================================='),justDisplay,true);
 
 if ~justDisplay
   closeLogfile
+  cd(curpwd);
 end
 
-%%%%%%%%%%%%%%%%%%%%%%
-%%   dispScanlist   %%
-%%%%%%%%%%%%%%%%%%%%%%
-function dispStr = dispList(fidList,nums,name,toLog)
+% ask user if this is ok
+if justDisplay
+  tf = askuser('(dofmricni) Ok to do the above');
+else
+  tf = true;
+end
 
-if nargin < 4,toLog = false;end
+%%%%%%%%%%%%%%%%%%
+%%   dispList   %%
+%%%%%%%%%%%%%%%%%%
+function dispList(s,justDisplay)
+
+if nargin < 2,justDisplay = true;end
 
 dispStr = {};
-dispConOrLog(sprintf('============================='),toLog);
-dispConOrLog(sprintf('%s',name),toLog);
-dispConOrLog(sprintf('============================='),toLog);
-
-  
-% if nums is nan, show all files
-if isnan(nums),nums = 1:length(fidList);end
-
-for i = 1:length(nums)
-  % get display string
-  if isfield(fidList{nums(i)},'dispstr')
-    dispstr = fidList{nums(i)}.dispstr;
-  else
-    dispstr = fidList{nums(i)}.filename;
-  end
-  % display the string
-  dispConOrLog(dispstr,toLog);
-end
-
-% empty nums means to display all
-if isempty(nums)
-  disp('NO MATCHING FILES');
-end
-
-%%%%%%%%%%%%%%%%%%%%
-%%   sortFidList  %%
-%%%%%%%%%%%%%%%%%%%%
-function fidList = sortFidList(fidList)
-
-% sort by time stamp from log file
-for i = 1:length(fidList)
-  for j = 1:length(fidList)-1
-    if fidList{j}.startTime > fidList{j+1}.startTime
-      temp = fidList{j};
-      fidList{j} = fidList{j+1};
-      fidList{j+1} = temp;
-    end
-  end
-end
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%   getDatenumFromLogLine   %%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [thisDatenum thisDatestr]= getDatenumFromLogLine(thisline)
-
-thisDatenum = 0;thisDatestr = '';
-if ~isempty(thisline)
-  splitThisLine = strfind(thisline,': ');
-  if ~isempty(splitThisLine)
-    thisline = thisline(1:splitThisLine-1);
-    [dow month day hhmmss year] = strread(thisline,'%s %s %s %s %s');
-    thisDatestr = sprintf('%s-%s-%s %s',day{1},month{1},year{1},hhmmss{1});
-    thisDatenum = datenum(thisDatestr);
-  end
-end
-
-%%%%%%%%%%%%%%%%%%%%%%%%
-%%   getEpiScanNums   %%
-%%%%%%%%%%%%%%%%%%%%%%%%
-function epiNums = getEpiScanNums(fidList,nVolsCutoff)
-
-if ieNotDefined('nVolsCutoff'),nVolsCutoff = 10;end
-
-epiNums = [];
-for i = 1:length(fidList)
-  if ~isempty(fidList{i}.info)
-    if fidList{i}.info.dim(4) > nVolsCutoff
-      epiNums(end+1) = i;
-    end
-  end
-end
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%
-%%   getAnatScanNums   %%
-%%%%%%%%%%%%%%%%%%%%%%%%%
-function anatNums = getAnatScanNums(fidList,anatFilename)
-
-% set the extension of the anatFilenames to search for to fid
-anatFilename = cellArray(anatFilename);
-for i = 1:length(anatFilename)
-  anatFilename{i} = lower(setext(anatFilename{i},'fid'));
-end
-
-anatNums = [];
-% look for 3D scans or one that matches anatFilename
-for i = 1:length(fidList)
-  % check for matching name
-  if ~isempty(anatFilename) && any(strcmp(lower(fidList{i}.filename),anatFilename))
-    anatNums(end+1) = i;
-  elseif ~isempty(fidList{i}.info)
-    % check for 3d scan
-    if fidList{i}.info.acq3d
-      % make sure it is not a raw scan
-      if fidList{i}.info.dim(3) == length(fidList{i}.info.pss)
-        anatNums(end+1) = i;
-      end
+for i = 1:length(s.fileList)
+  if ~isinf(s.fileList(i).startTime)
+    if s.dispNiftiHeaderInfo && ~isempty(s.fileList(i).h)
+      pixdim = s.fileList(i).h.pixdim;
+      dim = s.fileList(i).h.dim;
+      dispConOrLog(sprintf('%i) %02i:%02i %s [%s] [%s] TR: %0.2f TE: %s -> %s',i,s.fileList(i).startHour,s.fileList(i).startMin,s.fileList(i).filename,mlrnum2str(pixdim,'compact=1'),mlrnum2str(dim,'compact=1','sigfigs=0'),s.fileList(i).tr,mlrnum2str(s.fileList(i).te,'compact=1'),s.fileList(i).toName),justDisplay);
     else
-      % check for an anatomy sounding name (i.e. has the word "anat" in it
-      if ~isempty(strfind(lower(fidList{i}.filename),'anat'))
-	%          keyboard
-	%          %make sure it is not a raw scan (has been epibsi5 processed)
-	%          command = sprintf('thisanatprocpar = readprocpar(''%s'')',fidList{i}.fullfile);
-	%          eval(command);
-	%          if thisanatprocpar.ni ~= 0
-	anatNums(end+1) = i;
-	%         end
-      end
+      dispConOrLog(sprintf('%i) %02i:%02i %s TR: %0.2f TE: %s -> %s',i,s.fileList(i).startHour,s.fileList(i).startMin,s.fileList(i).filename,s.fileList(i).tr,mlrnum2str(s.fileList(i).te,'compact=1'),s.fileList(i).toName),justDisplay);
+      
+    end
+  end
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%
+%%   sortFileList  %%
+%%%%%%%%%%%%%%%%%%%%%
+function fileList = sortFileList(fileList)
+
+% sort by time stamp 
+for i = 1:length(fileList)
+  for j = 1:length(fileList)-1
+    if fileList(j).startTime > fileList(j+1).startTime
+      temp = fileList(j);
+      fileList(j) = fileList(j+1);
+      fileList(j+1) = temp;
     end
   end
 end
@@ -653,78 +509,121 @@ end
 %%%%%%%%%%%%%%%%%%%%%
 %%   getFileList   %%
 %%%%%%%%%%%%%%%%%%%%%
-function [fileList fileListArray] = getFileList(dirname,extList,matchExtList,filenameMatch)
+function fileList = getFileList(dirname)
 
-fileList = {};fileListArray = {};
-
-% make into a cell array
-extList = cellArray(extList);
-
-if ~ieNotDefined('matchExtList')
-  matchExtList = cellArray(matchExtList);
-else
-  matchExtList = [];
-end
-
-% default to no filename matching 
-if ieNotDefined('filenameMatch')
-  filenameMatch = '';
-else
-  filenameMatch = cellArray(filenameMatch);
-end
+fileList = [];
 
 % open the directory
 dirList = dir(dirname);
 if isempty(dirList),return,end
 
-% now go through the directory looking for matches
+% now go through the directory and fill in some information about what we have
+disppercent(-inf,'(dofmricni) Getting file list');
 for i = 1:length(dirList)
   match = 0;
   % skip all . files
   if dirList(i).name(1) == '.',continue,end
-  % skip all files that don't match the filename match if specified
-  if ~isempty(filenameMatch)
-    noFilenameMatch = 0;
-    for j = 1:length(filenameMatch)
-      if isempty(strfind(lower(dirList(i).name),lower(filenameMatch{j}))),noFilenameMatch=1;,end
-    end
-    if noFilenameMatch,continue,end
+  % keep the name and date of the file
+  fileList(end+1).filename = dirList(i).name;
+  fileList(end).fullfile = fullfile(dirname,dirList(i).name);
+  fileList(end).date = dirList(i).date;
+  fileList(end).datenum = dirList(i).datenum;
+  % get name of nifti
+  % first look for uncompressed nifti
+  fileList(end).nifti = dir(sprintf('%s/*.nii',fullfile(dirname,dirList(i).name)));
+  if isempty(fileList(end).nifti)
+    % now look for compressed
+    fileList(end).nifti = dir(sprintf('%s/*.nii.gz',fullfile(dirname,dirList(i).name)));
   end
-  % get the file extension
-  thisExt = getext(dirList(i).name);
-  % check for match
-  for j = 1:length(extList)
-    if strcmp(extList{j},thisExt)
-      % found the match
-      if ~match
-	% keep the name of the file
-	fileList{end+1}.filename = dirList(i).name;
-	fileListArray{end+1} = dirList(i).name;
-	fileList{end}.fullfile = fullfile(dirname,dirList(i).name);
-	fileList{end}.date = dirList(i).date;
-	fileList{end}.datenum = dirList(i).datenum;
-	% if we need to find matches
-	if ~isempty(matchExtList)
-	  fileList{end}.filename = dirList(i).name;
-	  fileListArray{end+1} = dirList(i).name;
-	  fileList{end}.fullfile = fullfile(dirname,dirList(i).name);
-	  fileList{end}.path = dirname;
-	  fileList{end}.(sprintf('%sfilename',extList{j})) = dirList(i).name;
-	  % check for matching file
-	  stemName = stripext(fullfile(dirname,dirList(i).name));
-	  for k = 1:length(matchExtList)
-	    if ~isfile(setext(stemName,matchExtList{j}))
-	      % new system does not require matching ext files (everything stored in car)
-	      %disp(sprintf('(dofmricni1:getFileList) No matching %s file for %s',matchExtList{j},dirList(i).name));
-	    else
-	      fileList{end}.(sprintf('%sfilename',matchExtList{j})) = setext(dirList(i).name,matchExtList{j});
-	    end
-	  end
-	  
-	end
-      end
-      match = 1;
+  if ~isempty(fileList(end).nifti)
+    fileList(end).nifti = strtrim(fullfile(dirname,dirList(i).name,fileList(end).nifti(1).name));
+  end
+  % get the nifti extension
+  if ~isempty(fileList(end).nifti)
+    ext = getext(fileList(end).nifti);
+    if strcmp(lower(ext),'gz')
+      ext = sprintf('%s.gz',getext(stripext(fileList(end).nifti)));
     end
+    fileList(end).niftiExt = ext;
+  end
+  % get name of dicom
+  try
+    % look for an uncompress dicom directory
+    dicomDir = dir(sprintf('%s/*_dicoms',fullfile(dirname,dirList(i).name)));
+    if ~isempty(dicomDir)
+      fileList(end).dicom = fullfile(dirname,dirList(i).name,dicomDir(1).name);
+    else
+      % if not looked for a compressed zip file
+      fileList(end).dicom = dir(sprintf('%s/*_dicoms.tgz',fullfile(dirname,dirList(i).name)));
+      if ~isempty(fileList(end).dicom)
+	fileList(end).dicom = fullfile(dirname,dirList(i).name,fileList(end).dicom.name);
+      end
+    end
+  catch
+    fileList(end).dicom = [];
+  end
+  disppercent(i/length(dirList));
+end
+disppercent(inf);
+
+%%%%%%%%%%%%%%%%%%%%%%
+%%   getDicomInfo   %%
+%%%%%%%%%%%%%%%%%%%%%%
+function info = getDicomInfo(filename)
+
+info = [];
+if isempty(filename),return,end
+
+%unzip if necessary
+if getext(filename,'tgz')
+  % make sure the directory is writable
+  dirName = fileparts(filename);
+  system(sprintf('chmod 755 %s',fileparts(filename)));
+
+  % change to direcotry
+  curpwd = pwd;
+  cd(dirName);
+
+  % unzip the dicom
+  system(sprintf('tar xf %s',getLastDir(filename)));
+
+  % change path back
+  cd(curpwd);
+end
+
+% now do a dir to look at all the files and select the first dicom
+d = dir(fullfile(stripext(filename),'*.dcm'));
+
+% if we got one, then load it
+if length(d) >= 1
+  info = dicominfo(fullfile(stripext(filename),d(1).name));
+end
+
+% get the subjectID
+subjectID = [];
+if isfield(info,'PatientName') && isfield(info.PatientName,'FamilyName')
+  subjectID = info.PatientName.FamilyName;
+  if ~isempty(subjectID) || ~any(length(subjectID) == [4 5]) || isequal(lower(subjectID(1)),'s')
+    mrWarnDlg('(dofmricni) PatientName should always be set to a subjectID (not the real name)!!!');
+    subjectID = [];
+  end
+end
+if isempty(subjectID)
+  if ~isfield(info,'PatientName') && isfield(info.PatientName,'GivenName')
+    subjectID = info.PatientName.GivenName
+    if ~isempty(subjectID) || ~any(length(subjectID) == [4 5]) || isequal(lower(subjectID(1)),'s')
+      mrWarnDlg('(dofmricni) PatientName should always be set to a subjectID (not the real name)!!!');
+    end
+  end
+end
+info.subjectID = subjectID;
+
+% scrub all fields that begin with Patient so that
+% we don't keep around any identifiers
+infoFieldNames = fieldnames(info);
+for i = 1:length(infoFieldNames)
+  if strncmp(lower('Patient'),lower(infoFieldNames{i}),7)
+    info = rmfield(info,infoFieldNames{i});
   end
 end
 
@@ -741,7 +640,6 @@ disp('=================================================================');
 % run the command
 [status result] = system(commandName);
 disp(result);
-
 
 % write into the logfile
 writeLogFile('\n=================================================================\n');
@@ -793,18 +691,38 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%
 %    dispConeOrLog    %
 %%%%%%%%%%%%%%%%%%%%%%%
-function dispConOrLog(textStr,toLog)
+function dispConOrLog(textStr,justDisplay,alsoDisplay)
 
-if nargin < 2,toLog = false;end
-if toLog
-  writeLogFile(sprintf('%s\n',textStr));
-else
+if nargin < 2,justDisplay = true;end
+if nargin < 3,alsoDisplay = false;end
+if justDisplay
   disp(textStr);
+else
+  writeLogFile(sprintf('%s\n',textStr));
+  if alsoDisplay
+    disp(textStr);
+  end
 end
 %%%%%%%%%%%%%%%%%%%%%%%
 %    checkCommands    %
 %%%%%%%%%%%%%%%%%%%%%%%
 function retval = checkCommands
+
+retval = true;
+
+% check mgl
+if isempty(which('mglOpen')) 
+  disp(sprintf('(dofmrcni) You need to install mgl'));
+  retval = false;
+  return
+end
+
+% check mrTools
+if isempty(which('mlrVol')) 
+  disp(sprintf('(dofmrcni) You need to install mrTools'));
+  retval = false;
+  return
+end
 
 % commands to check
 commandNames = {};
@@ -860,3 +778,195 @@ for i = 1:length(stimfileList);
   end
 end
 
+%%%%%%%%%%%%%%%%%%%
+%%   getCNIDir   %%
+%%%%%%%%%%%%%%%%%%%
+function s = getCNIDir(s)
+
+s.cniDir = [];
+
+s.sunetID = mglGetParam('sunetID');
+if isempty(s.sunetID),s.sunetID = getusername;,end
+
+% put up dialog making sure info is correct
+mrParams = {{'cniComputerName',s.cniComputerName,'The name of the computer to ssh into'},...
+	    {'sunetID',s.sunetID,'Your sunet ID'}};
+params = mrParamsDialog(mrParams,'Login information');
+if isempty(params),return,end
+
+% save sunetID
+if ~isempty(params.sunetID) mglSetParam('sunetID',params.sunetID,1);end
+
+% get some variables into system variable
+s.sunetID = params.sunetID;
+s.cniComputerName = params.cniComputerName;
+  
+% get the list of directoris that live on the cni computer
+command = sprintf('ssh %s@%s /home/jlg/bin/gruDispData',s.sunetID,s.cniComputerName);
+disp(command);
+disp('Enter password: ');
+[status,result] = system(command);
+
+% check return
+if ~isequal(status,0) || isempty(result)
+  disp(sprintf('(dofmricni:cniDir) Error getting data directories from cni'));
+  return
+end
+
+% parse the results
+cniDir = [];
+while ~isempty(result)
+  % get one line
+  [thisLine result] = strtok(result,10);
+  % try to get the dirname. Should be "dirname,scan:scan:" etc.
+  [thisDirName scanNames] = strtok(thisLine,',');
+  % if we got something followed by scan names, keep going
+  if ~isempty(scanNames) && isempty(strfind(thisDirName,' '))
+    % strip comma from scanNames
+    if length(scanNames) > 1
+      scanNames = scanNames(2:end);
+    end
+    % get scanNames
+    scanNames = textscan(scanNames,'%s','Delimiter',':');
+    scanNames = scanNames{1};
+    % if we have a dir and scan names keep it
+    if ~isempty(thisDirName) && ~isempty(scanNames)
+      cniDir(end+1).dirName = thisDirName;
+      cniDir(end).scanNames = scanNames;
+    end
+  end
+end
+
+% check that we found something
+if isempty(cniDir)
+  disp(sprintf('(dofmricni) Could not find any studies'));
+  return
+end
+
+% get list of all studies
+allStudies = {};
+for iDir = 1:length(cniDir)
+  allStudies = {allStudies{:} cniDir(iDir).scanNames{:}};
+end
+% sort into reverse cronological order
+allStudies = fliplr(sort(allStudies));
+
+% limit to last 25 studies (so we do not get too long a list)
+maxAllStudies = min(25,length(allStudies));
+allStudies = {allStudies{1:min(maxAllStudies,end)}};
+
+% Now set up variables to have the default list be from all studies
+dirNames = {sprintf('From any of last %i studies',maxAllStudies),cniDir(:).dirName};
+scanNames = {allStudies cniDir(:).scanNames};
+mrParams = {{'chooseNum',1,'minmax',[1 length(dirNames)],'incdec=[-1 1]'},...
+	    {'studyName',dirNames,'type=string','Name of studies','group=chooseNum','editable=0'},...
+	    {'scanName',scanNames,'Name of scan','group=chooseNum'}};
+params = mrParamsDialog(mrParams);
+if isempty(params),return,end
+
+% get the scan name at top of list
+scanName = params.scanName{1};
+
+% get the directory
+if params.chooseNum == 1
+  % got to find dir name if they selected from the all studies list
+  for iDir = 1:length(cniDir)
+    if any(strcmp(scanName,cniDir(iDir).scanNames))
+      dirName = cniDir(iDir).dirName;
+    end
+  end
+else
+  % otherwise it just the parm
+  dirName = params.studyName{params.chooseNum};
+end
+
+% set cniDir in system variable
+s.cniDir = fullfile(dirName,scanName);
+disp(sprintf('(dofmricni:getCNIDir) Directory chosen is: %s',s.cniDir))
+
+%%%%%%%%%%%%%%%%%%%%
+%%   getCNIData   %%
+%%%%%%%%%%%%%%%%%%%%
+function [tf s] = getCNIData(s)
+
+tf = false;
+
+% set the directory to which we resync data
+toDir = mlrReplaceTilde(fullfile(s.localDataDir,'temp/dofmricni'));
+if ~isdir(toDir)
+  try
+    mkdir(toDir);
+  catch
+    mrWarnDlg(sprintf('(dofmricni) Cannot make directory %s. Either you do not have permissions, or perhaps you have a line to a drive that is not currently mounted?',toDir));
+    return
+  end
+end
+
+% Tell user what is going on
+dispHeader;
+disp(sprintf('Copying files from %s to %s',s.cniDir,toDir));
+disp(sprintf('This could take some time. Using rsync, so that if you quit in the middle'))
+disp(sprintf('You can continue where you left off by running dofmricni again'))
+dispHeader;
+
+% get dicoms
+fromDir = fullfile('/nimsfs/raw/jlg',s.cniDir);
+disp(sprintf('(dofmricni) Get files'));
+command = sprintf('rsync -rtv --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s %s',s.sunetID,s.cniComputerName,fromDir,toDir);
+disp(command);
+system(command);
+
+% got here, so everything is good
+tf = true;
+s.localDir = fullfile(toDir,getLastDir(s.cniDir));
+
+%%%%%%%%%%%%%%%%%%%%%
+%%   getusername   %%
+%%%%%%%%%%%%%%%%%%%%%
+% getusername.m
+%
+%      usage: getusername.m()
+%         by: justin gardner
+%       date: 09/07/05
+%
+function username = getusername()
+
+[retval username] = system('whoami');
+% sometimes there is more than one line (errors from csh startup)
+% so need to strip those off
+username = strread(username,'%s','delimiter','\n');
+username = username{end};
+if (retval == 0)
+  % get it again
+  [retval username2] = system('whoami');
+  username2 = strread(username2,'%s','delimiter','\n');
+  username2 = username2{end};
+  if (retval == 0)
+    % find the matching last characers
+    % this is necessary, because matlab's system command
+    % picks up stray key strokes being written into
+    % the terminal but puts those at the beginning of
+    % what is returned by stysem. so we run the
+    % command twice and find the matching end part of
+    % the string to get the username
+    minlen = min(length(username),length(username2));
+    for k = 0:minlen
+      if (k < minlen)
+	if username(length(username)-k) ~= username2(length(username2)-k)
+	  break
+	end
+      end
+    end
+    if (k > 0)
+      username = username(length(username)-k+1:length(username));
+      username = lower(username);
+      username = username(find((username <= 'z') & (username >= 'a')));
+    else
+      username = 'unknown';
+    end
+  else
+    username = 'unknown';
+  end
+else
+  username = 'unknown';
+end
