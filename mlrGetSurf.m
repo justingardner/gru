@@ -215,13 +215,12 @@ for i = 1:length(files)
 end
 
 %% Push to hg server
-t = datetime('now');
 cur = pwd;
 cd(s.aDBLocal);
 disp('Pushing local changes to AnatDB Server: warning--this may take some time!');
 system('hg add');
-system(sprintf('hg commit -m "Added segmentation files for %s on %s"',s.subjectID,datestr(t)));
-system(sprintf('hg push'));
+system(sprintf('hg commit -m "Added segmentation files for %s on %s"',s.subjectID,datestr(now)));
+system(sprintf('hg push -v'));
 cd(cur);
 
 %% Cleanup the server, get rid of the /data/temp/s#### and /data/freesurfer/subjects/s####
@@ -242,7 +241,7 @@ disp(sprintf('mlrGetSurf for subject %s is complete.',s.subjectID));
 
 function [s_t1, s_surf] = checkForSurfFiles(dir)
 dirs = {'surf','mri'};
-files = {{'lh.pial' 'rh.pial' 'lh.smoothwm' 'rh.smoothwm' 'lh.inflated' 'rh.inflated'}, {'T1.mgz', 'T1.nii'}};
+files = {{'lh.pial' 'rh.pial' 'lh.smoothwm' 'rh.smoothwm' 'lh.inflated' 'rh.inflated'}, {'T1.mgz'}};
 success = [1 1];
 for di = 1:length(dirs)
     cdir = dirs{di};
