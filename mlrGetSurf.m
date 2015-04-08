@@ -79,9 +79,9 @@ end
 
 %% Folder Structure
 if ~isdir(s.aDBLocal)
-    disp(sprintf('Please copy into a terminal, then dbcont:'));
-    disp(sprintf('hg clone %s %s',s.aDBServ,s.aDBLocal));
-    keyboard
+%     disp(sprintf('Please copy into a terminal, then dbcont:'));
+    command = sprintf('hg clone %s %s',s.aDBServ,s.aDBLocal);
+    system(command);
 else
     disp('Anatomy Database exists for subject. ');
     cur = pwd;
@@ -126,42 +126,15 @@ s.fstempPath = fullfile('/data/freesurfer/subjects/',folder);
 s.fstempPathMRI = fullfile(s.fstempPath,'mri');
 s.fstempPathSurf = fullfile(s.fstempPath,'surf');
 
-% Check if the T1 is finished
-command = sprintf('ls %s',s.fstempPathMRI);
-s.conn = ssh2_command(s.conn,command);
-
-pos = findFile(s.conn,'T1.mgz');
-
-exist_t1 = 1;
-if ~pos
-    exist_t1 = 0;
-else
-    disp('Found T1.mgz file');
-    while ~findFile(s.conn,'T1.nii')
-        disp('Converting T1.mgz to T1.nii');
-        command = sprintf('ssh %s@%s\nmri_convert %s %s',s.sunetID,s.cniComputerName,fullfile(s.fstempPathMRI,'T1.mgz'),fullfile(s.fstempPathMRI,'T1.nii'));
-        disp('Enter the following commands into any terminal [dbcont when complete]:');
-        disp(command);
-        keyboard
-        command = sprintf('ls %s',s.fstempPathMRI);
-        s.conn = ssh2_command(s.conn,command);
-    end
-end
-if exist_t1
-    disp('T1.nii file exists, will copy as canonical.');
-end
-
 %% Check for Surfaces
 command = sprintf('ls %s',s.fstempPathSurf);
 s.conn = ssh2_command(s.conn,command);
-
-
-files = {{'lh.pial' 'rh.pial' 'lh.smoothwm' 'rh.smoothwm' 'lh.inflated' 'rh.inflated'}, {'T1.mgz', 'T1.nii'}};
 
 exist_surf = 1;
 if ~findFile(s.conn,'lh.pial') || ~findFile(s.conn,'rh.pial') || ~findFile(s.conn,'lh.smoothwm') || ~findFile(s.conn,'rh.smoothwm')
     warning('FreeSurfer didn''t finish running. Re-run this later to copy the surfaces.');
     exist_surf = 0;
+    return
 end
 
 if exist_surf
@@ -178,6 +151,8 @@ while isdir(s.fullLocal)
     warning('Found existing directory %s.',s.fullLocal);
     in = input('Do you want to overwrite? [y/n]: ','s');
     if strcat(in,'y')
+        warning('Overwriting a directory may not work correctly--scp sometimes fails. In addition, you may be over-writing data. A better practice is to simply copy into a new folder /FS/2 by saying no to the ovewr-write. [dbcont]');
+        keyboard
         break
     end
     i = i+1;
@@ -191,34 +166,61 @@ disp(scpCommand);
 system(scpCommand);
 
 %% Check that SCP succeeded
-[s_t1 s_surf] = checkForSurfFiles(s.fullLocal);
+[s_t1, s_surf] = checkForSurfFiles(s.fullLocal);
 if ~s_surf
     warning('No surface files.');
+    keyboard
 end
 if ~s_t1
     warning('No canonical files.');
+    keyboard
 end
 
 %% Run mlrImportFreeSurfer
 if s_surf
     cDir = pwd;
-    cd (s.fullLocal)
-    mlrImportFreeSurfer
+    cd(s.fullLocal);    
+    mrSetPref('niftiFileExtension','.nii');
+    mlrImportFreeSurfer('baseName',s.subjectID);
     cd(cDir);
-    warning('mlrImportFreeSurfer was not run.');
 end
 
-%% Copy canonical T1
-if s_t1
-    file = fullfile(s.fullLocal,'mri','T1.nii');
-    nfile = fullfile(s.aDBLocal,'3D','T1w_Canonical.nii');
-    copyfile(file,nfile);
+%% Copy canonical from mlrImport
+files = {sprintf('%s_mprage_pp.nii',s.subjectID)};
+
+for i = 1:length(files)
+    file = fullfile(s.fullLocal,'surfRelax',files{i});
+    nfile = fullfile(s.aDBLocal,'3D',sprintf('%sc.nii',s.subjectID));
+    disp(sprintf('Copying %s to %s',file,nfile));
+    suc = copyfile(file,nfile);
+    if ~suc
+        warning('File copy failed... check?');
+    end
+end
+
+%% Copy freesurfer files up
+files = {sprintf('%s_left_Curv.vff',s.subjectID), sprintf('%s_left_GM.off',s.subjectID), ...
+    sprintf('%s_left_Inf.off',s.subjectID), sprintf('%s_left_WM.off',s.subjectID), ...
+    sprintf('%s_right_Curv.vff',s.subjectID), sprintf('%s_right_GM.off',s.subjectID), ...
+    sprintf('%s_right_Inf.off',s.subjectID), sprintf('%s_right_WM.off',s.subjectID)};
+
+for i = 1:length(files)
+    file = fullfile(s.fullLocal,'surfRelax',files{i});
+    nfile = fullfile(s.aDBLocal,'mlrBaseAnatomies',files{i});
+    disp(sprintf('Copying %s to %s',file,nfile));
+    suc = copyfile(file,nfile);
+    if ~suc
+        warning('File copy failed... check?');
+    end
 end
 
 %% Push to hg server
+t = datetime('now');
 cur = pwd;
 cd(s.aDBLocal);
-system(sprintf('hg commit -m "Added segmentation files for %s"',s.subjectID));
+disp('Pushing local changes to AnatDB Server: warning--this may take some time!');
+system('hg add');
+system(sprintf('hg commit -m "Added segmentation files for %s on %s"',s.subjectID,datestr(t)));
 system(sprintf('hg push'));
 cd(cur);
 
@@ -236,7 +238,7 @@ ssh2_close(s.conn);
 s.conn = struct;
 
 %% 
-disp('mlrGetSurf for subject %s is complete.',s.subjectID);
+disp(sprintf('mlrGetSurf for subject %s is complete.',s.subjectID));
 
 function [s_t1, s_surf] = checkForSurfFiles(dir)
 dirs = {'surf','mri'};
@@ -340,4 +342,7 @@ else
     if isempty(pos)
         pos = 0;
     end
+end
+if pos > 0
+    pos = 1;
 end
