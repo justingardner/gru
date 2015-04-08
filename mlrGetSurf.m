@@ -196,6 +196,12 @@ for i = 1:length(files)
     if ~suc
         warning('File copy failed... check?');
     end
+    nfile = fullfile(s.aDBLocal,'mlrBaseAnatomies',sprintf('%sc.nii',s.subjectID));
+    disp(sprintf('Copying %s to %s',file,nfile));
+    suc = copyfile(file,nfile);
+    if ~suc
+        warning('File copy failed... check?');
+    end
 end
 
 %% Copy freesurfer files up
