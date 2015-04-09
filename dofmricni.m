@@ -257,7 +257,6 @@ tf = false;
 curpwd = pwd;
 cd(s.localSessionDir);
 [sessionParams groupParams] = mrInit([],[],'justGetParams=1','magnet',s.magnet,'operator',s.operatorName,'subject',s.subjectID,'coil',s.receiveCoilName,'pulseSequence',s.seriesDescription);
-keyboard
 if isempty(sessionParams),return,end
 
 % now run mrInit
