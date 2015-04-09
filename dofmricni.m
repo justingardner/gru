@@ -33,8 +33,6 @@ function retval = dofmricni(varargin)
 getArgs(varargin,{'stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data'});
 
 clc;
-% check to make sure we have the computer setup correctly to run epibsi, postproc and sense
-if checkCommands == 0,return,end
 
 % set up system variable (which gets passed around with important system info)
 s.cniComputerName = cniComputerName;
@@ -46,6 +44,10 @@ s.dispNiftiHeaderInfo = false;
 s.teLower = 25;
 s.teHigher = 35;
 
+% check to make sure we have the computer setup correctly to run epibsi, postproc and sense
+[tf s] = checkCommands(s);
+if ~tf,return,end
+
 % choose which directory to download from cni
 s = getCNIDir(s);
 if isempty(s.cniDir),return,end
@@ -55,7 +57,9 @@ if isempty(s.cniDir),return,end
 if ~tf,return,end
 
 % make sure that MLR is not running
+mlrPath mrTools;
 mrQuit;
+mlrPath mrTools;
 
 % check the data
 [tf s] = examineData(s);
@@ -89,7 +93,7 @@ s.operatorName = [];
 s.receiveCoilName = [];
 s.studyDate = '';
 for i = 1:length(fileList)
-  fileList(i).dicomInfo = getDicomInfo(fileList(i).dicom);
+  fileList(i).dicomInfo = getDicomInfo(fileList(i).dicom,s);
   fileList(i).tr = nan;
   fileList(i).te = nan;
   % pull out info from dicom header
@@ -131,8 +135,16 @@ for i = 1:length(fileList)
     % pull out operator
     if isfield(fileList(i).dicomInfo,'OperatorName')
       s.operatorName = fileList(i).dicomInfo.OperatorName;
-      if ~isempty(s.operatorName) && isfield(s.operatorName,'FamilyName') && isfield(s.operatorName,'GivenName')
-	s.operatorName = strtrim(sprintf('%s %s',s.operatorName.GivenName,s.operatorName.FamilyName));
+      if ~isempty(s.operatorName)
+	if isfield(s.operatorName,'FamilyName') && isfield(s.operatorName,'GivenName')
+	  s.operatorName = strtrim(sprintf('%s %s',s.operatorName.GivenName,s.operatorName.FamilyName));
+	elseif isfield(s.operatorName,'FamilyName')
+	  s.operatorName = strtrim(sprintf('%s',s.operatorName.FamilyName));
+	elseif isfield(s.operatorName,'GivenName')
+	  s.operatorName = strtrim(sprintf('%s',s.operatorName.GivenName));
+	else
+	  s.operatorName = '';
+	end
       end
     end
     % pull out coil
@@ -245,6 +257,7 @@ tf = false;
 curpwd = pwd;
 cd(s.localSessionDir);
 [sessionParams groupParams] = mrInit([],[],'justGetParams=1','magnet',s.magnet,'operator',s.operatorName,'subject',s.subjectID,'coil',s.receiveCoilName,'pulseSequence',s.seriesDescription);
+keyboard
 if isempty(sessionParams),return,end
 
 % now run mrInit
@@ -366,6 +379,7 @@ end
 function [tf s] = moveData(justDisplay,s)
 
 clc;
+curpwd = pwd;
 
 % open the logfile
 if ~justDisplay
@@ -374,7 +388,6 @@ if ~justDisplay
     mkdir(s.localSessionDir);
   end
   % change to that directory
-  curpwd = pwd;
   cd(s.localSessionDir);
   % and start a log there
   openLogfile('dofmricni.log');
@@ -435,7 +448,7 @@ for i = 1:length(s.fileList)
     % check if compressed
     if (length(s.fileList(i).niftiExt)>2) && strcmp(s.fileList(i).niftiExt(end-1:end),'gz')
       % make command to gunzip
-      command = sprintf('gunzip -f %s',s.fileList(i).toFullfile);
+      command = sprintf('%s -f %s',s.commands.gunzip,s.fileList(i).toFullfile);
       s.fileList(i).toUncompressedName = stripext(s.fileList(i).toName);
       if justDisplay,commandNum=commandNum+1;disp(sprintf('%i: %s',commandNum,command)),else,mysystem(command);,end
       command = sprintf('chmod 644 %s',fullfile(fileparts(s.fileList(i).toFullfile),s.fileList(i).toUncompressedName));
@@ -458,7 +471,9 @@ dispConOrLog(sprintf('=============================================='),justDispl
 
 if ~justDisplay
   closeLogfile
-  cd(curpwd);
+  if ~isequal(s.localDir,curpwd)
+    cd(curpwd);
+  end
 end
 
 % ask user if this is ok
@@ -569,7 +584,7 @@ disppercent(inf);
 %%%%%%%%%%%%%%%%%%%%%%
 %%   getDicomInfo   %%
 %%%%%%%%%%%%%%%%%%%%%%
-function info = getDicomInfo(filename)
+function info = getDicomInfo(filename,s)
 
 info = [];
 if isempty(filename),return,end
@@ -585,7 +600,7 @@ if getext(filename,'tgz')
   cd(dirName);
 
   % unzip the dicom
-  system(sprintf('tar xf %s',getLastDir(filename)));
+  system(sprintf('%s xf %s',s.commands.tar,getLastDir(filename)));
 
   % change path back
   cd(curpwd);
@@ -706,16 +721,16 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%
 %    checkCommands    %
 %%%%%%%%%%%%%%%%%%%%%%%
-function retval = checkCommands
+function [retval s] = checkCommands(s)
 
 retval = true;
 
 % check mgl
-if isempty(which('mglOpen')) 
-  disp(sprintf('(dofmrcni) You need to install mgl'));
-  retval = false;
-  return
-end
+%if isempty(which('mglOpen')) 
+%  disp(sprintf('(dofmrcni) You need to install mgl'));
+%  retval = false;
+%  return
+%end
 
 % check mrTools
 if isempty(which('mlrVol')) 
@@ -725,24 +740,36 @@ if isempty(which('mlrVol'))
 end
 
 % commands to check
-commandNames = {};
-helpFlag = {};
+preferredCommandNames = {'/usr/bin/tar','/usr/bin/gunzip'};
+commandNames = {'tar','gunzip'};
+helpFlag = {'-h','-h','-h','-h'};
+
+
 for i = 1:length(commandNames)
-  % suse which to tell if we have the command
-  [commandStatus commandRetval] = system(sprintf('which %s',eval(commandNames{i})));
-  % check for commandStatus error
-  if commandStatus~=0
-    disp(sprintf('(dofmricni) Could not find %s command: %s',commandNames{i},eval(commandNames{i})));
-    disp(sprintf('            See http://gru.stanford.edu/doku.php/gruprivate/stanford#computer_setup for help setting up your computer'));
-    retval = 0;
-    return
+  % check if the preferred command exists
+  [commandStatus commandRetval] = system(sprintf('which %s',preferredCommandNames{i}));
+  if commandStatus==0
+    s.commands.(commandNames{i}) = preferredCommandNames{i};
+  else
+    % not found, so just look for any old command
+    [commandStatus commandRetval] = system(sprintf('which %s',commandNames{i}));
+    if commandStatus==0
+      s.commands.(commandNames{i}) = commandNames{i};
+    else
+      % could not find anything. Error and give up
+      disp(sprintf('(dofmricni) Could not find command: %s',commandNames{i}));
+      disp(sprintf('            See http://gru.stanford.edu/doku.php/gruprivate/stanford#computer_setup for help setting up your computer'));
+      retval = 0;
+      return
+    end
   end
+
   % run the command to see what happens
-  [commandStatus commandRetval] = system(sprintf('%s %s',eval(commandNames{i}),helpFlag{i}));
+  [commandStatus commandRetval] = system(sprintf('%s %s',s.commands.(commandNames{i}),helpFlag{i}));
   % check for commandStatus error
   if commandStatus>1
     disp(commandRetval);
-    disp(sprintf('(dofmricni) Found %s command: %s, but could not run (possibly missing fink library?)',commandNames{i},eval(commandNames{i})));
+    disp(sprintf('(dofmricni) Found command: %s, but running gave an error',s.commands.(commandNames{i})));
     disp(sprintf('            See http://gru.brain.riken.jp/doku.php?id=grupub:dofmricni for help setting up your computer'));
     retval = 0;
     return
@@ -865,7 +892,7 @@ params = mrParamsDialog(mrParams);
 if isempty(params),return,end
 
 % get the scan name at top of list
-scanName = params.scanName{1};
+scanName = params.scanName{params.chooseNum};
 
 % get the directory
 if params.chooseNum == 1
