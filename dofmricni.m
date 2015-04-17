@@ -422,17 +422,32 @@ commandNum = 0;
 for i = 1:length(s.fileList)
   % BOLD scan
   if s.fileList(i).bold
-    % make full path
-    s.fileList(i).toFullfile = fullfile(s.localSessionDir,'Raw/TSeries',s.fileList(i).toName);
-    % make command to copy
-    command = sprintf('copyfile %s %s f',s.fileList(i).nifti,s.fileList(i).toFullfile);
-    if justDisplay,commandNum=commandNum+1;disp(sprintf('%i: %s',commandNum,command)),else,myeval(command,justDisplay);,end
+    % check for valid nifti
+    if isempty(s.fileList(i).nifti)
+      dispConOrLog(sprintf('********************************************'),justDisplay,true);
+      dispConOrLog(sprintf('(dofmricni) !!!! BOLD nifti file for %s is missing !!!!',s.fileList(i).filename),justDisplay,true);
+      % ignore it for later
+      s.fileList(i).ignore = true;
+    else
+      % make full path
+      s.fileList(i).toFullfile = fullfile(s.localSessionDir,'Raw/TSeries',s.fileList(i).toName);
+      % make command to copy
+      command = sprintf('copyfile %s %s f',s.fileList(i).nifti,s.fileList(i).toFullfile);
+      if justDisplay,commandNum=commandNum+1;disp(sprintf('%i: %s',commandNum,command)),else,myeval(command,justDisplay);,end
+    end
   % anat scan
   elseif s.fileList(i).anat
-    s.fileList(i).toFullfile = fullfile(s.localSessionDir,'Anatomy',s.fileList(i).toName);
-    % make command to copy
-    command = sprintf('copyfile %s %s f',s.fileList(i).nifti,s.fileList(i).toFullfile);
-    if justDisplay,commandNum=commandNum+1;disp(sprintf('%i: %s',commandNum,command)),else,myeval(command,justDisplay);,end
+    if isempty(s.fileList(i).nifti)
+      dispConOrLog(sprintf('********************************************'),justDisplay,true);
+      dispConOrLog(sprintf('(dofmricni) !!!! Anatomy nifti file for %s is missing !!!!',s.fileList(i).filename),justDisplay,true);
+      % ignore it for later
+      s.fileList(i).ignore = true;
+    else
+      s.fileList(i).toFullfile = fullfile(s.localSessionDir,'Anatomy',s.fileList(i).toName);
+      % make command to copy
+      command = sprintf('copyfile %s %s f',s.fileList(i).nifti,s.fileList(i).toFullfile);
+      if justDisplay,commandNum=commandNum+1;disp(sprintf('%i: %s',commandNum,command)),else,myeval(command,justDisplay);,end
+    end
   end
 end
 
@@ -443,7 +458,7 @@ dispConOrLog(sprintf('=============================================='),justDispl
 commandNum = 0;
 for i = 1:length(s.fileList)
   % BOLD scan or anat scans may need to be uncompressed
-  if s.fileList(i).bold || s.fileList(i).anat
+  if (s.fileList(i).bold || s.fileList(i).anat) && ~s.fileList(i).ignore
     % check if compressed
     if (length(s.fileList(i).niftiExt)>2) && strcmp(s.fileList(i).niftiExt(end-1:end),'gz')
       % make command to gunzip
@@ -542,6 +557,8 @@ for i = 1:length(dirList)
   fileList(end).fullfile = fullfile(dirname,dirList(i).name);
   fileList(end).date = dirList(i).date;
   fileList(end).datenum = dirList(i).datenum;
+  % set ignore to false (this gets set if something goes wrong)
+  fileList(end).ignore = false;
   % get name of nifti
   % first look for uncompressed nifti
   fileList(end).nifti = dir(sprintf('%s/*.nii',fullfile(dirname,dirList(i).name)));
