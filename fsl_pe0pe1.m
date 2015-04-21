@@ -30,6 +30,9 @@ function fsl_pe0pe1(folder)
 
 % disp(sprintf('(fsl_pe0pe1) Warning: This function takes a LONG time to run locally.\nRunning this on the LXC server would be much better and could be run in parallel.'));
 
+disp(sprintf('(fsl_pe0pe1) Unwarping in %s',folder));
+tic
+
 tfolder = fullfile(folder,'temp');
 mkdir(tfolder);
 files = dir(folder);
@@ -47,6 +50,8 @@ for i = 1:length(files)
     fi = files(i);
     if strfind(fi.name,'acq_params.txt')
         found_acq_params = 1;
+    elseif strfind(fi.name,'uw_')
+        % skip
     elseif strfind(fi.name,'pe0')
         if fi.bytes > 100000000 % 1 mega byte
             pe0files{end+1} = fi.name;
@@ -91,12 +96,11 @@ if ~strcmp(input('Include? [y/n]: ','s'),'y')
     return
 end
 
-keyboard
 %% Run fslroi
 
 % pe1
 roi1files = {};
-roi1files{1} = hlpr_fslroi(pe1files{1},1,1,1,1,tfolder);
+roi1files{1} = hlpr_fslroi(pe1files{1},1,1,1,1,tfolder,folder);
 % pe0
 roi0files = {};
 for i = 1:length(pe0files)
@@ -121,6 +125,20 @@ for i = 1:length(tufiles)
     finalfiles{i} = hlpr_applytopup(tufiles{i},pe0files{i},tfolder,folder);
 end
 
+
+%% gunzip
+for i = 1:length(finalfiles)
+    fi = finalfiles{i};
+    system(sprintf('gunzip %s',fullfile(folder,fi)));
+end
+
+%% rm
+
+for i = 1:length(finalfiles)
+    fi = finalfiles{i};
+    system(sprintf('rm %s.nii.gz',fi));
+end
+
 %% cleanup
 % for i = 1:length(roi1files)
 %     system(sprintf('rm %s.nii.gz',fullfile(folder,roi1files{i})));
@@ -131,15 +149,10 @@ end
 system(sprintf('rm %s',fullfile(folder,'acq_params.txt')));
 system(sprintf('rm -rf %s',tfolder));
 
-%% gunzip
-for i = 1:length(finalfiles)
-    fi = finalfiles{i};
-    system(sprintf('gunzip %s',fullfile(folder,fi)));
-    system(sprintf('rm %s',fullfile(folder,fi)));
-end
-
 %% disp result
-disp(sprintf('(fsl_pe0pe1) Completed successfully for %s',folder));
+T = toc;
+disp(sprintf('(fsl_pe0pe1) Unwarping completed successfully for %s',folder));
+disp(sprintf('(fsl_pe0pe1) Elapsed time %04.2f s',T));
 
 function outfile = hlpr_applytopup(tu,orig,tfolder,folder)
 % applytopup --imain=rs_pe0 --inindex=1 --method=jac --datain=acq_param.txt --topup=rs_topup --out=rs0_unwarped
@@ -147,8 +160,8 @@ function outfile = hlpr_applytopup(tu,orig,tfolder,folder)
 outfile = fullfile(folder,sprintf('uw_%s',orig(1:end-4)));
 tu = fullfile(tfolder,tu);
 acqFile = fullfile(folder,'acq_params.txt');
-command = sprintf('applytopup --imain=%s --inindex=1 --method=jac --datain=%s --topup=%s --out=%s',orig(1:end-4),acqFile,tu,outfile);
-system(command);
+command = sprintf('applytopup --imain=%s --inindex=1 --method=jac --datain=%s --topup=%s --out=%s',fullfile(folder,orig(1:end-4)),acqFile,tu,outfile);
+% system(command);
 
 function outfile = hlpr_topup(merge,pos,tfolder,folder)
 
@@ -157,7 +170,7 @@ outfull = fullfile(tfolder,outfile);
 merge = fullfile(tfolder,merge);
 acqFile = fullfile(folder,'acq_params.txt');
 command = sprintf('topup --imain=%s --datain=%s --config=b02b0.cnf --out=%s',merge,acqFile,outfull);
-system(command);
+% system(command);
 
 function outfile = hlpr_fslmerge(scan0,scan1,pos,folder)
 
@@ -166,7 +179,7 @@ outfull = fullfile(folder,outfile);
 scan0 = fullfile(folder,scan0);
 scan1 = fullfile(folder,scan1);
 command = sprintf('fslmerge -t %s %s %s',outfull,scan0,scan1);
-system(command);
+% system(command);
 
 function outfile = hlpr_fslroi(scan,pos,type,n1,n2,tfolder,folder)
 
@@ -174,4 +187,4 @@ outfile = sprintf('pe%i_%02.0f',type,pos);
 outfull = fullfile(tfolder,outfile);
 scan = fullfile(folder,scan);
 command = sprintf('fslroi %s %s %i %i',scan,outfull,n1,n2);
-system(command);
+% system(command);
