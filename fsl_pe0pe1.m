@@ -103,34 +103,50 @@ roi1files = {};
 roi1files{1} = hlpr_fslroi(pe1files{1},1,1,1,1,tfolder,folder);
 % pe0
 roi0files = {};
+disppercent(-inf,'Calculating ROIs...');
 for i = 1:length(pe0files)
     roi0files{i} = hlpr_fslroi(pe0files{i},i,0,1,1,tfolder,folder);
+    disppercent(i/length(pe0files));
 end
+disppercent(inf);
 
 %% fslmerge
 mergefiles = {};
+disppercent(-inf,'Merging pe0 and pe1 files...');
 for i = 1:length(roi0files)
     mergefiles{i} = hlpr_fslmerge(roi0files{i},roi1files{1},i,tfolder);
+    disppercent(i/length(roi0files));
 end
+disppercent(inf);
 
 %% topup
 tufiles = {};
+disppercent(-inf,'Calculating topup...');
 for i = 1:length(mergefiles)
-    tufiles{i} = hlpr_topup(mergefiles{i},i,tfolder,folder);
+    tufiles{i} = hlpr_topup(mergefiles{i},i,tfolder,folder);    
+    disppercent(i/length(mergefiles));
+
 end
+disppercent(inf);
 
 %% applytopup
+disppercent(-inf,'Applying topup...');
 finalfiles = {};
 for i = 1:length(tufiles)
     finalfiles{i} = hlpr_applytopup(tufiles{i},pe0files{i},tfolder,folder);
+    disppercent(i/length(tufiles));
 end
+disppercent(inf);
 
 
 %% gunzip
+disppercent(-inf,'Unzipping and removing .gz files...');
 for i = 1:length(finalfiles)
     fi = finalfiles{i};
     system(sprintf('gunzip %s',fullfile(folder,fi)));
+    disppercent(i/length(finalfiles));
 end
+disppercent(inf);
 
 %% rm
 
