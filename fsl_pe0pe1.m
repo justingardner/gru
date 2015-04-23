@@ -160,7 +160,6 @@ if ~isempty(failed)
     disp('Some files failed to unzip, check before we remove anything...');
 end
 
-keyboard
 for i = 1:length(finalfiles)
     fi = finalfiles{i};
     system(sprintf('rm %s.nii.gz',fi));
@@ -188,7 +187,7 @@ outfile = fullfile(folder,sprintf('uw_%s',orig(1:end-4)));
 tu = fullfile(tfolder,tu);
 acqFile = fullfile(folder,'acq_params.txt');
 command = sprintf('applytopup --imain=%s --inindex=1 --method=jac --datain=%s --topup=%s --out=%s',fullfile(folder,orig(1:end-4)),acqFile,tu,outfile);
-% system(command);
+system(command);
 
 function outfile = hlpr_topup(merge,pos,tfolder,folder)
 
@@ -197,7 +196,7 @@ outfull = fullfile(tfolder,outfile);
 merge = fullfile(tfolder,merge);
 acqFile = fullfile(folder,'acq_params.txt');
 command = sprintf('topup --imain=%s --datain=%s --config=b02b0.cnf --out=%s',merge,acqFile,outfull);
-% system(command);
+system(command);
 
 function outfile = hlpr_fslmerge(scan0,scan1,pos,folder)
 
@@ -206,7 +205,7 @@ outfull = fullfile(folder,outfile);
 scan0 = fullfile(folder,scan0);
 scan1 = fullfile(folder,scan1);
 command = sprintf('fslmerge -t %s %s %s',outfull,scan0,scan1);
-% system(command);
+system(command);
 
 function outfile = hlpr_fslroi(scan,pos,type,n1,n2,tfolder,folder)
 
@@ -214,4 +213,4 @@ outfile = sprintf('pe%i_%02.0f',type,pos);
 outfull = fullfile(tfolder,outfile);
 scan = fullfile(folder,scan);
 command = sprintf('fslroi %s %s %i %i',scan,outfull,n1,n2);
-% system(command);
+system(command);
