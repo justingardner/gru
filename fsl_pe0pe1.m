@@ -1,6 +1,9 @@
 %% FSL Combine pe0 and pe1 calibration scans (mux8 acquisitions)
-% Base on code from Bob Dougherty (CNI)
-% Call: fsl_pe0pe1(directory)
+% Based on code from Bob Dougherty (CNI)
+% Dan Birman (2015-05)
+% dbirman@stanford.edu
+%
+% Call: fsl_pe0pe1('/path/to/your/directory')
 %
 % #!/bin/bash
 % 
@@ -70,8 +73,8 @@ end
 
 if ~found_acq_params
     acqFile = fullfile(folder,'acq_params.txt');
-    system(sprintf('echo ''0 1 0 0.05720'' > %s',acqFile));
-    system(sprintf('echo ''0 -1 0 0.05720'' >> %s',acqFile));
+    system(sprintf('echo ''0 1 0 1'' > %s',acqFile));
+    system(sprintf('echo ''0 -1 0 1'' >> %s',acqFile));
 end
 
 %% Check if we have multiple pe1 scans
@@ -156,8 +159,8 @@ disppercent(inf);
 %% rm
 
 if ~isempty(failed)
-    keyboard
     disp('Some files failed to unzip, check before we remove anything...');
+    keyboard
 end
 
 for i = 1:length(finalfiles)
