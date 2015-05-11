@@ -3,7 +3,17 @@
 % Dan Birman (2015-05)
 % dbirman@stanford.edu
 %
-% Call: fsl_pe0pe1('/path/to/your/directory')
+% Call: [str, unwarp] = fsl_pe0pe1('/path/to/your/directory',doUnwarp=False)
+%       returns only a string which can be disp() to see what will be
+%       unwarped.
+%
+% Call: fsl_pe0pe1('/path/to/your/directory',doUnwarp=True,unwarp)
+%       Performs the unwarping for the files in 'unwarp' (from a previous
+%       doUnwarp=False call).
+%
+% Failure: str == 'failure'
+%
+% CODE FROM BOB:
 %
 % #!/bin/bash
 % 
@@ -29,19 +39,52 @@
 % 
 % [Smith 2004] S.M. Smith, M. Jenkinson, M.W. Woolrich, C.F. Beckmann, T.E.J. Behrens, H. Johansen-Berg, P.R. Bannister, M. De Luca, I. Drobnjak, D.E. Flitney, R. Niazy, J. Saunders, J. Vickers, Y. Zhang, N. De Stefano, J.M. Brady, and P.M. Matthews. Advances in functional and structural MR image analysis and implementation as FSL. NeuroImage, 23(S1):208-219, 2004. 
 
-function fsl_pe0pe1(folder)
+function [str, unwarp] = fsl_pe0pe1(folder,doUnwarp,unwarp)
 
-% disp(sprintf('(fsl_pe0pe1) Warning: This function takes a LONG time to run locally.\nRunning this on the LXC server would be much better and could be run in parallel.'));
 
-disp(sprintf('(fsl_pe0pe1) Unwarping in %s',folder));
-tic
+[s, r] = system('fslroi');
+if s==127
+    setenv('FSLDIR','/Applications/fsl');  % this to tell where FSL folder is
+    [s, r] = system('fslroi');
+end
+if s==127
+    setenv('FSLDIR','/usr/local/fsl');  % this to tell where FSL folder is
+    [s, r] = system('fslroi');
+end
+if s==127
+    str = 'failed';
+    disp('(fsl_pe0pe1) FSL may not be properly installed. Check your PATH');
+    return
+end
+
+if doUnwarp
+    disp(sprintf('(fsl_pe0pe1) Unwarping in %s',folder));
+    tic
+else
+    disp(sprintf('(fsl_pe0pe1) Checking %s for unwarp files',folder));
+end
+
+if ~exist(folder)
+    disp('(fsl_pe0pe1) Folder doesn''t exist... Failed');
+    str = 'failed';
+    return
+end
 
 tfolder = fullfile(folder,'temp');
 mkdir(tfolder);
 files = dir(folder);
 
-pe0files = {};
-pe1files = {};
+if doUnwarp && ~exist('unwarp')
+    str = 'failure';
+    disp(sprintf('(fsl_pe0pe1) Failure: No ''unwarp'' structure passed.\nRun this first:\n[s, unwarp] = fsl_pe0pe1(folder,false);\nThen run:\nfsl_pe0pe1(folder,true,unwarp);'));
+end
+
+findFiles = 0;
+if ~exist('unwarp')
+    unwarp.pe0files = {};
+    unwarp.pe1files = {};
+    findFiles = 1;
+end
 
 % Currently I wrote this to find one pe1 file, and use that for all of the
 % pe0 files.
@@ -49,67 +92,82 @@ pe1files = {};
 found_acq_params = 0;
 
 %% Separate files by type
-for i = 1:length(files)
-    fi = files(i);
-    if strfind(fi.name,'acq_params.txt')
-        found_acq_params = 1;
-    elseif strfind(fi.name,'uw_')
-        % skip
-    elseif strfind(fi.name,'pe0')
-        if fi.bytes > 100000000 % 1 mega byte
-            pe0files{end+1} = fi.name;
-        else
-            disp(sprintf('(fsl_pe0pe1) File size < 100 mB. Likely a cancelled scan: %s',fi.name));
-            if strcmp(input('Include? [y/n]: ','s'),'y')
-                pe0files{end+1} = fi.name;
+if findFiles
+    for i = 1:length(files)
+        fi = files(i);
+        if strfind(fi.name,'acq_params.txt')
+            found_acq_params = 1;
+        elseif strfind(fi.name,'uw_')
+            % skip files that might have already been unwarped
+        elseif ~isempty(strfind(fi.name,'pe1')) || ~isempty(strfind(fi.name,'CAL'))
+            unwarp.pe1files{end+1} = fi.name;
+        elseif ~isempty(strfind(fi.name,'pe0')) || ~isempty(strfind(fi.name,'mux8'))
+            if fi.bytes > 100000000 % 1 mega byte
+                unwarp.pe0files{end+1} = fi.name;
+            else
+                disp(sprintf('(fsl_pe0pe1) File size < 100 mB. Likely a cancelled scan: %s',fi.name));
+                if strcmp(input('Include? [y/n]: ','s'),'y')
+                    unwarp.pe0files{end+1} = fi.name;
+                end
             end
         end
-    elseif strfind(fi.name,'pe1')
-        pe1files{end+1} = fi.name;
     end
-end
 
-%% Add acq_params.txt if not found
+    %% Add acq_params.txt if not found
 
-if ~found_acq_params
-    acqFile = fullfile(folder,'acq_params.txt');
-    system(sprintf('echo ''0 1 0 1'' > %s',acqFile));
-    system(sprintf('echo ''0 -1 0 1'' >> %s',acqFile));
-end
+    if ~found_acq_params
+        acqFile = fullfile(folder,'acq_params.txt');
+        system(sprintf('echo ''0 1 0 1'' > %s',acqFile));
+        system(sprintf('echo ''0 -1 0 1'' >> %s',acqFile));
+    end
 
-%% Check if we have multiple pe1 scans
+    %% Check if we have multiple pe1 scans
 
-if length(pe1files) > 1
-    disp('(fsl_pe0pe1) Multiple pe1 scans found, using first scan.\nYou can implement different functionality...');
-    pe1files = pe1files(1);
+    if length(unwarp.pe1files) > 1
+        disp('(fsl_pe0pe1) Multiple pe1 scans found, using last scan.\nYou can implement different functionality...');
+        scanchoice = 0;
+        while ~scanchoice
+            in = input('(fsl_pe0pe1) Use first or last scan? [f/l]','s');
+            if strcmp(in,'f')
+                unwarp.pe1files = unwarp.pe1files(1); scanchoice=1;
+            elseif strcmp(in,'l')
+                unwarp.pe1files = unwarp.pe1files(end); scanchoice=1;
+            else
+                in = input('(fsl_pe0pe1) Incorrect input. Use first or last scan? [f/l]','s');
+            end
+        end
+    end
 end
 
 %% Check whether to continue
 
-disp('**********************************************************');
-for i = 1:length(pe0files)
-    disp(sprintf('Unwarping %s',pe0files{i}));
+str = '';
+str = strcat(str,'\n','**********************************************************');
+for i = 1:length(unwarp.pe0files)
+    str = strcat(str,'\n',sprintf('Unwarping %s',unwarp.pe0files{i}));
 end
-disp(sprintf('Using calibration file %s',pe1files{1}));
-disp('**********************************************************');
-disp('\n\nIs this correct? [y/n] ');
-            
-if ~strcmp(input('Include? [y/n]: ','s'),'y')
-    disp('(fsl_pe0pe1) Canceling...');
+str = strcat(str,'\n',sprintf('Using calibration file %s',unwarp.pe1files{1}));
+str = strcat(str,'\n','**********************************************************');
+str = sprintf(str);
+
+if ~doUnwarp
     return
 end
+
+% If we get here we are unwarping!
+disp(str);
 
 %% Run fslroi
 
 % pe1
 roi1files = {};
-roi1files{1} = hlpr_fslroi(pe1files{1},1,1,1,1,tfolder,folder);
+roi1files{1} = hlpr_fslroi(unwarp.pe1files{1},1,1,1,1,tfolder,folder);
 % pe0
 roi0files = {};
 disppercent(-inf,'Calculating ROIs...');
-for i = 1:length(pe0files)
-    roi0files{i} = hlpr_fslroi(pe0files{i},i,0,1,1,tfolder,folder);
-    disppercent(i/length(pe0files));
+for i = 1:length(unwarp.pe0files)
+    roi0files{i} = hlpr_fslroi(unwarp.pe0files{i},i,0,1,1,tfolder,folder);
+    disppercent(i/length(unwarp.pe0files));
 end
 disppercent(inf);
 
@@ -136,7 +194,7 @@ disppercent(inf);
 disppercent(-inf,'Applying topup...');
 finalfiles = {};
 for i = 1:length(tufiles)
-    finalfiles{i} = hlpr_applytopup(tufiles{i},pe0files{i},tfolder,folder);
+    finalfiles{i} = hlpr_applytopup(tufiles{i},unwarp.pe0files{i},tfolder,folder);
     disppercent(i/length(tufiles));
 end
 disppercent(inf);
@@ -177,6 +235,25 @@ end
 % end
 system(sprintf('rm %s',fullfile(folder,'acq_params.txt')));
 system(sprintf('rm -rf %s',tfolder));
+
+%% Backup + rename
+% Move all of the original files (unwarp.pe0files) to folder//unwarp_orig
+% Then renamne the uw_ files to the original names
+if ~isdir(fullfile(folder,'unwarp_orig'))
+    mkdir(fullfile(folder,'unwarp_orig'));
+end
+
+for i = 1:length(unwarp.pe0files)
+    file = unwarp.pe0files{i};
+    fileLoc = fullfile(folder,file);
+    backupLoc = fullfile(folder,'unwarp_orig',file);
+    % make backup
+    system(sprintf('mv %s %s',fileLoc,backupLoc));
+    % uw_ file
+    uw_fileLoc = fullfile(folder,strcat('uw_',file));
+    % rename uw_ file
+    system(sprintf('mv %s %s',uw_fileLoc,fileLoc));
+end
 
 %% disp result
 T = toc;
