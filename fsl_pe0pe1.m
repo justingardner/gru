@@ -44,14 +44,6 @@ function [str, unwarp] = fsl_pe0pe1(folder,doUnwarp,unwarp)
 
 [s, r] = system('fslroi');
 if s==127
-    setenv('FSLDIR','/Applications/fsl');  % this to tell where FSL folder is
-    [s, r] = system('fslroi');
-end
-if s==127
-    setenv('FSLDIR','/usr/local/fsl');  % this to tell where FSL folder is
-    [s, r] = system('fslroi');
-end
-if s==127
     str = 'failed';
     disp('(fsl_pe0pe1) FSL may not be properly installed. Check your PATH');
     return
