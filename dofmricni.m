@@ -231,9 +231,16 @@ for i = 1:length(fileList)
     fileList(i).toName = setext(sprintf('bold%02i_%s',boldNum,fileList(i).filename),fileList(i).niftiExt);
     % also get receiverCoilName and sequence type info
     if isfield(fileList(i).dicomInfo,'SeriesDescription')
+      % keep the first one in the list as the series description
       if isempty(s.seriesDescription)
 	s.seriesDescription = fileList(i).dicomInfo.SeriesDescription;
       end
+    end
+    % get mux factor from name
+    muxloc = findstr('mux',lower(fileList(i).filename))
+    fileList(i).mux = [];
+    if ~isempty(muxloc)
+      fileList(i).mux = str2num(strtok(fileList(i).filename(muxloc(1)+3:end),'_ '));
     end
     % update bold count
     s.boldScans(end+1) = i;
@@ -309,7 +316,7 @@ if s.dispNiftiHeaderInfo
       end
     end
     % get flip angle
-    if isfield(fileList(i).descrip,'fa')
+    if isfield(fileList(i),'descrip') && isfield(fileList(i).descrip,'fa')
       fileList(i).flipAngle = fileList(i).descrip.fa;
     end
     % check if this is a bold
@@ -581,7 +588,14 @@ for iBOLD = 1:length(s.boldScans)
 	removeVols = 0;
       end
     end
-    % FIX, FIX, FIX when we know what to expect based on MUX and ACC put that check in here
+    % We expect mux * calibration volumes (which is usually 2 - passed in argument)
+    if isfield(boldScan,'mux') && ~isempty(boldScan.mux)
+      calibrationPulses = boldScan.mux*s.removeInitialVols;
+      % now check if everything matches
+      if stimfile.ignoredInitialVols ~= calibrationPulses
+	disp(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to %i but was set to %i',calibrationPulses,stimfile.ignoredInitialVols));
+      end
+    end
     dispConOrLog(sprintf('  ->%s : Removing %i volumes',stimfile.name,removeVols));
     if ~justDisplay
       % now, go ahead and remove them
@@ -1249,7 +1263,7 @@ dispHeader;
 % get dicoms
 fromDir = fullfile('/nimsfs/raw/jlg',s.cniDir);
 disp(sprintf('(dofmricni) Get files'));
-command = sprintf('rsync -rtv --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s %s',s.sunetID,s.cniComputerName,fromDir,s.localDir);
+command = sprintf('rsync -rtv --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s/ %s',s.sunetID,s.cniComputerName,fromDir,s.localDir);
 disp(command);
 system(command,'-echo');
 
