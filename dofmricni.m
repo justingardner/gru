@@ -17,11 +17,21 @@
 %             for mlr (and decompress the niftis). It will also put the dicomInfo
 %             into the scan
 %
-%                'stimfileDir=/usr1/justin/data/s00620101001/stimfile': Set this if you want to load the first pass
-%                    stimfiles form a specific directory.
 %                'numMotionComp=1': Set to 0 if you don't want to run MLR motion comp. Set to > 1 if you want
 %                    to set multiple motionComp parameters (e.g. for motionComping two sets of scans taken at
 %                    different resolutions)
+%                'pe0pe1=1': Set to 0 if you do not want to run FSL distortion correction
+%                'calibrationNameStrings={'CAL','pe0'}: If these strings are in the filename, then it will
+%                   assume these are calibrations for use with the pe0pe1 correction
+%                'minVolumes=10': Ignores scans that have less than this number of volumes
+%                'removeInitialVols=2': Will remove this many initial volumes (steady-states) and correct stimfile
+%                   to match. Note that setting to 0 will correct stimfile. Set to [] if you do not want to correct
+%                   stimfile either.
+%                'stimfileRemoveInitialVols=[]': Typically just set to empty and the program will calculate
+%                   the right number of vols to remove from the stimfiles (this is needed because there are
+%                   some initial vols that are recorded that are just calibrations). Override the setting
+%                   by putting the number of vols you want to actually remove
+%                'cleanUp=1': Sets whether to keep the temporary staging directory or not.
 %
 %
 function retval = dofmricni(varargin)
@@ -30,7 +40,7 @@ function retval = dofmricni(varargin)
 % what we are using these days
 
 % Default arguments
-getArgs(varargin,{'stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','stimComputerName=oban','stimComputerUserName=gru','username=[]','pe0pe1=1','minVolumes=10'});
+getArgs(varargin,{'stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','stimComputerName=oban','stimComputerUserName=gru','username=[]','pe0pe1=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1'});
 
 clc;
 
@@ -44,6 +54,10 @@ s.stimfileDir = stimfileDir;
 s.numMotionComp = numMotionComp;
 s.dispNiftiHeaderInfo = true;
 s.minVolumes = minVolumes;
+s.removeInitialVols = removeInitialVols;
+s.stimfileRemoveInitialVols = stimfileRemoveInitialVols;
+s.calibrationNameStrings = calibrationNameStrings;
+s.cleanUp = cleanUp;
 
 % range for te to be considered a BODL scan
 s.teLower = 25;
@@ -82,12 +96,18 @@ if ~tf,return,end
 [tf s] = matchStimfiles(s);
 if ~tf,return,end
 
+% setup FSL distortion correction
+if s.pe0pe1
+  [tf s] = doFSLpe0pe1(s);
+  if ~tf,return,end
+end
+
 % now propose a move
-[tf s] = moveData(true,s);
+[tf s] = moveAndPreProcessData(true,s);
 if ~tf,return,end
 
 % and do it
-[tf s] = moveData(false,s);
+[tf s] = moveAndPreProcessData(false,s);
 if ~tf,return,end
 
 % now run mrInit
@@ -282,6 +302,8 @@ disppercent(inf);
 
 % read nifti headers
 if s.dispNiftiHeaderInfo
+  % initialze to know calibration files
+  s.calibrationFile = [];
   disppercent(-inf,'(dofmricni) Reading nifti headers');
   for i = 1:length(fileList)
     if ~isempty(fileList(i).nifti)
@@ -298,7 +320,19 @@ if s.dispNiftiHeaderInfo
 	if isempty(fileList(i).h)
 	  disp(sprintf('(dofmricni) !!! Scan %s has no nifti header, removing from list of BOLD scans !!!',fileList(i).filename));
 	else
-	  disp(sprintf('(dofmricni) !!! Scan %s has only %i volumes, removing from list of BOLD scans. Increase minVolumes setting in dofmricni to keep. !!!',fileList(i).filename,fileList(i).h.dim(4)));
+	  % see if this is a calibration scan
+	  calibrationFile = false;
+	  for iString = 1:length(s.calibrationNameStrings)
+	    if ~isempty(findstr(fileList(i).filename,s.calibrationNameStrings{iString}))
+	      calibrationFile = true;
+	      s.calibrationFile(end+1) = i;
+	      break;
+	    end
+	  end
+	  % if it is not a calibration scan then tell user we are dropping
+	  if ~calibrationFile
+	    disp(sprintf('\n(dofmricni) !!! Scan %s has only %i volumes, removing from list of BOLD scans. Decrease minVolumes setting in dofmricni to keep. !!!',fileList(i).filename,fileList(i).h.dim(4)));
+	  end
 	end
 	% remove from list
 	fileList(i).bold = false;
@@ -344,7 +378,14 @@ function tf = runMrInit(s)
 tf = false;
 curpwd = pwd;
 cd(s.localSessionDir);
-[sessionParams groupParams] = mrInit([],[],'justGetParams=1','magnet',s.magnet,'operator',s.operatorName,'subject',s.subjectID,'coil',s.receiveCoilName,'pulseSequence',s.seriesDescription);
+
+% create stimfile list to pass into mrInit
+for i = 1:length(s.stimfileMatch)
+  stimfileMatchList{i} = s.stimfileInfo(s.stimfileMatch(i)).name;
+end
+
+% initialize parameters
+[sessionParams groupParams] = mrInit([],[],'justGetParams=1','magnet',s.magnet,'operator',s.operatorName,'subject',s.subjectID,'coil',s.receiveCoilName,'pulseSequence',s.seriesDescription,'stimfileMatchList',stimfileMatchList);
 if isempty(sessionParams),return,end
 
 % now run mrInit
@@ -360,10 +401,12 @@ if ~isempty(v)
     % look for matching scan in fileList
     fileListNum = find(strcmp(scanName,{s.fileList(:).toUncompressedName}));
     if ~isempty(fileListNum)
-      % and store it
+      % set the dicom information
       v = viewSet(v,'auxParam','dicomInfo',s.fileList(fileListNum).dicomInfo,iScan);
     end
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % set framePeriod as recorded in stimfile
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     stimfile = viewGet(v,'stimfile',iScan);
     if ~isempty(stimfile)
       if strcmp(stimfile{1}.filetype,'mgl')
@@ -460,10 +503,104 @@ else
   dispConOrLog(command,justDisplay,true);
 end  
 
+%%%%%%%%%%%%%%%%%%%%%
+%%   doFSLpe0pe1   %%
+%%%%%%%%%%%%%%%%%%%%%
+function [tf s] = doFSLpe0pe1(s,doit)
+
+tf = true;
+if nargin < 2, doit = false;end
+
+% set unwarp to the files the calibration file we found, and 
+if isempty(s.calibrationFile)
+  dispConOrLog(sprintf('(dofmricni:doFSLpe0pe1) !!! No calibration file found. Skipping unwarping !!!!',~doit));
+  return
+else
+  if ~isfield(s,'unwarp')
+    % put the calibration files in pe1
+    for i = 1:length(s.calibrationFile)
+      s.unwarp.calfiles{i} = s.fileList(s.calibrationFile(i)).toName;
+    end
+    % check length
+    if length(s.unwarp.calfiles) > 1
+      % display list
+      for i = 1:length(s.unwarp.calfiles)
+	disp(sprintf('%i: %s',i,s.unwarp.calfiles{i}));
+      end
+      calnum = getnum('(dofmricni) Which scan do you want to use for fsl unwarping calibration scan: ',1:length(s.unwarp.calfiles));
+      s.unwarp.calfiles = {s.unwarp.calfiles{calnum}};
+    end
+  end
+end
+
+% put bold scans into pe1
+if isempty(s.boldScans)
+  s = rmfield(s,'unwarp');
+  return
+else
+  for i = 1:length(s.boldScans)
+    s.unwarp.EPIfiles{i} = s.fileList(s.boldScans(i)).toName;
+  end
+end
+
+% now actually do it
+if doit && s.pe0pe1
+  retval = fsl_pe0pe1(fullfile(s.localSessionDir,'Raw','TSeries'),s.unwarp);
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    doRemoveInitialsVols    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function doRemoveInitialVols(s,justDisplay)
+
+for iBOLD = 1:length(s.boldScans)
+  % get scan info
+  boldScan = s.fileList(s.boldScans(iBOLD));
+  % get vols before and after
+  nVols = boldScan.h.dim(4);
+  nVolsAfter = nVols-s.removeInitialVols;
+  % display which one it is
+  dispConOrLog(sprintf('%i: %s (%i->%i vols)',iBOLD,boldScan.filename,nVols,nVolsAfter),justDisplay);
+  if ~justDisplay
+    % go ahead and remove them, first load the file
+    filename = fullfile(s.localSessionDir,'Raw','TSeries',boldScan.toName);
+    [d h] = mlrImageLoad(filename);
+    % remove the appropriate number of voulems
+    d = d(:,:,:,1+s.removeInitialVols:end);
+    % write it back
+    mlrImageSave(filename,d,h);
+  end
+  % if there is a matching stimfile, then what are we to do
+  if length(s.stimfileMatch) >= iBOLD
+    % get the stimfile
+    stimfile = s.stimfileInfo(s.stimfileMatch(iBOLD));
+    % compute number of volumes that we *should* remove
+    removeVols = s.stimfileRemoveInitialVols;
+    if isempty(removeVols)
+      % remove number of volumes to make the stimfile match in length to
+      % the bold scan
+      removeVols = stimfile.numVols-nVolsAfter;
+      % check if we have enough
+      if removeVols<0
+	dispConOrLog(sprintf('  !!! %s has recorded volumes (%i + %i ignored) this is less than the scan (%i) !!!',stimfile.name,stimfile.numVols,stimfile.ignoredInitialVols,nVolsAfter));
+	removeVols = 0;
+      end
+    end
+    % FIX, FIX, FIX when we know what to expect based on MUX and ACC put that check in here
+    dispConOrLog(sprintf('  ->%s : Removing %i volumes',stimfile.name,removeVols));
+    if ~justDisplay
+      % now, go ahead and remove them
+      if removeVols 
+	removeTriggers(fullfile(s.localSessionDir,'Etc',stimfile.name),1:removeVols);
+      end
+    end
+  end
+end
+
 %%%%%%%%%%%%%%%%%%
 %%   moveData   %%
 %%%%%%%%%%%%%%%%%%
-function [tf s] = moveData(justDisplay,s)
+function [tf s] = moveAndPreProcessData(justDisplay,s)
 
 clc;
 curpwd = pwd;
@@ -539,6 +676,26 @@ for i = 1:length(s.fileList)
   end
 end
 
+% distortion correction with fsl
+if s.pe0pe1
+  dispConOrLog(sprintf('=============================================='),justDisplay,true);
+  dispConOrLog(sprintf('FSL distortion correction: pe0pe1'),justDisplay,true);
+  dispConOrLog(sprintf('=============================================='),justDisplay,true)
+  % first time, call fsl_pe0pe1 to see what it wants to do
+  if justDisplay
+    if isfield(s,'unwarp')
+      disp(sprintf('Calibration file: %s',s.unwarp.calfiles{1}));
+      for i = 1:length(s.unwarp.EPIfiles)
+	disp(sprintf('%i: %s',i,s.unwarp.EPIfiles{i}));
+      end
+    end
+  else
+    % just call it
+    doFSLpe0pe1(s,true);
+  end
+end
+  
+% stimfile move to Etc directory
 if ~isempty(s.stimfileInfo)
   dispConOrLog(sprintf('=============================================='),justDisplay,true);
   dispConOrLog(sprintf('Copy stimfiles'),justDisplay,true);
@@ -551,12 +708,33 @@ if ~isempty(s.stimfileInfo)
   end
 end
 
+% disp the stimfile match
+if ~isempty(s.stimfileMatch)
+  dispConOrLog(sprintf('=============================================='),justDisplay,true);
+  dispConOrLog(sprintf('Stimfile match'),justDisplay,true);
+  dispConOrLog(sprintf('=============================================='),justDisplay,true)
+  dispStimfileMatch(s,s.stimfileMatch,false);
+end
+
+% disp the stimfile match
+if ~isempty(s.removeInitialVols)
+  dispConOrLog(sprintf('=============================================='),justDisplay,true);
+  dispConOrLog(sprintf('Remove %i initial (steady-state) volumes',s.removeInitialVols),justDisplay,true);
+  dispConOrLog(sprintf('=============================================='),justDisplay,true)
+  doRemoveInitialVols(s,justDisplay);
+end
+
+% clean up
 dispConOrLog(sprintf('=============================================='),justDisplay,true);
 dispConOrLog(sprintf('Clean up'),justDisplay,true);
 dispConOrLog(sprintf('=============================================='),justDisplay,true);
 
-command = sprintf('rm -rf %s',s.localDir);
-if justDisplay,commandNum=commandNum+1;disp(sprintf('%i: %s',commandNum,command)),else,mysystem(command);,end
+if s.cleanUp
+  command = sprintf('rm -rf %s',s.localDir);
+  if justDisplay,commandNum=commandNum+1;disp(sprintf('%i: %s',commandNum,command)),else,mysystem(command);,end
+else
+  dispConOrLog(sprintf('Keeping temporary files in %s',s.localDir));
+end
 
 dispConOrLog(sprintf('=============================================='),justDisplay,true);
 dispConOrLog(sprintf('Done'),justDisplay,true);
@@ -838,13 +1016,33 @@ end
 % commands to check
 preferredCommandNames = {'/usr/bin/tar','/usr/bin/gunzip'};
 commandNames = {'tar','gunzip'};
-helpFlag = {'-h','-h','-h','-h'};
+helpFlag = {'-h','-h'};
+[retval s] = checkShellCommands(s,commandNames,preferredCommandNames,helpFlag);
+if ~retval,return,end
 
 % needs fsl
 if s.pe0pe1
   preferredCommandNames = {'fslroi','fslmerge','topup','applytopup'};
   commandNames = {'fslroi','fslmerge','topup','applytopup'};
+  helpFlag = {'-h','-h','-h','-h'};
+  [retval s] = checkShellCommands(s,commandNames,preferredCommandNames,helpFlag);
+  if ~retval
+    disp(sprintf('(dofmricni) !!! FSL does not appear to be installed correctly !!!'));
+    if askuser('Do you want to continue to run w/out FSL? This just means it will skip the distortion correction')
+      retval = true;
+      s.pe0pe1 = false;
+    else
+      return
+    end
+  end
 end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    checkShellCommands    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function [retval s] = checkShellCommands(s,commandNames,preferredCommandNames,helpFlag)
+
+retval = true;
 
 for i = 1:length(commandNames)
   % check if the preferred command exists
@@ -1133,6 +1331,11 @@ if ~isempty(stimfileListing)
     s.stimfileInfo(end).startTime = stimfile.myscreen.starttime;
     s.stimfileInfo(end).endTime = stimfile.myscreen.endtime;
     s.stimfileInfo(end).numVols = stimfile.myscreen.volnum;
+    if isfield(stimfile.myscreen,'ignoredInitialVols')
+      s.stimfileInfo(end).ignoredInitialVols = stimfile.myscreen.ignoredInitialVols;
+    else
+      s.stimfileInfo(end).ignoredInitialVols = 0;
+    end
   end
 end
 
@@ -1146,7 +1349,7 @@ tf = true;
 function [tf s] = matchStimfiles(s)
 
 tf = false;
-
+clc;
 % if we have non-zero stimfiles and non-zero bold
 stimfileMatch = [];
 if length(s.boldScans) && length(s.stimfileInfo)
@@ -1175,26 +1378,10 @@ if length(s.boldScans) && length(s.stimfileInfo)
   end
 end
 
-% show available stimfiles
-dispHeader('Available stimfiles');
-for iStimfile = 1:length(s.stimfileInfo)
-  stimfile = s.stimfileInfo(iStimfile);
-  disp(sprintf('%i: %s (%i vols %s %s)',iStimfile,stimfile.name,stimfile.numVols,stimfile.startTime,stimfile.endTime));
-end
-
-% show match
 isMatched = false;
 while ~isMatched
-  dispHeader('Proposed match');
-  % propose the match to the user
-  for iBOLD = 1:length(s.boldScans)
-    if stimfileMatch(iBOLD) ~= 0
-      % stimfile info for this stimfile
-      stimfile = s.stimfileInfo(stimfileMatch(iBOLD));
-      bold = s.fileList(s.boldScans(iBOLD));
-      disp(sprintf('%i->%i: %s (%i vols %s) -> %s (%i vols %s %s)',iBOLD,stimfileMatch(iBOLD),bold.filename,bold.h.dim(4),bold.startDate,stimfile.name,stimfile.numVols,stimfile.startTime,stimfile.endTime));
-    end
-  end
+  % show match
+  dispStimfileMatch(s,stimfileMatch,true)
   % ask user if this is ok
   if askuser(sprintf('(dofmricni) Do you accept this matching of bold files to stimfiles?'))==1
     break;
@@ -1202,7 +1389,8 @@ while ~isMatched
     stimfileMatch = [];
     while length(stimfileMatch) ~= length(s.boldScans)
       % get what the user wants
-      stimfileMatch = getnum(sprintf('(dofmricni) Enter a numeric array for the stimfiles you want to match to each of these bold scans. Set entries to 0 for bold scans you do not want to match to any stimfile. This must be an array of length %i: ',length(s.boldScans)));
+      stimfileMatch = getnum(sprintf('(dofmricni) Enter a numeric array for the stimfiles you want to match to each of these bold scans. Set entries to 0 for bold scans you do not want to match to any stimfile. This must be an array of length %i (set to -1 if you do not want to match): ',length(s.boldScans)));
+      if isequal(stimfileMatch,-1),isMatched=true;stimfileMatch=[];break,end
       % check length
       if any(stimfileMatch>length(s.stimfileInfo)) || any(stimfileMatch<0)
 	disp(sprintf('(dofmricni) !!! Each element must be 0 or a number between 1:%i !!!',length(s.stimfileInfo)))
@@ -1215,6 +1403,36 @@ end
 % set in structure
 s.stimfileMatch = stimfileMatch;
 tf = true;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    dispStimfileMatch    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function dispStimfileMatch(s,stimfileMatch,dispAvailable)
+
+if nargin == 2,dispAvailable=true;end
+if dispAvailable
+  % show available stimfiles
+  dispHeader('Available stimfiles');
+  for iStimfile = 1:length(s.stimfileInfo)
+    stimfile = s.stimfileInfo(iStimfile);
+    disp(sprintf('%i: %s (%i vols, %i ignored vols %s %s)',iStimfile,stimfile.name,stimfile.numVols,stimfile.ignoredInitialVols,stimfile.startTime,stimfile.endTime));
+  end
+end
+
+% display header only if we are showing dispAvailable
+if dispAvailable
+  dispHeader('Proposed match');
+end
+
+% propose the match to the user
+for iBOLD = 1:length(s.boldScans)
+  if stimfileMatch(iBOLD) ~= 0
+    % stimfile info for this stimfile
+    stimfile = s.stimfileInfo(stimfileMatch(iBOLD));
+    bold = s.fileList(s.boldScans(iBOLD));
+    disp(sprintf('%i->%i: %s (%i vols %s) -> %s (%i vols %s %s)',iBOLD,stimfileMatch(iBOLD),bold.filename,bold.h.dim(4),bold.startDate,stimfile.name,stimfile.numVols,stimfile.startTime,stimfile.endTime));
+  end
+end
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %    getRemoteFiles  %%
