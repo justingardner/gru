@@ -399,7 +399,7 @@ if ~isempty(v)
   for iScan = 1:nScans
     scanName = viewGet(v,'tseriesFile',iScan);
     % look for matching scan in fileList
-    fileListNum = find(strcmp(scanName,{s.fileList(:).toUncompressedName}));
+    fileListNum = find(strcmp(scanName,{s.fileList(:).toName}));
     if ~isempty(fileListNum)
       % set the dicom information
       v = viewSet(v,'auxParam','dicomInfo',s.fileList(fileListNum).dicomInfo,iScan);
@@ -415,10 +415,6 @@ if ~isempty(v)
 	if length(volEvents) > 1
 	  % get the framePeriod
 	  framePeriod = median(diff(stimfile{1}.myscreen.events.time(volEvents)));
-	  % now see if there are more volumes than acquisition triggers
-	  if volTrigRatio(iScan)>1
-	    framePeriod = framePeriod/volTrigRatio(iScan);
-	  end
 	  % round to nearest 1/1000 of a second
 	  framePeriod = round(framePeriod*1000)/1000;
 	  disp(sprintf('(dofmricni) Frame period as recorded in stimfile is: %0.3f',framePeriod));
