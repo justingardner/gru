@@ -3,11 +3,11 @@
 % Dan Birman (2015-05)
 % dbirman@stanford.edu
 %
-% Call: [str, unwarp] = fsl_pe0pe1('/path/to/your/directory',doUnwarp=False)
+% Call: [str, unwarp] = fsl_pe0pe1('/path/to/your/directory')
 %       returns only a string which can be disp() to see what will be
 %       unwarped.
 %
-% Call: fsl_pe0pe1('/path/to/your/directory',doUnwarp=True,unwarp)
+% Call: fsl_pe0pe1('/path/to/your/directory',unwarp)
 %       Performs the unwarping for the files in 'unwarp' (from a previous
 %       doUnwarp=False call).
 %
