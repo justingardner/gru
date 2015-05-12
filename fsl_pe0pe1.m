@@ -74,8 +74,8 @@ files = dir(folder);
 
 findFiles = 0;
 if ~exist('unwarp')
-    unwarp.pe0files = {};
-    unwarp.pe1files = {};
+    unwarp.calfiles = {};
+    unwarp.EPIfiles = {};
     findFiles = 1;
 end
 
@@ -93,14 +93,14 @@ if findFiles
         elseif strfind(fi.name,'uw_')
             % skip files that might have already been unwarped
         elseif ~isempty(strfind(fi.name,'pe1')) || ~isempty(strfind(fi.name,'CAL'))
-            unwarp.pe1files{end+1} = fi.name;
+            unwarp.EPIfiles{end+1} = fi.name;
         elseif ~isempty(strfind(fi.name,'pe0')) || ~isempty(strfind(fi.name,'mux8'))
             if fi.bytes > 100000000 % 1 mega byte
-                unwarp.pe0files{end+1} = fi.name;
+                unwarp.calfiles{end+1} = fi.name;
             else
                 disp(sprintf('(fsl_pe0pe1) File size < 100 mB. Likely a cancelled scan: %s',fi.name));
                 if strcmp(input('Include? [y/n]: ','s'),'y')
-                    unwarp.pe0files{end+1} = fi.name;
+                    unwarp.calfiles{end+1} = fi.name;
                 end
             end
         end
@@ -116,15 +116,15 @@ if findFiles
 
     %% Check if we have multiple pe1 scans
 
-    if length(unwarp.pe1files) > 1
+    if length(unwarp.EPIfiles) > 1
         disp('(fsl_pe0pe1) Multiple pe1 scans found, using last scan.\nYou can implement different functionality...');
         scanchoice = 0;
         while ~scanchoice
             in = input('(fsl_pe0pe1) Use first or last scan? [f/l]','s');
             if strcmp(in,'f')
-                unwarp.pe1files = unwarp.pe1files(1); scanchoice=1;
+                unwarp.EPIfiles = unwarp.EPIfiles(1); scanchoice=1;
             elseif strcmp(in,'l')
-                unwarp.pe1files = unwarp.pe1files(end); scanchoice=1;
+                unwarp.EPIfiles = unwarp.EPIfiles(end); scanchoice=1;
             else
                 in = input('(fsl_pe0pe1) Incorrect input. Use first or last scan? [f/l]','s');
             end
@@ -143,10 +143,10 @@ end
 
 str = '';
 str = strcat(str,'\n','**********************************************************');
-for i = 1:length(unwarp.pe0files)
-    str = strcat(str,'\n',sprintf('Unwarping %s',unwarp.pe0files{i}));
+for i = 1:length(unwarp.calfiles)
+    str = strcat(str,'\n',sprintf('Unwarping %s',unwarp.calfiles{i}));
 end
-str = strcat(str,'\n',sprintf('Using calibration file %s',unwarp.pe1files{1}));
+str = strcat(str,'\n',sprintf('Using calibration file %s',unwarp.EPIfiles{1}));
 str = strcat(str,'\n','**********************************************************');
 str = sprintf(str);
 
@@ -161,13 +161,13 @@ disp(str);
 
 % pe1
 roi1files = {};
-roi1files{1} = hlpr_fslroi(unwarp.pe1files{1},1,1,1,1,tfolder,folder);
+roi1files{1} = hlpr_fslroi(unwarp.EPIfiles{1},1,1,1,1,tfolder,folder);
 % pe0
 roi0files = {};
 disppercent(-inf,'Calculating ROIs...');
-for i = 1:length(unwarp.pe0files)
-    roi0files{i} = hlpr_fslroi(unwarp.pe0files{i},i,0,1,1,tfolder,folder);
-    disppercent(i/length(unwarp.pe0files));
+for i = 1:length(unwarp.calfiles)
+    roi0files{i} = hlpr_fslroi(unwarp.calfiles{i},i,0,1,1,tfolder,folder);
+    disppercent(i/length(unwarp.calfiles));
 end
 disppercent(inf);
 
@@ -194,7 +194,7 @@ disppercent(inf);
 disppercent(-inf,'Applying topup...');
 finalfiles = {};
 for i = 1:length(tufiles)
-    finalfiles{i} = hlpr_applytopup(tufiles{i},unwarp.pe0files{i},tfolder,folder);
+    finalfiles{i} = hlpr_applytopup(tufiles{i},unwarp.calfiles{i},tfolder,folder);
     disppercent(i/length(tufiles));
 end
 disppercent(inf);
@@ -237,14 +237,14 @@ system(sprintf('rm %s',fullfile(folder,'acq_params.txt')));
 system(sprintf('rm -rf %s',tfolder));
 
 %% Backup + rename
-% Move all of the original files (unwarp.pe0files) to folder//unwarp_orig
+% Move all of the original files (unwarp.calfiles) to folder//unwarp_orig
 % Then renamne the uw_ files to the original names
 if ~isdir(fullfile(folder,'unwarp_orig'))
     mkdir(fullfile(folder,'unwarp_orig'));
 end
 
-for i = 1:length(unwarp.pe0files)
-    file = unwarp.pe0files{i};
+for i = 1:length(unwarp.calfiles)
+    file = unwarp.calfiles{i};
     fileLoc = fullfile(folder,file);
     backupLoc = fullfile(folder,'unwarp_orig',file);
     % make backup
