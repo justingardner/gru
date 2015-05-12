@@ -235,21 +235,6 @@ for i = 1:length(fileList)
 	s.seriesDescription = fileList(i).dicomInfo.SeriesDescription;
       end
     end
-    if isfield(fileList(i),'h')
-      % get other info from description field
-      if isfield(fileList(i).h,'hdr') && isfield(fileList(i).h.hdr,'descrip')
-	descrip = fileList(i).h.hdr.descrip;
-	% parse it
-	while ~isempty(descrip)
-	  [thisVar descrip] = strtok(descrip,';');
-	  [varName varValue] = strtok(thisVar,'=');
-	  fileList(i).descrip.(varName) = str2num(varValue(2:end));
-	end
-      end
-      if isfield(fileList(i).descrip,'fa')
-	fileList(i).flipAngle = fileList(i).descrip.fa;
-      end
-    end
     % update bold count
     s.boldScans(end+1) = i;
     boldNum = boldNum+1;
@@ -299,7 +284,6 @@ for i = 1:length(fileList)
 end
 disppercent(inf);
 
-
 % read nifti headers
 if s.dispNiftiHeaderInfo
   % initialze to know calibration files
@@ -311,6 +295,22 @@ if s.dispNiftiHeaderInfo
       fileList(i).h = mlrImageHeaderLoad(fileList(i).nifti);
     else
       fileList(i).h = [];
+    end
+    % get other info from description field
+    if isfield(fileList(i).h,'hdr') && isfield(fileList(i).h.hdr,'descrip')
+      descrip = fileList(i).h.hdr.descrip;
+      % parse it
+      while ~isempty(descrip)
+	[thisVar descrip] = strtok(descrip,';');
+	[varName varValue] = strtok(thisVar,'=');
+	if ~isempty(deblank(varName))
+	  fileList(i).descrip.(varName) = str2num(varValue(2:end));
+	end
+      end
+    end
+    % get flip angle
+    if isfield(fileList(i).descrip,'fa')
+      fileList(i).flipAngle = fileList(i).descrip.fa;
     end
     % check if this is a bold
     if fileList(i).bold
@@ -347,7 +347,6 @@ else
     fileList(i).h = [];
   end
 end
-
 
 % get the subject id
 if isempty(s.subjectID)
@@ -541,7 +540,7 @@ end
 
 % now actually do it
 if doit && s.pe0pe1
-  retval = fsl_pe0pe1(fullfile(s.localSessionDir,'Raw','TSeries'),s.unwarp);
+  retval = fsl_pe0pe1(fullfile(s.localSessionDir,'Pre'),s.unwarp);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -625,7 +624,7 @@ dispConOrLog(sprintf('Make Directories'),justDisplay,true);
 dispConOrLog(sprintf('=============================================='),justDisplay,true);
 
 % list of directories to make
-dirList = {'Etc','Raw','Raw/TSeries','Anatomy'};
+dirList = {'Etc','Pre','Raw','Raw/TSeries','Anatomy'};
 
 % make them
 for i = 1:length(dirList)
@@ -636,13 +635,13 @@ for i = 1:length(dirList)
 end
 
 dispConOrLog(sprintf('=============================================='),justDisplay,true);
-dispConOrLog(sprintf('Move Files'),justDisplay,true);
+dispConOrLog(sprintf('Copy files from staging area'),justDisplay,true);
 dispConOrLog(sprintf('=============================================='),justDisplay,true);
 
 commandNum = 0;
 for i = 1:length(s.fileList)
   % BOLD scan
-  if s.fileList(i).bold
+  if s.fileList(i).bold || any(i==s.calibrationFile)
     % check for valid nifti
     if isempty(s.fileList(i).nifti)
       dispConOrLog(sprintf('********************************************'),justDisplay,true);
@@ -651,7 +650,7 @@ for i = 1:length(s.fileList)
       s.fileList(i).ignore = true;
     else
       % make full path
-      s.fileList(i).toFullfile = fullfile(s.localSessionDir,'Raw/TSeries',s.fileList(i).toName);
+      s.fileList(i).toFullfile = fullfile(s.localSessionDir,'Pre',s.fileList(i).toName);
       % make command to copy
       command = sprintf('copyfile %s %s f',s.fileList(i).nifti,s.fileList(i).toFullfile);
       if justDisplay,commandNum=commandNum+1;disp(sprintf('%i: %s',commandNum,command)),else,myeval(command,justDisplay);,end
@@ -691,6 +690,23 @@ if s.pe0pe1
   end
 end
   
+dispConOrLog(sprintf('=============================================='),justDisplay,true);
+dispConOrLog(sprintf('Move Files from Pre to Raw'),justDisplay,true);
+dispConOrLog(sprintf('=============================================='),justDisplay,true);
+
+commandNum = 0;
+for i = 1:length(s.fileList)
+  % BOLD scans
+  if s.fileList(i).bold
+    % make full path
+    s.fileList(i).preFullfile = fullfile(s.localSessionDir,'Pre',s.fileList(i).toName);
+    s.fileList(i).toFullfile = fullfile(s.localSessionDir,'Raw/TSeries',s.fileList(i).toName);
+    % make command to copy
+    command = sprintf('movefile %s %s f',s.fileList(i).preFullfile,s.fileList(i).toFullfile);
+    if justDisplay,commandNum=commandNum+1;disp(sprintf('%i: %s',commandNum,command)),else,myeval(command,justDisplay);,end
+  end
+end
+
 % stimfile move to Etc directory
 if ~isempty(s.stimfileInfo)
   dispConOrLog(sprintf('=============================================='),justDisplay,true);
