@@ -39,7 +39,7 @@
 % 
 % [Smith 2004] S.M. Smith, M. Jenkinson, M.W. Woolrich, C.F. Beckmann, T.E.J. Behrens, H. Johansen-Berg, P.R. Bannister, M. De Luca, I. Drobnjak, D.E. Flitney, R. Niazy, J. Saunders, J. Vickers, Y. Zhang, N. De Stefano, J.M. Brady, and P.M. Matthews. Advances in functional and structural MR image analysis and implementation as FSL. NeuroImage, 23(S1):208-219, 2004. 
 
-function [str, unwarp] = fsl_pe0pe1(folder,doUnwarp,unwarp)
+function [str, unwarp] = fsl_pe0pe1(folder,unwarp)
 
 
 [s, r] = system('fslroi');
@@ -47,6 +47,12 @@ if s==127
     str = 'failed';
     disp('(fsl_pe0pe1) FSL may not be properly installed. Check your PATH');
     return
+end
+
+if ~exist('unwarp')
+    doUnwarp = 0;
+else
+    doUnwarp = 1;
 end
 
 if doUnwarp
@@ -65,11 +71,6 @@ end
 tfolder = fullfile(folder,'temp');
 mkdir(tfolder);
 files = dir(folder);
-
-if doUnwarp && ~exist('unwarp')
-    str = 'failure';
-    disp(sprintf('(fsl_pe0pe1) Failure: No ''unwarp'' structure passed.\nRun this first:\n[s, unwarp] = fsl_pe0pe1(folder,false);\nThen run:\nfsl_pe0pe1(folder,true,unwarp);'));
-end
 
 findFiles = 0;
 if ~exist('unwarp')
@@ -128,6 +129,13 @@ if findFiles
                 in = input('(fsl_pe0pe1) Incorrect input. Use first or last scan? [f/l]','s');
             end
         end
+    end
+else
+
+    acqFile = fullfile(folder,'acq_params.txt');
+    if ~isfile(acqFile)
+        system(sprintf('echo ''0 1 0 1'' > %s',acqFile));
+        system(sprintf('echo ''0 -1 0 1'' >> %s',acqFile));
     end
 end
 
