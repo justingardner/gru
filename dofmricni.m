@@ -30,19 +30,28 @@ function retval = dofmricni(varargin)
 % what we are using these days
 
 % Default arguments
-getArgs(varargin,{'stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data'});
+getArgs(varargin,{'stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','stimComputerName=oban','stimComputerUserName=gru','username=[]','pe0pe1=1','minVolumes=10'});
 
 clc;
 
 % set up system variable (which gets passed around with important system info)
 s.cniComputerName = cniComputerName;
+s.username = username;
+s.stimComputerUserName = stimComputerUserName;
+s.stimComputerName = stimComputerName;
 s.localDataDir = mlrReplaceTilde(localDataDir);
 s.stimfileDir = stimfileDir;
 s.numMotionComp = numMotionComp;
-s.dispNiftiHeaderInfo = false;
+s.dispNiftiHeaderInfo = true;
+s.minVolumes = minVolumes;
+
 % range for te to be considered a BODL scan
 s.teLower = 25;
 s.teHigher = 35;
+
+% whether do to FSL distortion correction (which looks at images created with different directions
+% of phase enocode and figures how to stretch and compress image apropriately)
+s.pe0pe1 = pe0pe1;
 
 % check to make sure we have the computer setup correctly to run epibsi, postproc and sense
 [tf s] = checkCommands(s);
@@ -63,6 +72,14 @@ mlrPath mrTools;
 
 % check the data
 [tf s] = examineData(s);
+if ~tf,return,end
+
+% get stimfiles
+[tf s] = getStimfiles(s);
+if ~tf,return,end
+
+% match stimfiles
+[tf s] = matchStimfiles(s);
 if ~tf,return,end
 
 % now propose a move
@@ -160,8 +177,17 @@ disppercent(inf);
 
 % get scan start time
 for i = 1:length(fileList)
+  fileList(i).startDate = [];
   if all(isfield(fileList(i).dicomInfo,{'AcquisitionTime','AcquisitionDate'}))
+    % get start time
     fileList(i).startTime = str2num(fileList(i).dicomInfo.AcquisitionTime);
+    % try to get datenum
+    try
+      fileList(i).startDate = datestr(datenum([fileList(i).dicomInfo.AcquisitionDate fileList(i).dicomInfo.AcquisitionTime],'yyyymmddHHMMSS'));
+    catch
+      disp(sprintf('(dofmricni) Unrecognized date format in dicom: %s %s',fileList(i).dicomInfo.AcquisitionDate,fileList(i).dicomInfo.AcquisitionTime));
+    end
+      
   else
     fileList(i).startTime = inf;
   end
@@ -172,33 +198,15 @@ end
 % sort by start time
 fileList = sortFileList(fileList);
 
-% read nifti headers
-if s.dispNiftiHeaderInfo
-  disppercent(-inf,'(dofmricni) Reading nifti headers');
-  for i = 1:length(fileList)
-    if ~isempty(fileList(i).nifti)
-      system(sprintf('chmod 644 %s',fileList(i).nifti));
-      fileList(i).h = mlrImageHeaderLoad(fileList(i).nifti);
-    else
-      fileList(i).h = [];
-    end
-    disppercent(i/length(fileList));
-  end
-  disppercent(inf);
-else
-  for i = 1:length(fileList)
-    fileList(i).h = [];
-  end
-end
-
 % get list of bold scans
 boldNum = 0;
 s.seriesDescription = [];
+s.boldScans = [];
 for i = 1:length(fileList)
-  % check by whether name contains BOLD or TR is in range
+  % check by whether name contains BOLD or TR is in range 
   if ~isempty(findstr('bold',lower(fileList(i).filename))) || (~isempty(fileList(i).te) && (fileList(i).te >= s.teLower) && fileList(i).te <= s.teHigher)
     fileList(i).bold = true;
-    boldNum = boldNum+1;
+    fileList(i).flipAngle = nan;
     % name to be copied to
     fileList(i).toName = setext(sprintf('bold%02i_%s',boldNum,fileList(i).filename),fileList(i).niftiExt);
     % also get receiverCoilName and sequence type info
@@ -207,7 +215,24 @@ for i = 1:length(fileList)
 	s.seriesDescription = fileList(i).dicomInfo.SeriesDescription;
       end
     end
-    
+    if isfield(fileList(i),'h')
+      % get other info from description field
+      if isfield(fileList(i).h,'hdr') && isfield(fileList(i).h.hdr,'descrip')
+	descrip = fileList(i).h.hdr.descrip;
+	% parse it
+	while ~isempty(descrip)
+	  [thisVar descrip] = strtok(descrip,';');
+	  [varName varValue] = strtok(thisVar,'=');
+	  fileList(i).descrip.(varName) = str2num(varValue(2:end));
+	end
+      end
+      if isfield(fileList(i).descrip,'fa')
+	fileList(i).flipAngle = fileList(i).descrip.fa;
+      end
+    end
+    % update bold count
+    s.boldScans(end+1) = i;
+    boldNum = boldNum+1;
   else
     fileList(i).bold = false;
     fileList(i).toName = '';
@@ -227,12 +252,75 @@ for i = 1:length(fileList)
   end
 end
 
+% uncompress nifti files
+disppercent(-inf,'(dofmricni) Uncompressing nifti files');
+for i = 1:length(fileList)
+  % BOLD scan or anat scans may need to be uncompressed
+  if (fileList(i).bold || fileList(i).anat) && ~fileList(i).ignore
+    % check if compressed
+    if (length(fileList(i).niftiExt)>2) && strcmp(fileList(i).niftiExt(end-1:end),'gz')
+      % change mode just in case
+      system(sprintf('chmod 644 %s',fileList(i).nifti),'-echo');
+      % make command to gunzip
+      uncompressedFilename = stripext(fileList(i).nifti);
+      if ~isfile(uncompressedFilename)
+	system(sprintf('%s -c %s > %s',s.commands.gunzip,fileList(i).nifti,uncompressedFilename),'-echo');
+      end
+      % make sure that the mode is set correctly
+      system(sprintf('chmod 644 %s',uncompressedFilename),'-echo');
+      % change nifti name
+      fileList(i).nifti = uncompressedFilename;
+      fileList(i).niftiExt = getext(uncompressedFilename);
+      % change to name to remove gzip
+      fileList(i).toName = stripext(fileList(i).toName);
+    end
+  end
+  disppercent(i/length(fileList));
+end
+disppercent(inf);
+
+
+% read nifti headers
+if s.dispNiftiHeaderInfo
+  disppercent(-inf,'(dofmricni) Reading nifti headers');
+  for i = 1:length(fileList)
+    if ~isempty(fileList(i).nifti)
+      system(sprintf('chmod 644 %s',fileList(i).nifti));
+      fileList(i).h = mlrImageHeaderLoad(fileList(i).nifti);
+    else
+      fileList(i).h = [];
+    end
+    % check if this is a bold
+    if fileList(i).bold
+      % if it is and we do not have a nifti header then remove from list
+      % or if we have too few volumes
+      if isempty(fileList(i).h) || (fileList(i).h.dim(4) < s.minVolumes)
+	if isempty(fileList(i).h)
+	  disp(sprintf('(dofmricni) !!! Scan %s has no nifti header, removing from list of BOLD scans !!!',fileList(i).filename));
+	else
+	  disp(sprintf('(dofmricni) !!! Scan %s has only %i volumes, removing from list of BOLD scans. Increase minVolumes setting in dofmricni to keep. !!!',fileList(i).filename,fileList(i).h.dim(4)));
+	end
+	% remove from list
+	fileList(i).bold = false;
+	s.boldScans = setdiff(s.boldScans,i);
+      end
+    end
+    disppercent(i/length(fileList));
+  end
+  disppercent(inf);
+else
+  for i = 1:length(fileList)
+    fileList(i).h = [];
+  end
+end
+
+
 % get the subject id
 if isempty(s.subjectID)
   mrParams = {{'subjectID',0,'incdec=[-1 1]','minmax=[0 inf]','Subject ID'}};
   params = mrParamsDialog(mrParams,'Set subject ID');
   if isempty(params),return,end
-  s.subjectID = sprintf('s%04i',params.subjectID);
+  s.subjectID = gruSubjectNum2ID(params.subjectID);
 end
 
 % get name of directory to copy
@@ -451,27 +539,18 @@ for i = 1:length(s.fileList)
   end
 end
 
-dispConOrLog(sprintf('=============================================='),justDisplay,true);
-dispConOrLog(sprintf('Uncompress and set permission of files'),justDisplay,true);
-dispConOrLog(sprintf('=============================================='),justDisplay,true);
-
-commandNum = 0;
-for i = 1:length(s.fileList)
-  % BOLD scan or anat scans may need to be uncompressed
-  if (s.fileList(i).bold || s.fileList(i).anat) && ~s.fileList(i).ignore
-    % check if compressed
-    if (length(s.fileList(i).niftiExt)>2) && strcmp(s.fileList(i).niftiExt(end-1:end),'gz')
-      % make command to gunzip
-      command = sprintf('%s -f %s',s.commands.gunzip,s.fileList(i).toFullfile);
-      s.fileList(i).toUncompressedName = stripext(s.fileList(i).toName);
-      if justDisplay,commandNum=commandNum+1;disp(sprintf('%i: %s',commandNum,command)),else,mysystem(command);,end
-      command = sprintf('chmod 644 %s',fullfile(fileparts(s.fileList(i).toFullfile),s.fileList(i).toUncompressedName));
-      if justDisplay,commandNum=commandNum+1;disp(sprintf('%i: %s',commandNum,command)),else,mysystem(command);,end
-    else
-      s.fileList(i).toUncompressedName = s.fileList(i).toName;
-    end
+if ~isempty(s.stimfileInfo)
+  dispConOrLog(sprintf('=============================================='),justDisplay,true);
+  dispConOrLog(sprintf('Copy stimfiles'),justDisplay,true);
+  dispConOrLog(sprintf('=============================================='),justDisplay,true)
+  commandNum = 0;
+  for i = 1:length(s.stimfileInfo)
+    % make command to move
+    command = sprintf('copyfile %s %s f',fullfile(s.localDir,s.stimfileInfo(i).name),fullfile(s.localSessionDir,'Etc'));
+    if justDisplay,commandNum=commandNum+1;disp(sprintf('%i: %s',commandNum,command)),else,myeval(command,justDisplay);,end
   end
 end
+
 dispConOrLog(sprintf('=============================================='),justDisplay,true);
 dispConOrLog(sprintf('Clean up'),justDisplay,true);
 dispConOrLog(sprintf('=============================================='),justDisplay,true);
@@ -510,7 +589,8 @@ for i = 1:length(s.fileList)
     if s.dispNiftiHeaderInfo && ~isempty(s.fileList(i).h)
       pixdim = s.fileList(i).h.pixdim;
       dim = s.fileList(i).h.dim;
-      dispConOrLog(sprintf('%i) %02i:%02i %s [%s] [%s] TR: %0.2f TE: %s -> %s',i,s.fileList(i).startHour,s.fileList(i).startMin,s.fileList(i).filename,mlrnum2str(pixdim,'compact=1'),mlrnum2str(dim,'compact=1','sigfigs=0'),s.fileList(i).tr,mlrnum2str(s.fileList(i).te,'compact=1'),s.fileList(i).toName),justDisplay);
+      flipAngle = s.fileList(i).flipAngle;
+      dispConOrLog(sprintf('%i) %02i:%02i %s [%s] [%s] TR: %0.2f TE: %s flipAngle: %s -> %s',i,s.fileList(i).startHour,s.fileList(i).startMin,s.fileList(i).filename,mlrnum2str(pixdim,'compact=1'),mlrnum2str(dim,'compact=1','sigfigs=0'),s.fileList(i).tr,mlrnum2str(s.fileList(i).te,'compact=1'),mlrnum2str(s.fileList(i).flipAngle,'compact=1'),s.fileList(i).toName),justDisplay);
     else
       dispConOrLog(sprintf('%i) %02i:%02i %s TR: %0.2f TE: %s -> %s',i,s.fileList(i).startHour,s.fileList(i).startMin,s.fileList(i).filename,s.fileList(i).tr,mlrnum2str(s.fileList(i).te,'compact=1'),s.fileList(i).toName),justDisplay);
       
@@ -634,15 +714,15 @@ end
 subjectID = [];
 if isfield(info,'PatientName') && isfield(info.PatientName,'FamilyName')
   subjectID = info.PatientName.FamilyName;
-  if ~isempty(subjectID) || ~any(length(subjectID) == [4 5]) || isequal(lower(subjectID(1)),'s')
+  if ~isempty(subjectID) && (~any(length(subjectID) == [4 5]) || ~isequal(lower(subjectID(1)),'s'))
     mrWarnDlg('(dofmricni) PatientName should always be set to a subjectID (not the real name)!!!');
     subjectID = [];
   end
 end
 if isempty(subjectID)
-  if ~isfield(info,'PatientName') && isfield(info.PatientName,'GivenName')
-    subjectID = info.PatientName.GivenName
-    if ~isempty(subjectID) || ~any(length(subjectID) == [4 5]) || isequal(lower(subjectID(1)),'s')
+  if isfield(info,'PatientName') && isfield(info.PatientName,'GivenName')
+    subjectID = info.PatientName.GivenName;
+    if ~isempty(subjectID) && (~any(length(subjectID) == [4 5]) || ~isequal(lower(subjectID(1)),'s'))
       mrWarnDlg('(dofmricni) PatientName should always be set to a subjectID (not the real name)!!!');
     end
   end
@@ -760,6 +840,11 @@ preferredCommandNames = {'/usr/bin/tar','/usr/bin/gunzip'};
 commandNames = {'tar','gunzip'};
 helpFlag = {'-h','-h','-h','-h'};
 
+% needs fsl
+if s.pe0pe1
+  preferredCommandNames = {'fslroi','fslmerge','topup','applytopup'};
+  commandNames = {'fslroi','fslmerge','topup','applytopup'};
+end
 
 for i = 1:length(commandNames)
   % check if the preferred command exists
@@ -828,8 +913,14 @@ function s = getCNIDir(s)
 
 s.cniDir = [];
 
+% get the username
+if isempty(s.username)
+  s.username = getusername;
+end
+
+% default sunetID to be username
 s.sunetID = mglGetParam('sunetID');
-if isempty(s.sunetID),s.sunetID = getusername;,end
+if isempty(s.sunetID),s.sunetID = s.username;,end
 
 % put up dialog making sure info is correct
 mrParams = {{'cniComputerName',s.cniComputerName,'The name of the computer to ssh into'},...
@@ -845,16 +936,8 @@ s.sunetID = params.sunetID;
 s.cniComputerName = params.cniComputerName;
   
 % get the list of directoris that live on the cni computer
-command = sprintf('ssh %s@%s /home/jlg/bin/gruDispData',s.sunetID,s.cniComputerName);
-disp(command);
-disp('Enter password: ');
-[status,result] = system(command);
-
-% check return
-if ~isequal(status,0) || isempty(result)
-  disp(sprintf('(dofmricni:cniDir) Error getting data directories from cni'));
-  return
-end
+result = doRemoteCommand(s.sunetID,s.cniComputerName,'/home/jlg/bin/gruDispData');
+if isempty(result),return,end
 
 % parse the results
 cniDir = [];
@@ -927,13 +1010,6 @@ end
 s.cniDir = fullfile(dirName,scanName);
 disp(sprintf('(dofmricni:getCNIDir) Directory chosen is: %s',s.cniDir))
 
-%%%%%%%%%%%%%%%%%%%%
-%%   getCNIData   %%
-%%%%%%%%%%%%%%%%%%%%
-function [tf s] = getCNIData(s)
-
-tf = false;
-
 % set the directory to which we resync data
 toDir = mlrReplaceTilde(fullfile(s.localDataDir,'temp/dofmricni'));
 if ~isdir(toDir)
@@ -944,10 +1020,18 @@ if ~isdir(toDir)
     return
   end
 end
+s.localDir = fullfile(toDir,getLastDir(s.cniDir));
+
+%%%%%%%%%%%%%%%%%%%%
+%%   getCNIData   %%
+%%%%%%%%%%%%%%%%%%%%
+function [tf s] = getCNIData(s)
+
+tf = false;
 
 % Tell user what is going on
 dispHeader;
-disp(sprintf('Copying files from %s to %s',s.cniDir,toDir));
+disp(sprintf('Copying files from %s to %s',s.cniDir,s.localDir));
 disp(sprintf('This could take some time. Using rsync, so that if you quit in the middle'))
 disp(sprintf('You can continue where you left off by running dofmricni again'))
 dispHeader;
@@ -955,13 +1039,236 @@ dispHeader;
 % get dicoms
 fromDir = fullfile('/nimsfs/raw/jlg',s.cniDir);
 disp(sprintf('(dofmricni) Get files'));
-command = sprintf('rsync -rtv --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s %s',s.sunetID,s.cniComputerName,fromDir,toDir);
+command = sprintf('rsync -rtv --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s %s',s.sunetID,s.cniComputerName,fromDir,s.localDir);
 disp(command);
-system(command);
+system(command,'-echo');
 
 % got here, so everything is good
 tf = true;
-s.localDir = fullfile(toDir,getLastDir(s.cniDir));
+
+%%%%%%%%%%%%%%%%%%%%%
+%%   getStimfiles  %%
+%%%%%%%%%%%%%%%%%%%%%
+function [tf s] = getStimfiles(s)
+
+tf = false;
+
+% stimfile info
+s.stimfileInfo = {};
+
+% get experiment name
+s.experimentName = fileparts(s.cniDir);
+% get stimfile stem
+s.stimfileStem = s.studyDate(3:end);
+
+% first get experiment folders on stimulus computer
+dataListing = doRemoteCommand(s.stimComputerUserName,s.stimComputerName,sprintf('find data ''-type'' d ''-print'''));
+
+% look for correct directory
+stimfileListing = [];
+while (~isempty(dataListing))
+  [thisListing,dataListing] = strtok(dataListing);
+  % find data directory
+  [dataDir,thisListing] = strtok(thisListing,filesep);
+  [dataDir,thisListing] = strtok(thisListing,filesep);
+  if ~isempty(dataDir)
+    % get subject dir
+    [subjectDir,thisListing] = strtok(thisListing,filesep);
+    if ~isempty(subjectDir)
+      % check for match
+      if isequal(gruSubjectID2num(subjectDir),gruSubjectID2num(s.subjectID)) && strcmp(lower(dataDir),lower(s.experimentName))
+	% now try to get the stimfiles
+	s.stimDataDir = fullfile('data',dataDir,subjectDir,s.stimfileStem);
+	stimfileListing = getRemoteListing(s.stimComputerUserName,s.stimComputerName,sprintf('%s*.mat',s.stimDataDir));
+	break;
+      end
+    end
+  end
+end
+
+if ~isempty(stimfileListing)
+  % ask user if these are correct
+  paramsInfo = {};
+  if strcmp(questdlg(sprintf('Found %i stimfiles in directory: %s. Use these?',length(stimfileListing),s.stimDataDir),'Confirm stimfile directory','Yes','No','Yes'),'Yes')
+    % get the files
+    getRemoteFiles(s.stimComputerUserName,s.stimComputerName,sprintf('%s*.mat',s.stimDataDir),s.localDir);
+  else
+    stimfileListing = [];
+  end
+end
+
+% if could not find from above, then ask user to input a name
+while isempty(stimfileListing)
+  paramsInfo = {};
+  paramsInfo{end+1} = {'computerName',s.stimComputerName,'Name of computer where files are located'};
+  paramsInfo{end+1} = {'computerUserName',s.stimComputerUserName,'Name of user on computer for ssh login'};
+  paramsInfo{end+1} = {'stimfileStem',s.stimfileStem,'The base of the stimfile names'};
+  paramsInfo{end+1} = {'dataDir',fullfile('data',s.experimentName,s.subjectID),'Name of directory on %s where stimfiles are located'};
+  params = mrParamsDialog(paramsInfo,sprintf('Indicate location of stimfiles'));
+  if isempty(params),break,end
+  stimfileListing = getRemoteListing(params.computerUserName,params.computerName,fullfile(params.dataDir,sprintf('%s*.mat',params.stimfileStem)));
+  if ~isempty(stimfileListing)
+    % get the listing
+    stimfileListing = getRemoteFiles(params.computerUserName,params.computerName,fullfile(params.dataDir,sprintf('%s*.mat',params.stimfileStem)),s.localDir);
+    s.stimComputerName = params.computerName;
+    s.stimComputerUserName = params.computerUserName;
+    s.stimDataDir = params.dataDir;
+    s.stimfileStem = params.stimfileStem;
+  end
+end
+
+
+% examine the stimfiles that we have
+if ~isempty(stimfileListing)
+  for i = 1:length(stimfileListing)
+    % remember name
+    s.stimfileInfo(end+1).name = stimfileListing{i};
+    % load the file
+    stimfile = load(fullfile(s.localDir,stimfileListing{i}));
+    % figure out tr from stimfile
+    volTrace = find(strcmp('volume',stimfile.myscreen.traceNames));
+    e = stimfile.myscreen.events;
+    s.stimfileInfo(end).tr = median(diff(e.time(e.tracenum==volTrace)));
+    % get some other info
+    s.stimfileInfo(end).startTime = stimfile.myscreen.starttime;
+    s.stimfileInfo(end).endTime = stimfile.myscreen.endtime;
+    s.stimfileInfo(end).numVols = stimfile.myscreen.volnum;
+  end
+end
+
+% basically, always return true even if no stimfiles found - since
+% we can always get them later
+tf = true;
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%%   matchStimfiles  %%
+%%%%%%%%%%%%%%%%%%%%%%%
+function [tf s] = matchStimfiles(s)
+
+tf = false;
+
+% if we have non-zero stimfiles and non-zero bold
+stimfileMatch = [];
+if length(s.boldScans) && length(s.stimfileInfo)
+  % get stimfileInfo
+  stimfileInfo = s.stimfileInfo;
+  availableStimfiles = 1:length(stimfileInfo);
+  % cycle over bold scans
+  for iBOLD = 1:length(s.boldScans)
+    % try to match to stimfile which is closest in time
+    if ~isempty(availableStimfiles)
+      timeDiff = inf(1,length(stimfileInfo));
+      for iStimfile = availableStimfiles
+	if ~isempty(s.fileList(s.boldScans(iBOLD)).startDate)
+	  timeDiff(iStimfile) = abs(datenum(stimfileInfo(iStimfile).startTime)-datenum(s.fileList(s.boldScans(iBOLD)).startDate));
+	else
+	  timeDiff(iStimfile) = inf;
+	end
+      end
+      % find closest match in time
+      [minTime stimfileMatch(iBOLD)] = min(timeDiff);
+      % remove that from the available list
+      availableStimfiles = setdiff(availableStimfiles,stimfileMatch(iBOLD));
+    else
+      stimfileMatch(iBOLD) = 0;
+    end
+  end
+end
+
+% show available stimfiles
+dispHeader('Available stimfiles');
+for iStimfile = 1:length(s.stimfileInfo)
+  stimfile = s.stimfileInfo(iStimfile);
+  disp(sprintf('%i: %s (%i vols %s %s)',iStimfile,stimfile.name,stimfile.numVols,stimfile.startTime,stimfile.endTime));
+end
+
+% show match
+isMatched = false;
+while ~isMatched
+  dispHeader('Proposed match');
+  % propose the match to the user
+  for iBOLD = 1:length(s.boldScans)
+    if stimfileMatch(iBOLD) ~= 0
+      % stimfile info for this stimfile
+      stimfile = s.stimfileInfo(stimfileMatch(iBOLD));
+      bold = s.fileList(s.boldScans(iBOLD));
+      disp(sprintf('%i->%i: %s (%i vols %s) -> %s (%i vols %s %s)',iBOLD,stimfileMatch(iBOLD),bold.filename,bold.h.dim(4),bold.startDate,stimfile.name,stimfile.numVols,stimfile.startTime,stimfile.endTime));
+    end
+  end
+  % ask user if this is ok
+  if askuser(sprintf('(dofmricni) Do you accept this matching of bold files to stimfiles?'))==1
+    break;
+  else
+    stimfileMatch = [];
+    while length(stimfileMatch) ~= length(s.boldScans)
+      % get what the user wants
+      stimfileMatch = getnum(sprintf('(dofmricni) Enter a numeric array for the stimfiles you want to match to each of these bold scans. Set entries to 0 for bold scans you do not want to match to any stimfile. This must be an array of length %i: ',length(s.boldScans)));
+      % check length
+      if any(stimfileMatch>length(s.stimfileInfo)) || any(stimfileMatch<0)
+	disp(sprintf('(dofmricni) !!! Each element must be 0 or a number between 1:%i !!!',length(s.stimfileInfo)))
+	stimfileMatch = [];
+      end
+    end
+  end
+end
+
+% set in structure
+s.stimfileMatch = stimfileMatch;
+tf = true;
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%    getRemoteFiles  %%
+%%%%%%%%%%%%%%%%%%%%%%%
+function retval = getRemoteFiles(username,computerName,fromFiles,toDir)
+
+% copy them
+[status,retval] = system(sprintf('scp ''%s@%s:%s'' %s',username,computerName,fromFiles,toDir),'-echo');
+
+% bad status, return
+if status
+  retval = [];
+else
+  % get listings (the above gets the output of scp which is not as useful)
+  retval = getRemoteListing(username,computerName,fromFiles);
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%
+%    getRemoteListing  %%
+%%%%%%%%%%%%%%%%%%%%%%%%%
+function retval = getRemoteListing(username,computerName,listDir)
+
+retval = [];
+lsRetval = doRemoteCommand(username,computerName,sprintf('ls ''%s''',listDir));
+% check for empty
+badMatchStr = 'ls: No match.';
+if strncmp(retval,badMatchStr,length(badMatchStr))
+  retval = [];
+else
+  % make into a cell array
+  while ~isempty(lsRetval)
+    [thisFilename lsRetval] = strtok(lsRetval);
+    if ~isempty(thisFilename)
+      retval{end+1} = getLastDir(thisFilename);
+    end
+  end
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%
+%    doRemoteCommand    %
+%%%%%%%%%%%%%%%%%%%%%%%%%
+function retval = doRemoteCommand(username,computerName,commandName)
+
+retval = [];
+command = sprintf('ssh %s@%s %s',username,computerName,commandName);
+disp(sprintf('(dofrmicni) Doing remote command: %s',command));
+disp(sprintf('If you have not yet set passwordless ssh (see: http://gru.stanford.edu/doku.php/gruprivate/sshpassless) then enter your password here: ',computerName));
+[status,retval] = system(command,'-echo');
+if status~=0
+  disp(sprintf('(dofmricni) Could not ssh in to do remote command on: %s@%s',username,computerName));
+  return
+end
+disp(sprintf('(dofmricni) Remote command on %s successful',computerName));
+
 
 %%%%%%%%%%%%%%%%%%%%%
 %%   getusername   %%

@@ -150,7 +150,7 @@ s.fullLocal = fullfile(s.aDBLocal,'mlrBaseAnatomies','FS',num2str(i));
 while isdir(s.fullLocal)
     warning('Found existing directory %s.',s.fullLocal);
     in = input('Do you want to overwrite? [y/n]: ','s');
-    if strcat(in,'y')
+    if strcmp(in,'y')
         warning('Overwriting a directory may not work correctly--scp sometimes fails. In addition, you may be over-writing data. A better practice is to simply copy into a new folder /FS/2 by saying no to the ovewr-write. [dbcont]');
         keyboard
         break
