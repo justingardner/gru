@@ -237,7 +237,7 @@ for i = 1:length(fileList)
       end
     end
     % get mux factor from name
-    muxloc = findstr('mux',lower(fileList(i).filename))
+    muxloc = findstr('mux',lower(fileList(i).filename));
     fileList(i).mux = [];
     if ~isempty(muxloc)
       fileList(i).mux = str2num(strtok(fileList(i).filename(muxloc(1)+3:end),'_ '));
