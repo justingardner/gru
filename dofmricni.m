@@ -323,7 +323,7 @@ if s.dispNiftiHeaderInfo
     if fileList(i).bold
       % if it is and we do not have a nifti header then remove from list
       % or if we have too few volumes
-      if isempty(fileList(i).h) || (fileList(i).h.dim(4) < s.minVolumes)
+      if isempty(fileList(i).h) || size(fileList(i).h.dim,2) < 4 || (fileList(i).h.dim(4) < s.minVolumes)
 	if isempty(fileList(i).h)
 	  disp(sprintf('(dofmricni) !!! Scan %s has no nifti header, removing from list of BOLD scans !!!',fileList(i).filename));
 	else
@@ -338,7 +338,11 @@ if s.dispNiftiHeaderInfo
 	  end
 	  % if it is not a calibration scan then tell user we are dropping
 	  if ~calibrationFile
-	    disp(sprintf('\n(dofmricni) !!! Scan %s has only %i volumes, removing from list of BOLD scans. Decrease minVolumes setting in dofmricni to keep. !!!',fileList(i).filename,fileList(i).h.dim(4)));
+        if size(fileList(i).h.dim,2) < 4
+          disp(sprintf('\n(dofmricni) !!! Scan %s has 0 volumes, removing from list of BOLD scans.',fileList(i).filename));
+        else
+	      disp(sprintf('\n(dofmricni) !!! Scan %s has only %i volumes, removing from list of BOLD scans. Decrease minVolumes setting in dofmricni to keep. !!!',fileList(i).filename,fileList(i).h.dim(4)));
+        end
 	  end
 	end
 	% remove from list
@@ -1345,23 +1349,25 @@ end
 % examine the stimfiles that we have
 if ~isempty(stimfileListing)
   for i = 1:length(stimfileListing)
-    % remember name
-    s.stimfileInfo(end+1).name = stimfileListing{i};
-    % load the file
-    stimfile = load(fullfile(s.localDir,stimfileListing{i}));
-    % figure out tr from stimfile
-    volTrace = find(strcmp('volume',stimfile.myscreen.traceNames));
-    e = stimfile.myscreen.events;
-    s.stimfileInfo(end).tr = median(diff(e.time(e.tracenum==volTrace)));
-    % get some other info
-    s.stimfileInfo(end).startTime = stimfile.myscreen.starttime;
-    s.stimfileInfo(end).endTime = stimfile.myscreen.endtime;
-    s.stimfileInfo(end).numVols = stimfile.myscreen.volnum;
-    if isfield(stimfile.myscreen,'ignoredInitialVols')
-      s.stimfileInfo(end).ignoredInitialVols = stimfile.myscreen.ignoredInitialVols;
-    else
-      s.stimfileInfo(end).ignoredInitialVols = 0;
-    end
+      if ~isempty(strfind(stimfileListing{i},'.mat'))
+        % remember name
+        s.stimfileInfo(end+1).name = stimfileListing{i};
+        % load the file
+        stimfile = load(fullfile(s.localDir,stimfileListing{i}));
+        % figure out tr from stimfile
+        volTrace = find(strcmp('volume',stimfile.myscreen.traceNames));
+        e = stimfile.myscreen.events;
+        s.stimfileInfo(end).tr = median(diff(e.time(e.tracenum==volTrace)));
+        % get some other info
+        s.stimfileInfo(end).startTime = stimfile.myscreen.starttime;
+        s.stimfileInfo(end).endTime = stimfile.myscreen.endtime;
+        s.stimfileInfo(end).numVols = stimfile.myscreen.volnum;
+        if isfield(stimfile.myscreen,'ignoredInitialVols')
+          s.stimfileInfo(end).ignoredInitialVols = stimfile.myscreen.ignoredInitialVols;
+        else
+          s.stimfileInfo(end).ignoredInitialVols = 0;
+        end
+      end
   end
 end
 
