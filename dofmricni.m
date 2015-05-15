@@ -1351,6 +1351,7 @@ end
 % examine the stimfiles that we have
 if ~isempty(stimfileListing)
   for i = 1:length(stimfileListing)
+      % Another bugfix by dan: ###
       if ~isempty(strfind(stimfileListing{i},'.mat'))
         % remember name
         s.stimfileInfo(end+1).name = stimfileListing{i};
