@@ -166,7 +166,11 @@ roi1files{1} = hlpr_fslroi(unwarp.calfiles{1},1,1,1,1,tfolder,folder);
 roi0files = {};
 disppercent(-inf,'Calculating ROIs...');
 for i = 1:length(unwarp.EPIfiles)
-    roi0files{i} = hlpr_fslroi(unwarp.EPIfiles{i},i,0,1,1,tfolder,folder);
+    if strfind(unwarp.EPIfiles{i},'CAL')
+        disp('(fsl_pe0pe1) !!! For some reason you included a CAL file in with your EPIs. Ignoring...');
+    else
+        roi0files{i} = hlpr_fslroi(unwarp.EPIfiles{i},i,0,1,1,tfolder,folder);
+    end
     disppercent(i/length(unwarp.EPIfiles));
 end
 disppercent(inf);
