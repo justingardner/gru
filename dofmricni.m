@@ -576,8 +576,10 @@ for iBOLD = 1:length(s.boldScans)
     % write it back
     mlrImageSave(filename,d,h);
   end
-  % if there is a matching stimfile, then what are we to do
-  if length(s.stimfileMatch) >= iBOLD
+  % if there is a matching stimfile, then what are we to do ### DAN FIX:
+  % added a check for zero to avoid stimfileMatch failing to get
+  % stimfileInfo ####
+  if length(s.stimfileMatch) >= iBOLD && s.stimfileMatch(iBOLD)~=0
     % get the stimfile
     stimfile = s.stimfileInfo(s.stimfileMatch(iBOLD));
     % compute number of volumes that we *should* remove
