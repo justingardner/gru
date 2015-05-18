@@ -32,52 +32,59 @@
 %                   some initial vols that are recorded that are just calibrations). Override the setting
 %                   by putting the number of vols you want to actually remove
 %                'cleanUp=1': Sets whether to keep the temporary staging directory or not.
-%
+%                'useLocalData=0': Set this to 1 if you want to use already downloaded data
+%                   in your temp direcotry. Or set it to a string containing the path which
+%                   you want to use to get data from.
 %
 function retval = dofmricni(varargin)
 
-% todo: stimfile processing. Also would be nice to default motionComp parameters to
+% todo: Also would be nice to default motionComp parameters to
 % what we are using these days
 
 % Default arguments
-getArgs(varargin,{'stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','stimComputerName=oban','stimComputerUserName=gru','username=[]','pe0pe1=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1'});
+getArgs(varargin,{'stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','stimComputerName=oban','stimComputerUserName=gru','username=[]','pe0pe1=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1'});
 
+% clear screen
 clc;
 
-% set up system variable (which gets passed around with important system info)
-s.cniComputerName = cniComputerName;
-s.username = username;
-s.stimComputerUserName = stimComputerUserName;
-s.stimComputerName = stimComputerName;
+% set up system variable (which gets passed around with important system info) - this
+% means we have to copy these variables into s.
+sParams = {'cniComputerName','username','stimComputerUserName','stimComputerName','stimfileDir','numMotionComp','minVolumes','removeInitialVols','stimfileRemoveInitialVols','calibrationNameStrings','cleanUp','useLocalData','spoofTriggers'};
+for iParam = 1:length(sParams)
+  s.(sParams{iParam}) = eval(sParams{iParam});
+end
 s.localDataDir = mlrReplaceTilde(localDataDir);
-s.stimfileDir = stimfileDir;
-s.numMotionComp = numMotionComp;
-s.dispNiftiHeaderInfo = true;
-s.minVolumes = minVolumes;
-s.removeInitialVols = removeInitialVols;
-s.stimfileRemoveInitialVols = stimfileRemoveInitialVols;
-s.calibrationNameStrings = calibrationNameStrings;
-s.cleanUp = cleanUp;
 
-% range for te to be considered a BODL scan
-s.teLower = 25;
-s.teHigher = 35;
+% range for te to be considered a BOLD scan
+s.teLower = 20;
+s.teHigher = 40;
 
 % whether do to FSL distortion correction (which looks at images created with different directions
 % of phase enocode and figures how to stretch and compress image apropriately)
 s.pe0pe1 = pe0pe1;
 
-% check to make sure we have the computer setup correctly to run epibsi, postproc and sense
+% check to make sure we have the computer setup correctly to run
+% gunzip, FSL and other unix commands
 [tf s] = checkCommands(s);
 if ~tf,return,end
 
-% choose which directory to download from cni
-s = getCNIDir(s);
-if isempty(s.cniDir),return,end
+% check to see if we are to use downloaded data or not
+% if this is set (usually not) then we will check
+% the local temp directory, otherwise we will connect
+% to he CNI computer
+if isequal(s.useLocalData,0)
+  % choose which directory to download from cni
+  s = getCNIDir(s);
+  if isempty(s.cniDir),return,end
 
-% now move data into temporary directory on local machine so that we can analyze it
-[tf s] = getCNIData(s);
-if ~tf,return,end
+  % now move data into temporary directory on local machine so that we can analyze it
+  [tf s] = getCNIData(s);
+  if ~tf,return,end
+else
+  % get downloaded data
+  [tf s] = getLocalData(s);
+  if ~tf,return,end
+end
 
 % make sure that MLR is not running
 mlrPath mrTools;
@@ -113,10 +120,50 @@ if ~tf,return,end
 % now run mrInit
 runMrInit(s);
 
+%%%%%%%%%%%%%%%%%%%%%%
+%    getLocalData    %
+%%%%%%%%%%%%%%%%%%%%%%
+function [tf s] = getLocalData(s)
+
+tf = false;
+
+% if useLocalData is string then it means to check in that directory
+% for data
+if isstr(s.useLocalData)
+  s.localDir = mlrReplaceTilde(s.useLocalData);
+else
+  % list all directroies in temp and let user select
+  tempDir = mlrReplaceTilde(fullfile(s.localDataDir,'temp/dofmricni'));
+  tempDirListing = dir(tempDir);
+  % cycle through the tempDirListing looking for downloadedData
+  downloadedData = {};
+  for i = 1:length(tempDirListing)
+    if tempDirListing(i).isdir && ~isequal(tempDirListing(i).name(1),'.')
+      downloadedData{end+1} = tempDirListing(i).name;
+    end
+  end
+  % if now directories, then warn and return
+  if isempty(downloadedData)
+    disp(sprintf('(dofmricni) No downloaded data found in %s. Consider setting useLocalData equal to the directory that you want to use that contains directory',tempDir));
+    return
+  elseif length(downloadedData)==1
+    % just one directory, so use that
+    s.localDir = fullfile(tempDir,downloadedData{1});
+  else
+    % multiple directories, so ask the user to choose which one
+    paramsInfo = {{'localDir',downloadedData,sprintf('Directories in your %s folder which may contain downloaded data.',tempDir)}};
+    params = mrParamsDialog(paramsInfo,'Choose which directory you want to use');
+    if isempty(params),return,end
+    s.localDir = fullfile(tempDir,params.localDir);
+  end
+end
+
+tf = true;
+
 %%%%%%%%%%%%%%%%%%%%%
 %%   examineData   %%
 %%%%%%%%%%%%%%%%%%%%%
-function [tf s] = examineData(s);
+function [tf s] = examineData(s)
 
 tf = false;
 % get the list of filest that we have
@@ -223,12 +270,10 @@ boldNum = 0;
 s.seriesDescription = [];
 s.boldScans = [];
 for i = 1:length(fileList)
-  % check by whether name contains BOLD or TR is in range 
+  % check by whether name contains BOLD or TE is in range 
   if ~isempty(findstr('bold',lower(fileList(i).filename))) || (~isempty(fileList(i).te) && (fileList(i).te >= s.teLower) && fileList(i).te <= s.teHigher)
     fileList(i).bold = true;
     fileList(i).flipAngle = nan;
-    % name to be copied to
-    fileList(i).toName = setext(sprintf('bold%02i_%s',boldNum,fileList(i).filename),fileList(i).niftiExt);
     % also get receiverCoilName and sequence type info
     if isfield(fileList(i).dicomInfo,'SeriesDescription')
       % keep the first one in the list as the series description
@@ -247,7 +292,6 @@ for i = 1:length(fileList)
     boldNum = boldNum+1;
   else
     fileList(i).bold = false;
-    fileList(i).toName = '';
   end
 end
 
@@ -283,8 +327,6 @@ for i = 1:length(fileList)
       % change nifti name
       fileList(i).nifti = uncompressedFilename;
       fileList(i).niftiExt = getext(uncompressedFilename);
-      % change to name to remove gzip
-      fileList(i).toName = stripext(fileList(i).toName);
     end
   end
   disppercent(i/length(fileList));
@@ -292,71 +334,74 @@ end
 disppercent(inf);
 
 % read nifti headers
-if s.dispNiftiHeaderInfo
-  % initialze to know calibration files
-  s.calibrationFile = [];
-  disppercent(-inf,'(dofmricni) Reading nifti headers');
-  for i = 1:length(fileList)
-    if ~isempty(fileList(i).nifti)
-      system(sprintf('chmod 644 %s',fileList(i).nifti));
-      fileList(i).h = mlrImageHeaderLoad(fileList(i).nifti);
-    else
-      fileList(i).h = [];
-    end
-    % get other info from description field
-    if isfield(fileList(i).h,'hdr') && isfield(fileList(i).h.hdr,'descrip')
-      descrip = fileList(i).h.hdr.descrip;
-      % parse it
-      while ~isempty(descrip)
-	[thisVar descrip] = strtok(descrip,';');
-	[varName varValue] = strtok(thisVar,'=');
-	if ~isempty(deblank(varName))
-	  fileList(i).descrip.(varName) = str2num(varValue(2:end));
-	end
+% initialze to know calibration files
+s.calibrationFile = [];
+disppercent(-inf,'(dofmricni) Reading nifti headers');
+for i = 1:length(fileList)
+  if ~isempty(fileList(i).nifti)
+    system(sprintf('chmod 644 %s',fileList(i).nifti));
+    fileList(i).h = mlrImageHeaderLoad(fileList(i).nifti);
+  else
+    fileList(i).h = [];
+  end
+  % get other info from description field
+  if isfield(fileList(i).h,'hdr') && isfield(fileList(i).h.hdr,'descrip')
+    descrip = fileList(i).h.hdr.descrip;
+    % parse it
+    while ~isempty(descrip)
+      [thisVar descrip] = strtok(descrip,';');
+      [varName varValue] = strtok(thisVar,'=');
+      if ~isempty(deblank(varName))
+	fileList(i).descrip.(varName) = str2num(varValue(2:end));
       end
     end
-    % get flip angle
-    if isfield(fileList(i),'descrip') && isfield(fileList(i).descrip,'fa')
-      fileList(i).flipAngle = fileList(i).descrip.fa;
-    end
-    % check if this is a bold
-    if fileList(i).bold
-      % if it is and we do not have a nifti header then remove from list
-      % or if we have too few volumes
-      if isempty(fileList(i).h) || size(fileList(i).h.dim,2) < 4 || (fileList(i).h.dim(4) < s.minVolumes)
-	if isempty(fileList(i).h)
-	  disp(sprintf('(dofmricni) !!! Scan %s has no nifti header, removing from list of BOLD scans !!!',fileList(i).filename));
-	else
-	  % see if this is a calibration scan
-	  calibrationFile = false;
-	  for iString = 1:length(s.calibrationNameStrings)
-	    if ~isempty(findstr(fileList(i).filename,s.calibrationNameStrings{iString}))
-	      calibrationFile = true;
-	      s.calibrationFile(end+1) = i;
-	      break;
-	    end
-	  end
-	  % if it is not a calibration scan then tell user we are dropping
-	  if ~calibrationFile
-        if size(fileList(i).h.dim,2) < 4
-          disp(sprintf('\n(dofmricni) !!! Scan %s has 0 volumes, removing from list of BOLD scans.',fileList(i).filename));
-        else
-	      disp(sprintf('\n(dofmricni) !!! Scan %s has only %i volumes, removing from list of BOLD scans. Decrease minVolumes setting in dofmricni to keep. !!!',fileList(i).filename,fileList(i).h.dim(4)));
-        end
-	  end
-	end
-	% remove from list
+  end
+  % get flip angle
+  if isfield(fileList(i),'descrip') && isfield(fileList(i).descrip,'fa')
+    fileList(i).flipAngle = fileList(i).descrip.fa;
+  end
+  % see if this is a calibration scan
+  calibrationFile = false;
+  for iString = 1:length(s.calibrationNameStrings)
+    if ~isempty(findstr(fileList(i).filename,s.calibrationNameStrings{iString}))
+      calibrationFile = true;
+      s.calibrationFile(end+1) = i;
+      % remove it from the bold list
+      if fileList(i).bold
 	fileList(i).bold = false;
 	s.boldScans = setdiff(s.boldScans,i);
       end
+      % set its too name
+      fileList(i).toName = sprintf('%02i_CAL_%s',length(s.calibrationFile),getLastDir(fileList(i).nifti));
     end
-    disppercent(i/length(fileList));
   end
-  disppercent(inf);
-else
-  for i = 1:length(fileList)
-    fileList(i).h = [];
+  % check if this is a bold
+  if fileList(i).bold
+    % if it is and we do not have a nifti header then remove from list
+    % or if we have too few volumes
+    if isempty(fileList(i).h) || size(fileList(i).h.dim,2) < 4 || (fileList(i).h.dim(4) < s.minVolumes)
+      if isempty(fileList(i).h)
+	disp(sprintf('(dofmricni) !!! Scan %s has no nifti header, removing from list of BOLD scans !!!',fileList(i).filename));
+      else
+	% tell  user we are dropping
+	if size(fileList(i).h.dim,2) < 4
+	  disp(sprintf('\n(dofmricni) !!! Scan %s has 0 volumes, removing from list of BOLD scans.',fileList(i).filename));
+	else
+	  disp(sprintf('\n(dofmricni) !!! Scan %s has only %i volumes, removing from list of BOLD scans. Decrease minVolumes setting in dofmricni to keep. !!!',fileList(i).filename,fileList(i).h.dim(4)));
+	end
+      end
+      % remove from list
+      fileList(i).bold = false;
+      s.boldScans = setdiff(s.boldScans,i);
+    end
   end
+  disppercent(i/length(fileList));
+end
+disppercent(inf);
+
+% set the bold scans toName
+for iBOLD = 1:length(s.boldScans)
+  fileList(s.boldScans(iBOLD)).toName = sprintf('%03i_BOLD_%s',iBOLD,getLastDir(fileList(s.boldScans(iBOLD)).nifti));
 end
 
 % get the subject id
@@ -367,8 +412,11 @@ if isempty(s.subjectID)
   s.subjectID = gruSubjectNum2ID(params.subjectID);
 end
 
+% set experiment name
+s.experimentName = s.studyDate;
+
 % get name of directory to copy
-s.localSessionDir = fullfile(s.localDataDir,fileparts(s.cniDir),sprintf('%s%s',s.subjectID,s.studyDate));
+s.localSessionDir = fullfile(s.localDataDir,s.experimentName,sprintf('%s%s',s.subjectID,s.studyDate));
 
 % confirm with user
 mrParams = {{'localSessionDir',s.localSessionDir,'Where your data will get stored'}};
@@ -531,7 +579,8 @@ else
     if length(s.unwarp.calfiles) > 1
       % display list
       for i = 1:length(s.unwarp.calfiles)
-	disp(sprintf('%i: %s',i,s.unwarp.calfiles{i}));
+	calibFile = s.fileList(s.calibrationFile(i));
+	disp(sprintf('%i: %s (dims=[%s] tr:%0.1f te:%0.1f start: %s)',i,calibFile.filename,mlrnum2str(calibFile.h.dim,'sigfigs=0'),calibFile.tr,calibFile.te,calibFile.startDate));
       end
       calnum = getnum('(dofmricni) Which scan do you want to use for fsl unwarping calibration scan: ',1:length(s.unwarp.calfiles));
       s.unwarp.calfiles = {s.unwarp.calfiles{calnum}};
@@ -579,38 +628,229 @@ for iBOLD = 1:length(s.boldScans)
   % if there is a matching stimfile, then what are we to do ### DAN FIX:
   % added a check for zero to avoid stimfileMatch failing to get
   % stimfileInfo ####
-  if length(s.stimfileMatch) >= iBOLD && s.stimfileMatch(iBOLD)~=0
-    % get the stimfile
-    stimfile = s.stimfileInfo(s.stimfileMatch(iBOLD));
-    % compute number of volumes that we *should* remove
-    removeVols = s.stimfileRemoveInitialVols;
-    if isempty(removeVols)
-      % remove number of volumes to make the stimfile match in length to
-      % the bold scan
-      removeVols = stimfile.numVols-nVolsAfter;
-      % check if we have enough
-      if removeVols<0
-	dispConOrLog(sprintf('  !!! %s has recorded volumes (%i + %i ignored) this is less than the scan (%i) !!!',stimfile.name,stimfile.numVols,stimfile.ignoredInitialVols,nVolsAfter));
-	removeVols = 0;
+  if ~justDisplay && length(s.stimfileMatch) >= iBOLD && s.stimfileMatch(iBOLD)~=0
+    % get the stimfile info
+    fixStimfileTriggers(s,s.stimfileMatch(iBOLD),boldScan,justDisplay);
+  end
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    fixStimfileTriggers    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function s = fixStimfileTriggers(s,stimfileNum,boldScan,justDisplay)
+
+% get the stimfile info
+stimfileInfo = s.stimfileInfo(stimfileNum);
+
+% number of volumes we should remove
+removeVols = s.stimfileRemoveInitialVols;
+
+% get the mux factor
+if isfield(boldScan,'mux') && ~isempty(boldScan.mux)
+  mux = boldScan.mux;
+else
+  mux = 1;
+end
+
+% info about scan
+nVols = boldScan.h.dim(4);
+nSlices = boldScan.h.dim(3);
+
+% check to see if we are closer to the number of volumes
+% or number of volumes * slices/mux 
+if abs(stimfileInfo.numVols-nVols) < abs(stimfileInfo.numVols-nVols*nSlices/mux)
+  % we had a trigger for every slice
+  triggerEverySlice = true;
+else
+  triggerEverySlice = false;
+end
+
+% check whether the correct number of initial volumes were received
+% We expect mux * calibration volumes (which is usually 2 - passed in argument)
+if triggerEverySlice
+  calibrationTriggers = boldScan.mux*s.removeInitialVols;
+else
+  calibrationTriggers = nSlices*s.removeInitialVols;
+end
+
+% now check to see if it matches
+if stimfileInfo.ignoredInitialVols ~= calibrationTriggers
+  if triggerEverySlice
+    dispConOrLog(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to nSlices*initialVolumes %ix%i=%i but was set to %i',nSlices,s.removeInitialVols,calibrationTriggers,stimfileInfo.ignoredInitialVols),justDisplay);
+  else
+    dispConOrLog(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to mux*initialVolumes %ix%i=%i, but was set to %i',boldScan.mux,s.removeInitialVols,calibrationTriggers,stimfileInfo.ignoredInitialVols),justDisplay);
+  end
+  disp(sprintf('!!! Need to write code to fix this - show this to Justin...!!!'));
+  keyboard
+end
+
+% calculate how many acq pulses we expect
+if triggerEverySlice
+  acqTriggers = nVols-s.removeInitialVols;
+else
+  acqTriggers = (nVols-s.removeInitialVols)*nSlices/mux;
+end
+
+% and see if we have a match. If not, we will fix them
+if (acqTriggers ~= stimfileInfo.numVols) || (s.spoofTriggers && triggerEverySlice)
+  % display warning
+  dispConOrLog(sprintf('%s (%i vols)',boldScan.filename,boldScan.h.dim(4)-s.removeInitialVols));
+  dispConOrLog(sprintf('(dofmricni) !!! Stimfile expected to have %i acquisiton triggers but had %i !!!',acqTriggers,stimfileInfo.numVols));
+  % get the stimfile directory
+  if justDisplay
+    stimfileDir = s.localDir;
+  else
+    stimfileDir = fullfile(s.localSessionDir,'Etc');
+  end
+  % and load the stimfile
+  stimfileName = fullfile(stimfileDir,stimfileInfo.name);
+  stimfile = load(stimfileName);
+  % get volume events
+  e = stimfile.myscreen.events;
+  volTrace = find(strcmp('volume',stimfile.myscreen.traceNames));
+  volEvents = find(e.tracenum==volTrace);
+  volTimes = e.time(volEvents);
+  % fix the triggers by spoofing
+  if s.spoofTriggers
+    if justDisplay 
+      if askuser('Do you want to fix the acq triggers')
+	s.stimfileInfo(stimfileNum).fixAcq = true;
+      else
+	s.stimfileInfo(stimfileNum).fixAcq = false;
+      end
+    else
+      % otherwise fix
+      if stimfileInfo.fixAcq
+	% remove all volumes, but the first
+	%    stimfile = removeVols(stimfile,2:stimfileInfo.numVols);
+	% now add volumes for where events should have happened
+	framePeriod = boldScan.tr/1000;
+	dispConOrLog(sprintf('(dofmricni) Spoofing volumes every %s in %s',num2str(framePeriod),stimfileName));
+        % get all the volumes we need to add, and add them
+	addTimes = (volTimes(1)+framePeriod):framePeriod:volTimes(1)+(acqTriggers-1)*framePeriod;
+	stimfile = addVolEvents(stimfile,addTimes);
+	% save the stimfile back
+	save(stimfileName,'-struct','stimfile');
       end
     end
-    % We expect mux * calibration volumes (which is usually 2 - passed in argument)
-    if isfield(boldScan,'mux') && ~isempty(boldScan.mux)
-      calibrationPulses = boldScan.mux*s.removeInitialVols;
-      % now check if everything matches
-      if stimfile.ignoredInitialVols ~= calibrationPulses
-	disp(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to %i but was set to %i',calibrationPulses,stimfile.ignoredInitialVols));
-      end
+  else
+    % this is some long-winded code, that tries to find where the
+    % missing volumes are from and put them back in, but i think
+    % it is easier to just spoof them
+    
+    % calculate number missing
+    numMiss = acqTriggers-stimfileInfo.numVols;
+    % calculate the difference in time between each acquisition pulse
+    volTimesDiff = diff(volTimes);
+    medianVolDiff = median(volTimesDiff);
+    stdVolDiff = std(volTimesDiff);
+    % look for possible missing values as ones that are greater than some standard
+    % deviations longer than expected (num standard deviations is arbitrary so )
+    % try a few
+    nStd = 1;
+    numMissAcq = inf;
+    while (sum(numMissAcq)>numMiss) && (nStd < 10)
+      missAcq = find(volTimesDiff > (nStd*stdVolDiff+medianVolDiff));
+      % now try to figure out how many acquisitions are missing for these
+      numMissAcq = round(volTimesDiff(missAcq)/medianVolDiff)-1;
+      % up the nStd to make it more stringent
+      nStd = nStd+1;
     end
-    dispConOrLog(sprintf('  ->%s : Removing %i volumes',stimfile.name,removeVols));
-    if ~justDisplay
-      % now, go ahead and remove them
-      if removeVols 
-	removeTriggers(fullfile(s.localSessionDir,'Etc',stimfile.name),1:removeVols);
+    % check to see if we have fixed the problems
+    if numMiss ~= sum(numMissAcq)
+      % if not, maybe the stimfile ended before the end of the scan
+      if (stimfile.myscreen.endtimeSecs - volTimes(end)) < (2*medianVolDiff)
+	% calculate number of missing vols
+	numMissVolsAtEnd = (nVols-s.removeInitialVols)-round((volTimes(end)-volTimes(1))/(boldScan.tr/1000));
+	dispConOrLog(sprintf('(dofmricni) Stimfile likely ended %i volumes before scan',numMissVolsAtEnd),justDisplay);
+      else
+	% let the user know that there was a mismatch
+	dispConOrLog(sprintf('(dofmricni) !!! Found %i missing triggers, but expected to find %i',sum(numMissAcq),numMiss),justDisplay);
+      end
+    else
+      dispConOrLog(sprintf('(dofmricni) Found all of the %i missing triggers',numMiss),justDisplay);
+    end
+    % if just display, then ask user if we should fix
+    if justDisplay 
+      if askuser('Do you want to fix the acq triggers')
+	s.stimfileInfo(stimfileNum).fixAcq = true;
+      else
+	s.stimfileInfo(stimfileNum).fixAcq = false;
+      end
+    else
+      % otherwise fix
+      if stimfileInfo.fixAcq
+	for iMiss = 1:length(missAcq)
+	  thisMiss = missAcq(iMiss);
+	  % get the spacing for our artificial event
+	  spacing = (volTimes(thisMiss+1)-volTimes(thisMiss))/(numMissAcq(iMiss)+1);
+	  % get times to add
+	  addTimes = volTimes(thisMiss) + spacing*(1:numMissAcq(iMiss));
+	  % and add them
+	  for i = 1:length(addTimes)
+	    stimfile = addVolEvents(stimfile,addTimes(i));
+	  end
+	end
+	% This all should work, but giving up here since this seems like a god awful mess
+	% to fix the triggers this way (i.e. sometimes we can't find a good place for
+	% some of the missing triggers
+	disp(sprintf('(dofmricni) This code works here, but the file needs to be saved and tested'));
+	keyboard
       end
     end
   end
 end
+
+%keyboard
+%if removeVols 
+%  removeTriggers(fullfile(s.localSessionDir,'Etc',stimfileInfo.name),1:removeVols);
+%end
+
+%%%%%%%%%%%%%%%%%%%%%%
+%    addVolEvents    %
+%%%%%%%%%%%%%%%%%%%%%%
+function stimfile = addVolEvents(stimfile,addVolTimes)
+
+% shortcut
+e = stimfile.myscreen.events;
+times = e.time(1:e.n);
+
+% cycle over all vol times to be added
+for i = 1:length(addVolTimes)
+  volTime = addVolTimes(i);
+  % get the event number where we want to insert the event
+  addNum = last(find(times<volTime))+1;
+  lastEntry = addNum-1;
+  nextEntry = min(addNum,e.n);
+  if isempty(addNum),addNum=1;lastEntry=1;end
+  % get time of this event relative to the ones before it
+  % and after it (i.e. 0 if same as last event, 1 if same
+  % as next event.
+  thisFraction = (volTime-e.time(lastEntry))/(e.time(nextEntry)-e.time(lastEntry));
+  % add the event
+  e.n = e.n+1;
+  e.tracenum = [e.tracenum(1:addNum-1) 1 e.tracenum(addNum:end)];
+  e.data = [e.data(1:addNum-1) 1 e.data(addNum:end)];
+  % get interpolated ticknum
+  ticknum = round(e.ticknum(lastEntry)+thisFraction*(e.ticknum(nextEntry)-e.ticknum(lastEntry)));
+  e.ticknum = [e.ticknum(1:addNum-1) ticknum e.ticknum(addNum:end)];
+  e.volnum = [e.volnum(1:addNum-1) e.volnum(lastEntry) e.volnum(addNum:end)+1];
+  e.time = [e.time(1:addNum-1) volTime e.time(addNum:end)];
+  e.force = [e.force(1:addNum-1) 1 e.force(addNum:end)];
+end
+
+% put update events back into structure
+stimfile.myscreen.events = e;
+
+% record times of events that have been added
+if ~isfield(stimfile.myscreen,'addVolTimes')
+  stimfile.myscreen.addVolTimes = [];
+end
+stimfile.myscreen.addVolTimes(end+1:end+length(addVolTimes)) = addVolTimes;
+
+% update number of volumes
+stimfile.myscreen.volnum = stimfile.myscreen.volnum+length(addVolTimes);
+
 
 %%%%%%%%%%%%%%%%%%
 %%   moveData   %%
@@ -796,7 +1036,7 @@ if nargin < 2,justDisplay = true;end
 dispStr = {};
 for i = 1:length(s.fileList)
   if ~isinf(s.fileList(i).startTime)
-    if s.dispNiftiHeaderInfo && ~isempty(s.fileList(i).h)
+    if ~isempty(s.fileList(i).h)
       pixdim = s.fileList(i).h.pixdim;
       dim = s.fileList(i).h.dim;
       flipAngle = s.fileList(i).flipAngle;
@@ -1286,67 +1526,71 @@ tf = false;
 % stimfile info
 s.stimfileInfo = {};
 
-% get experiment name
-s.experimentName = fileparts(s.cniDir);
 % get stimfile stem
 s.stimfileStem = s.studyDate(3:end);
 
-% first get experiment folders on stimulus computer
-dataListing = doRemoteCommand(s.stimComputerUserName,s.stimComputerName,sprintf('find data ''-type'' d ''-print'''));
+% if not using local directory, go find the stimfiles
+if ~s.useLocalData
+  % first get experiment folders on stimulus computer
+  dataListing = doRemoteCommand(s.stimComputerUserName,s.stimComputerName,sprintf('find data ''-type'' d ''-print'''));
 
-% look for correct directory
-stimfileListing = [];
-while (~isempty(dataListing))
-  [thisListing,dataListing] = strtok(dataListing);
-  % find data directory
-  [dataDir,thisListing] = strtok(thisListing,filesep);
-  [dataDir,thisListing] = strtok(thisListing,filesep);
-  if ~isempty(dataDir)
-    % get subject dir
-    [subjectDir,thisListing] = strtok(thisListing,filesep);
-    if ~isempty(subjectDir)
-      % check for match
-      if isequal(gruSubjectID2num(subjectDir),gruSubjectID2num(s.subjectID)) && strcmp(lower(dataDir),lower(s.experimentName))
-	% now try to get the stimfiles
-	s.stimDataDir = fullfile('data',dataDir,subjectDir,s.stimfileStem);
-	stimfileListing = getRemoteListing(s.stimComputerUserName,s.stimComputerName,sprintf('%s*.mat',s.stimDataDir));
-	break;
+  % look for correct directory
+  stimfileListing = [];
+  while (~isempty(dataListing))
+    [thisListing,dataListing] = strtok(dataListing);
+    % find data directory
+    [dataDir,thisListing] = strtok(thisListing,filesep);
+    [dataDir,thisListing] = strtok(thisListing,filesep);
+    if ~isempty(dataDir)
+      % get subject dir
+      [subjectDir,thisListing] = strtok(thisListing,filesep);
+      if ~isempty(subjectDir)
+	% check for match
+	if isequal(gruSubjectID2num(subjectDir),gruSubjectID2num(s.subjectID)) && strcmp(lower(dataDir),lower(s.experimentName))
+	  % now try to get the stimfiles
+	  s.stimDataDir = fullfile('data',dataDir,subjectDir,s.stimfileStem);
+	  stimfileListing = getRemoteListing(s.stimComputerUserName,s.stimComputerName,sprintf('%s*.mat',s.stimDataDir));
+	  break;
+	end
       end
     end
   end
-end
 
-if ~isempty(stimfileListing)
-  % ask user if these are correct
-  paramsInfo = {};
-  if strcmp(questdlg(sprintf('Found %i stimfiles in directory: %s. Use these?',length(stimfileListing),s.stimDataDir),'Confirm stimfile directory','Yes','No','Yes'),'Yes')
-    % get the files
-    getRemoteFiles(s.stimComputerUserName,s.stimComputerName,sprintf('%s*.mat',s.stimDataDir),s.localDir);
-  else
-    stimfileListing = [];
-  end
-end
-
-% if could not find from above, then ask user to input a name
-while isempty(stimfileListing)
-  paramsInfo = {};
-  paramsInfo{end+1} = {'computerName',s.stimComputerName,'Name of computer where files are located'};
-  paramsInfo{end+1} = {'computerUserName',s.stimComputerUserName,'Name of user on computer for ssh login'};
-  paramsInfo{end+1} = {'stimfileStem',s.stimfileStem,'The base of the stimfile names'};
-  paramsInfo{end+1} = {'dataDir',fullfile('data',s.experimentName,s.subjectID),'Name of directory on %s where stimfiles are located'};
-  params = mrParamsDialog(paramsInfo,sprintf('Indicate location of stimfiles'));
-  if isempty(params),break,end
-  stimfileListing = getRemoteListing(params.computerUserName,params.computerName,fullfile(params.dataDir,sprintf('%s*.mat',params.stimfileStem)));
   if ~isempty(stimfileListing)
-    % get the listing
-    stimfileListing = getRemoteFiles(params.computerUserName,params.computerName,fullfile(params.dataDir,sprintf('%s*.mat',params.stimfileStem)),s.localDir);
-    s.stimComputerName = params.computerName;
-    s.stimComputerUserName = params.computerUserName;
-    s.stimDataDir = params.dataDir;
-    s.stimfileStem = params.stimfileStem;
+    % ask user if these are correct
+    paramsInfo = {};
+    if strcmp(questdlg(sprintf('Found %i stimfiles in directory: %s. Use these?',length(stimfileListing),s.stimDataDir),'Confirm stimfile directory','Yes','No','Yes'),'Yes')
+								 % get the files
+								 getRemoteFiles(s.stimComputerUserName,s.stimComputerName,sprintf('%s*.mat',s.stimDataDir),s.localDir);
+    else
+      stimfileListing = [];
+    end
   end
-end
 
+  % if could not find from above, then ask user to input a name
+  while isempty(stimfileListing)
+    paramsInfo = {};
+    paramsInfo{end+1} = {'computerName',s.stimComputerName,'Name of computer where files are located'};
+    paramsInfo{end+1} = {'computerUserName',s.stimComputerUserName,'Name of user on computer for ssh login'};
+    paramsInfo{end+1} = {'stimfileStem',s.stimfileStem,'The base of the stimfile names'};
+    paramsInfo{end+1} = {'dataDir',fullfile('data',s.experimentName,s.subjectID),'Name of directory on %s where stimfiles are located'};
+    params = mrParamsDialog(paramsInfo,sprintf('Indicate location of stimfiles'));
+    if isempty(params),break,end
+    stimfileListing = getRemoteListing(params.computerUserName,params.computerName,fullfile(params.dataDir,sprintf('%s*.mat',params.stimfileStem)));
+    if ~isempty(stimfileListing)
+      % get the listing
+      stimfileListing = getRemoteFiles(params.computerUserName,params.computerName,fullfile(params.dataDir,sprintf('%s*.mat',params.stimfileStem)),s.localDir);
+      s.stimComputerName = params.computerName;
+      s.stimComputerUserName = params.computerUserName;
+      s.stimDataDir = params.dataDir;
+      s.stimfileStem = params.stimfileStem;
+    end
+  end
+else
+  % local files then just get a listing
+  stimfileDir = dir(fullfile(s.localDir,sprintf('%s_stim*.mat',s.stimfileStem)));
+  stimfileListing = {stimfileDir(:).name};
+end
 
 % examine the stimfiles that we have
 if ~isempty(stimfileListing)
@@ -1413,23 +1657,25 @@ if length(s.boldScans) && length(s.stimfileInfo)
   end
 end
 
-isMatched = false;
-while ~isMatched
-  % show match
-  dispStimfileMatch(s,stimfileMatch,true)
-  % ask user if this is ok
-  if askuser(sprintf('(dofmricni) Do you accept this matching of bold files to stimfiles?'))==1
-    break;
-  else
-    stimfileMatch = [];
-    while length(stimfileMatch) ~= length(s.boldScans)
-      % get what the user wants
-      stimfileMatch = getnum(sprintf('(dofmricni) Enter a numeric array for the stimfiles you want to match to each of these bold scans. Set entries to 0 for bold scans you do not want to match to any stimfile. This must be an array of length %i (set to -1 if you do not want to match): ',length(s.boldScans)));
-      if isequal(stimfileMatch,-1),isMatched=true;stimfileMatch=[];break,end
-      % check length
-      if any(stimfileMatch>length(s.stimfileInfo)) || any(stimfileMatch<0)
-	disp(sprintf('(dofmricni) !!! Each element must be 0 or a number between 1:%i !!!',length(s.stimfileInfo)))
-	stimfileMatch = [];
+if ~isempty(s.stimfileInfo)
+  isMatched = false;
+  while ~isMatched
+    % show match
+    dispStimfileMatch(s,stimfileMatch,true)
+    % ask user if this is ok
+    if askuser(sprintf('(dofmricni) Do you accept this matching of bold files to stimfiles?'))==1
+      break;
+    else
+      stimfileMatch = [];
+      while length(stimfileMatch) ~= length(s.boldScans)
+	% get what the user wants
+	stimfileMatch = getnum(sprintf('(dofmricni) Enter a numeric array for the stimfiles you want to match to each of these bold scans. Set entries to 0 for bold scans you do not want to match to any stimfile. This must be an array of length %i (set to -1 if you do not want to match): ',length(s.boldScans)));
+	if isequal(stimfileMatch,-1),isMatched=true;stimfileMatch=[];break,end
+	% check length
+	if any(stimfileMatch>length(s.stimfileInfo)) || any(stimfileMatch<0)
+	  disp(sprintf('(dofmricni) !!! Each element must be 0 or a number between 1:%i !!!',length(s.stimfileInfo)))
+	  stimfileMatch = [];
+	end
       end
     end
   end
@@ -1439,10 +1685,27 @@ end
 s.stimfileMatch = stimfileMatch;
 tf = true;
 
+% check for correct number of volumes
+if ~isempty(stimfileMatch)
+  clc
+  for iBOLD = 1:length(s.boldScans)
+    % get scan info
+    boldScan = s.fileList(s.boldScans(iBOLD));
+    % if there is a matching stimfile, then check whether it needs to have
+    % its volumes fixed
+    if length(s.stimfileMatch) >= iBOLD && s.stimfileMatch(iBOLD)~=0
+      % get the stimfile info
+      s = fixStimfileTriggers(s,s.stimfileMatch(iBOLD),boldScan,1);
+    end
+  end
+end
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    dispStimfileMatch    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 function dispStimfileMatch(s,stimfileMatch,dispAvailable)
+
+if isempty(stimfileMatch),return,end
 
 if nargin == 2,dispAvailable=true;end
 if dispAvailable
@@ -1461,11 +1724,16 @@ end
 
 % propose the match to the user
 for iBOLD = 1:length(s.boldScans)
+  % get the scan info
+  bold = s.fileList(s.boldScans(iBOLD));
+  % if we have a match, display it
   if stimfileMatch(iBOLD) ~= 0
     % stimfile info for this stimfile
     stimfile = s.stimfileInfo(stimfileMatch(iBOLD));
-    bold = s.fileList(s.boldScans(iBOLD));
     disp(sprintf('%i->%i: %s (%i vols %s) -> %s (%i vols %s %s)',iBOLD,stimfileMatch(iBOLD),bold.filename,bold.h.dim(4),bold.startDate,stimfile.name,stimfile.numVols,stimfile.startTime,stimfile.endTime));
+  else
+    % otherwise display no match
+    disp(sprintf('%i->X: %s (%i vols %s) -> None',iBOLD,bold.filename,bold.h.dim(4),bold.startDate));
   end
 end
 
