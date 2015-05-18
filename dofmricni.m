@@ -464,7 +464,12 @@ cd(s.localSessionDir);
 
 % create stimfile list to pass into mrInit
 for i = 1:length(s.stimfileMatch)
-  stimfileMatchList{i} = s.stimfileInfo(s.stimfileMatch(i)).name;
+  if s.stimfileMatch(i)~=0
+    stimfileMatchList{i} = s.stimfileInfo(s.stimfileMatch(i)).name;
+  else
+    % no match
+    stimfileMatchList{i} = 'None';
+  end
 end
 
 % initialize parameters
