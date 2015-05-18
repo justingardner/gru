@@ -20,9 +20,13 @@
 %                'numMotionComp=1': Set to 0 if you don't want to run MLR motion comp. Set to > 1 if you want
 %                    to set multiple motionComp parameters (e.g. for motionComping two sets of scans taken at
 %                    different resolutions)
-%                'pe0pe1=1': Set to 0 if you do not want to run FSL distortion correction
+%                'unwarp=1': Set to 0 if you do not want to run FSL distortion correction (which looks at
+%                    images created with different phase encode directions - you need a calibration image
+%                    with phase encode taken in the opposite direction as in your main data set, see 
+%                    calibrationNameStrings below for how it should be named. Then FSL uses the different
+%                    images to decide how how to stretch and compress image apropriately to undo distortions
 %                'calibrationNameStrings={'CAL','pe0'}: If these strings are in the filename, then it will
-%                   assume these are calibrations for use with the pe0pe1 correction
+%                   assume these are calibrations for use with the FSL unwarp correction
 %                'minVolumes=10': Ignores scans that have less than this number of volumes
 %                'removeInitialVols=2': Will remove this many initial volumes (steady-states) and correct stimfile
 %                   to match. Note that setting to 0 will correct stimfile. Set to [] if you do not want to correct
@@ -42,14 +46,14 @@ function retval = dofmricni(varargin)
 % what we are using these days
 
 % Default arguments
-getArgs(varargin,{'stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','stimComputerName=oban','stimComputerUserName=gru','username=[]','pe0pe1=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1'});
+getArgs(varargin,{'stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','stimComputerName=oban','stimComputerUserName=gru','username=[]','unwarp=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1'});
 
 % clear screen
 clc;
 
 % set up system variable (which gets passed around with important system info) - this
 % means we have to copy these variables into s.
-sParams = {'cniComputerName','username','stimComputerUserName','stimComputerName','stimfileDir','numMotionComp','minVolumes','removeInitialVols','stimfileRemoveInitialVols','calibrationNameStrings','cleanUp','useLocalData','spoofTriggers'};
+sParams = {'cniComputerName','username','stimComputerUserName','stimComputerName','stimfileDir','numMotionComp','minVolumes','removeInitialVols','stimfileRemoveInitialVols','calibrationNameStrings','cleanUp','useLocalData','spoofTriggers','unwarp'};
 for iParam = 1:length(sParams)
   s.(sParams{iParam}) = eval(sParams{iParam});
 end
@@ -58,10 +62,6 @@ s.localDataDir = mlrReplaceTilde(localDataDir);
 % range for te to be considered a BOLD scan
 s.teLower = 20;
 s.teHigher = 40;
-
-% whether do to FSL distortion correction (which looks at images created with different directions
-% of phase enocode and figures how to stretch and compress image apropriately)
-s.pe0pe1 = pe0pe1;
 
 % check to make sure we have the computer setup correctly to run
 % gunzip, FSL and other unix commands
@@ -104,8 +104,8 @@ if ~tf,return,end
 if ~tf,return,end
 
 % setup FSL distortion correction
-if s.pe0pe1
-  [tf s] = doFSLpe0pe1(s);
+if s.unwarp
+  [tf s] = doFSLunwarp(s);
   if ~tf,return,end
 end
 
@@ -509,15 +509,14 @@ if ~isempty(v)
   deleteView(v);
 end
 
-% set up motion comp parameters
-%for i = 1:numMotionComp
-%  v = newView;
-%  if ~isempty(v)
-%    [v params] = motionComp(v,[],'justGetParams=1');
-%    deleteView(v);
-%    eval(sprintf('save motionCompParams%i params',i));
-%  end
-%end
+% run motion comp
+for i = 1:s.numMotionComp
+  v = newView;
+  if ~isempty(v)
+    [v params] = motionComp(v,[],'justGetParams=1');
+    keyboard
+  end
+end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %    removeTempFiles    %
@@ -583,16 +582,16 @@ else
 end  
 
 %%%%%%%%%%%%%%%%%%%%%
-%%   doFSLpe0pe1   %%
+%%   doFSLunwarp   %%
 %%%%%%%%%%%%%%%%%%%%%
-function [tf s] = doFSLpe0pe1(s,doit)
+function [tf s] = doFSLunwarp(s,doit)
 
 tf = true;
 if nargin < 2, doit = false;end
 
 % set unwarp to the files the calibration file we found, and 
 if isempty(s.calibrationFile)
-  dispConOrLog(sprintf('(dofmricni:doFSLpe0pe1) !!! No calibration file found. Skipping unwarping !!!!',~doit));
+  dispConOrLog(sprintf('(dofmricni:doFSLunwarp) !!! No calibration file found. Skipping unwarping !!!!',~doit));
   return
 else
   if ~isfield(s,'unwarp')
@@ -625,7 +624,7 @@ else
 end
 
 % now actually do it
-if doit && s.pe0pe1
+if doit && s.unwarp
   retval = fsl_pe0pe1(fullfile(s.localSessionDir,'Pre'),s.unwarp);
 end
 
@@ -654,9 +653,19 @@ for iBOLD = 1:length(s.boldScans)
   % if there is a matching stimfile, then what are we to do ### DAN FIX:
   % added a check for zero to avoid stimfileMatch failing to get
   % stimfileInfo ####
-  if ~justDisplay && length(s.stimfileMatch) >= iBOLD && s.stimfileMatch(iBOLD)~=0
-    % get the stimfile info
-    fixStimfileTriggers(s,s.stimfileMatch(iBOLD),boldScan,justDisplay);
+  if length(s.stimfileMatch) >= iBOLD && s.stimfileMatch(iBOLD)~=0
+    % get stimfileInfo for this trial
+    stimfileInfo = s.stimfileInfo(s.stimfileMatch(iBOLD));
+    % it should have already been called when we matched stimfile
+    % to check if we need to fixAcq, so display that info here
+    if isfield(stimfileInfo,'fixAcq') && stimfileInfo.fixAcq
+      dispConOrLog(sprintf('  Fixing acq triggers = %i for associated stimfile: %s (old values->ignoredInitialVols: %i nVols: %i)',nVolsAfter,stimfileInfo.name,stimfileInfo.ignoredInitialVols,stimfileInfo.numVols),justDisplay);
+    end
+    % actually do the change
+    if ~justDisplay 
+      % fix stimfile
+      fixStimfileTriggers(s,s.stimfileMatch(iBOLD),boldScan,justDisplay);
+    end
   end
 end
 
@@ -754,7 +763,7 @@ if (acqTriggers ~= stimfileInfo.numVols) || (s.spoofTriggers && triggerEverySlic
 	stimfile = removeTriggers(stimfile,2:stimfileInfo.numVols);
 	% now add volumes for where events should have happened
 	framePeriod = boldScan.tr/1000;
-	dispConOrLog(sprintf('(dofmricni) Spoofing volumes every %s in %s',num2str(framePeriod),stimfileName));
+	dispConOrLog(sprintf('(dofmricni) Spoofing volumes every %ss in %s',num2str(framePeriod),stimfileName));
         % get all the volumes we need to add, and add them
 	addTimes = (volTimes(1)+framePeriod):framePeriod:volTimes(1)+(acqTriggers-1)*framePeriod;
 	stimfile = addVolEvents(stimfile,addTimes);
@@ -897,9 +906,9 @@ for i = 1:length(s.fileList)
 end
 
 % distortion correction with fsl
-if s.pe0pe1
+if s.unwarp
   dispConOrLog(sprintf('=============================================='),justDisplay,true);
-  dispConOrLog(sprintf('FSL distortion correction: pe0pe1'),justDisplay,true);
+  dispConOrLog(sprintf('FSL distortion correction'),justDisplay,true);
   dispConOrLog(sprintf('=============================================='),justDisplay,true)
   % first time, call fsl_pe0pe1 to see what it wants to do
   if justDisplay
@@ -911,7 +920,7 @@ if s.pe0pe1
     end
   else
     % just call it
-    doFSLpe0pe1(s,true);
+    doFSLunwarp(s,true);
   end
 end
   
@@ -1258,7 +1267,7 @@ helpFlag = {'-h','-h'};
 if ~retval,return,end
 
 % needs fsl
-if s.pe0pe1
+if s.unwarp
   preferredCommandNames = {'fslroi','fslmerge','topup','applytopup'};
   commandNames = {'fslroi','fslmerge','topup','applytopup'};
   helpFlag = {'-h','-h','-h','-h'};
@@ -1267,7 +1276,7 @@ if s.pe0pe1
     disp(sprintf('(dofmricni) !!! FSL does not appear to be installed correctly !!!'));
     if askuser('Do you want to continue to run w/out FSL? This just means it will skip the distortion correction')
       retval = true;
-      s.pe0pe1 = false;
+      s.unwarp = false;
     else
       return
     end
