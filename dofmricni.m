@@ -413,7 +413,32 @@ if isempty(s.subjectID)
 end
 
 % set experiment name
-s.experimentName = s.studyDate;
+dofmricniFilename = fullfile(s.localDir,'dofmricni.mat');
+if isfield(s,'cniDir') && ~isempty(s.cniDir)
+  % get experiment name from cniDir
+  s.experimentName = fileparts(s.cniDir);
+  % save the s variable, so next time we can read this value
+  save(dofmricniFilename,'s');
+else
+  % we don't know the experiment name
+  s.experimentName = 'unknown';
+  % try to load it
+  if isfile(dofmricniFilename)
+    sold = load(dofmricniFilename);
+    if isfield(sold,'s') && isfield(sold.s,'experimentName')
+      s.experimentName = sold.s.experimentName;
+    end
+  end
+  % if still unknown then ask
+  if isempty(s.experimentName) || strcmp(s.experimentName,'unknown')
+    paramsInfo = {{'experimentName',s.experimentName,'Name of the experiment you are running - this will be used as a directory name under data to store all of your files'}};
+    params = mrParamsDialog(paramsInfo,'Set experiment name');
+    if isempty(params),return,end
+    s.experimentName = params.experimentName;
+  end
+  % save the s variable, so next time we can read this value
+  save(dofmricniFilename,'s');
+end
 
 % get name of directory to copy
 s.localSessionDir = fullfile(s.localDataDir,s.experimentName,sprintf('%s%s',s.subjectID,s.studyDate));
@@ -577,6 +602,7 @@ else
     end
     % check length
     if length(s.unwarp.calfiles) > 1
+      dispHeader('Choose calibration scan for FSL unwarping');
       % display list
       for i = 1:length(s.unwarp.calfiles)
 	calibFile = s.fileList(s.calibrationFile(i));
@@ -719,83 +745,22 @@ if (acqTriggers ~= stimfileInfo.numVols) || (s.spoofTriggers && triggerEverySlic
 	s.stimfileInfo(stimfileNum).fixAcq = false;
       end
     else
-      % otherwise fix
+      % otherwise fix (note there is code for actually putting back missing
+      % triggers, but removed it - should be in the git repo b0ce70f on May 18, 2015)
       if stimfileInfo.fixAcq
+	% save original
+	save(sprintf('%s_original.mat',stripext(stimfileName)),'-struct','stimfile');
 	% remove all volumes, but the first
-	%    stimfile = removeVols(stimfile,2:stimfileInfo.numVols);
+	stimfile = removeTriggers(stimfile,2:stimfileInfo.numVols);
 	% now add volumes for where events should have happened
 	framePeriod = boldScan.tr/1000;
 	dispConOrLog(sprintf('(dofmricni) Spoofing volumes every %s in %s',num2str(framePeriod),stimfileName));
         % get all the volumes we need to add, and add them
 	addTimes = (volTimes(1)+framePeriod):framePeriod:volTimes(1)+(acqTriggers-1)*framePeriod;
 	stimfile = addVolEvents(stimfile,addTimes);
+	stimfile.myscreen.modifiedDate = datestr(now);
 	% save the stimfile back
 	save(stimfileName,'-struct','stimfile');
-      end
-    end
-  else
-    % this is some long-winded code, that tries to find where the
-    % missing volumes are from and put them back in, but i think
-    % it is easier to just spoof them
-    
-    % calculate number missing
-    numMiss = acqTriggers-stimfileInfo.numVols;
-    % calculate the difference in time between each acquisition pulse
-    volTimesDiff = diff(volTimes);
-    medianVolDiff = median(volTimesDiff);
-    stdVolDiff = std(volTimesDiff);
-    % look for possible missing values as ones that are greater than some standard
-    % deviations longer than expected (num standard deviations is arbitrary so )
-    % try a few
-    nStd = 1;
-    numMissAcq = inf;
-    while (sum(numMissAcq)>numMiss) && (nStd < 10)
-      missAcq = find(volTimesDiff > (nStd*stdVolDiff+medianVolDiff));
-      % now try to figure out how many acquisitions are missing for these
-      numMissAcq = round(volTimesDiff(missAcq)/medianVolDiff)-1;
-      % up the nStd to make it more stringent
-      nStd = nStd+1;
-    end
-    % check to see if we have fixed the problems
-    if numMiss ~= sum(numMissAcq)
-      % if not, maybe the stimfile ended before the end of the scan
-      if (stimfile.myscreen.endtimeSecs - volTimes(end)) < (2*medianVolDiff)
-	% calculate number of missing vols
-	numMissVolsAtEnd = (nVols-s.removeInitialVols)-round((volTimes(end)-volTimes(1))/(boldScan.tr/1000));
-	dispConOrLog(sprintf('(dofmricni) Stimfile likely ended %i volumes before scan',numMissVolsAtEnd),justDisplay);
-      else
-	% let the user know that there was a mismatch
-	dispConOrLog(sprintf('(dofmricni) !!! Found %i missing triggers, but expected to find %i',sum(numMissAcq),numMiss),justDisplay);
-      end
-    else
-      dispConOrLog(sprintf('(dofmricni) Found all of the %i missing triggers',numMiss),justDisplay);
-    end
-    % if just display, then ask user if we should fix
-    if justDisplay 
-      if askuser('Do you want to fix the acq triggers')
-	s.stimfileInfo(stimfileNum).fixAcq = true;
-      else
-	s.stimfileInfo(stimfileNum).fixAcq = false;
-      end
-    else
-      % otherwise fix
-      if stimfileInfo.fixAcq
-	for iMiss = 1:length(missAcq)
-	  thisMiss = missAcq(iMiss);
-	  % get the spacing for our artificial event
-	  spacing = (volTimes(thisMiss+1)-volTimes(thisMiss))/(numMissAcq(iMiss)+1);
-	  % get times to add
-	  addTimes = volTimes(thisMiss) + spacing*(1:numMissAcq(iMiss));
-	  % and add them
-	  for i = 1:length(addTimes)
-	    stimfile = addVolEvents(stimfile,addTimes(i));
-	  end
-	end
-	% This all should work, but giving up here since this seems like a god awful mess
-	% to fix the triggers this way (i.e. sometimes we can't find a good place for
-	% some of the missing triggers
-	disp(sprintf('(dofmricni) This code works here, but the file needs to be saved and tested'));
-	keyboard
       end
     end
   end
