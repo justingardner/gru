@@ -3,11 +3,11 @@
 % Dan Birman (2015-05)
 % dbirman@stanford.edu
 %
-% Call: [str, unwarp] = fsl_EPIfilescalfiles('/path/to/your/directory')
+% Call: [str, unwarp] = fsl_pe0pe1('/path/to/your/directory')
 %       returns only a string which can be disp() to see what will be
 %       unwarped.
 %
-% Call: fsl_EPIfilescalfiles('/path/to/your/directory',unwarp)
+% Call: fsl_pe0pe1('/path/to/your/directory',unwarp)
 %       Performs the unwarping for the files in 'unwarp' (from a previous
 %       doUnwarp=False call).
 %
@@ -39,13 +39,13 @@
 % 
 % [Smith 2004] S.M. Smith, M. Jenkinson, M.W. Woolrich, C.F. Beckmann, T.E.J. Behrens, H. Johansen-Berg, P.R. Bannister, M. De Luca, I. Drobnjak, D.E. Flitney, R. Niazy, J. Saunders, J. Vickers, Y. Zhang, N. De Stefano, J.M. Brady, and P.M. Matthews. Advances in functional and structural MR image analysis and implementation as FSL. NeuroImage, 23(S1):208-219, 2004. 
 
-function [str, unwarp] = fsl_EPIfilescalfiles(folder,unwarp)
+function [str, unwarp] = fsl_pe0pe1(folder,unwarp)
 
 
 [s, r] = system('fslroi');
 if s==127
     str = 'failed';
-    disp('(fsl_EPIfilescalfiles) FSL may not be properly installed. Check your PATH');
+    disp('(fsl_pe0pe1) FSL may not be properly installed. Check your PATH');
     return
 end
 
@@ -56,14 +56,14 @@ else
 end
 
 if doUnwarp
-    disp(sprintf('(fsl_EPIfilescalfiles) Unwarping in %s',folder));
+    disp(sprintf('(fsl_pe0pe1) Unwarping in %s',folder));
     tic
 else
-    disp(sprintf('(fsl_EPIfilescalfiles) Checking %s for unwarp files',folder));
+    disp(sprintf('(fsl_pe0pe1) Checking %s for unwarp files',folder));
 end
 
 if ~exist(folder)
-    disp('(fsl_EPIfilescalfiles) Folder doesn''t exist... Failed');
+    disp('(fsl_pe0pe1) Folder doesn''t exist... Failed');
     str = 'failed';
     return
 end
@@ -98,7 +98,7 @@ if findFiles
             if fi.bytes > 100000000 % 1 mega byte
                 unwarp.EPIfiles{end+1} = fi.name;
             else
-                disp(sprintf('(fsl_EPIfilescalfiles) File size < 100 mB. Likely a cancelled scan: %s',fi.name));
+                disp(sprintf('(fsl_pe0pe1) File size < 100 mB. Likely a cancelled scan: %s',fi.name));
                 if strcmp(input('Include? [y/n]: ','s'),'y')
                     unwarp.EPIfiles{end+1} = fi.name;
                 end
@@ -117,16 +117,16 @@ if findFiles
     %% Check if we have multiple calfiles scans
 
     if length(unwarp.calfiles) > 1
-        disp('(fsl_EPIfilescalfiles) Multiple calfiles scans found, using last scan.\nYou can implement different functionality...');
+        disp('(fsl_pe0pe1) Multiple calfiles scans found, using last scan.\nYou can implement different functionality...');
         scanchoice = 0;
         while ~scanchoice
-            in = input('(fsl_EPIfilescalfiles) Use first or last scan? [f/l]','s');
+            in = input('(fsl_pe0pe1) Use first or last scan? [f/l]','s');
             if strcmp(in,'f')
                 unwarp.calfiles = unwarp.calfiles(1); scanchoice=1;
             elseif strcmp(in,'l')
                 unwarp.calfiles = unwarp.calfiles(end); scanchoice=1;
             else
-                in = input('(fsl_EPIfilescalfiles) Incorrect input. Use first or last scan? [f/l]','s');
+                in = input('(fsl_pe0pe1) Incorrect input. Use first or last scan? [f/l]','s');
             end
         end
     end
@@ -176,6 +176,10 @@ for i = 1:length(unwarp.EPIfiles)
     disppercent(i/length(unwarp.EPIfiles));
 end
 roi0files(drop) = [];
+if length(roi0files) < length(unwarp.EPIfiles)-length(drop)
+    disp('(fsl_pe0pe1) Bug... check it out...');
+    keyboard
+end
 disppercent(inf);
 
 %% fslmerge
@@ -187,6 +191,10 @@ for i = 1:length(roi0files)
 end
 disppercent(inf);
 
+if length(mergefiles) ~= length(roi0files)
+    disp('(fsl_pe0pe1) Returned file list too short...');
+end
+
 %% topup
 tufiles = {};
 disppercent(-inf,'Calculating topup...');
@@ -197,6 +205,10 @@ for i = 1:length(mergefiles)
 end
 disppercent(inf);
 
+if length(tufiles) ~= length(roi0files)
+    disp('(fsl_pe0pe1) Returned file list too short...');
+end
+
 %% applytopup
 disppercent(-inf,'Applying topup...');
 finalfiles = {};
@@ -205,6 +217,10 @@ for i = 1:length(tufiles)
     disppercent(i/length(tufiles));
 end
 disppercent(inf);
+
+if length(finalfiles) ~= length(roi0files)
+    disp('(fsl_pe0pe1) Returned file list too short...');
+end
 
 
 %% gunzip
@@ -233,16 +249,6 @@ for i = 1:length(finalfiles)
     system(sprintf('rm %s.nii.gz',fi));
 end
 
-%% cleanup
-% for i = 1:length(roi1files)
-%     system(sprintf('rm %s.nii.gz',fullfile(folder,roi1files{i})));
-% end
-% for i = 1:length(mergefiles)
-%     system(sprintf('rm %s.nii.gz',fullfile(folder,mergefiles{i})));
-% end
-system(sprintf('rm %s',fullfile(folder,'acq_params.txt')));
-system(sprintf('rm -rf %s',tfolder));
-
 %% Backup + rename
 % Move all of the original files (unwarp.EPIfiles) to folder//unwarp_orig
 % Then renamne the uw_ files to the original names
@@ -255,22 +261,49 @@ for i = 1:length(unwarp.EPIfiles)
     fileLoc = fullfile(folder,file);
     backupLoc = fullfile(folder,'unwarp_orig',file);
     % make backup
-    system(sprintf('mv %s %s',fileLoc,backupLoc));
+    s = movefile(fileLoc,backupLoc,'f');
+    if ~s
+        disp(sprintf('File backup seems to have failed... check result for %s',fileLoc));
+        keyboard
+    end
     % uw_ file
     uw_fileLoc = fullfile(folder,strcat('uw_',file));
     % rename uw_ file
-    system(sprintf('mv %s %s',uw_fileLoc,fileLoc));
+    s = movefile(uw_fileLoc,fileLoc,'f');
+    if ~s
+        disp(sprintf('File rename seems to have failed... check result for %s',fileLoc));
+        keyboard
+    end
 end
+
+%% Check that all of the files exist, if not, warn the user.
+
+for i = 1:length(unwarp.EPIfiles)
+    file = unwarp.EPIfiles{i};
+    fileLoc = fullfile(folder,file);
+    if ~isfile(fileLoc)
+        disp(sprintf('File %s did not unwarp!! All temp files remain: you can re-build the unwarp by hand.\n[dbcont] to continue.',fileLoc));
+        keyboard
+    end
+end
+
+%% cleanup
+system(sprintf('rm -rf %s',tfolder));
 
 %% disp result
 T = toc;
-disp(sprintf('(fsl_EPIfilescalfiles) Unwarping completed successfully for %s',folder));
-disp(sprintf('(fsl_EPIfilescalfiles) Elapsed time %04.2f s',T));
+disp(sprintf('(fsl_pe0pe1) Unwarping completed successfully for %s',folder));
+disp(sprintf('(fsl_pe0pe1) Elapsed time %04.2f s',T));
 
 function outfile = hlpr_applytopup(tu,orig,tfolder,folder)
 % applytopup --imain=rs_EPIfiles --inindex=1 --method=jac --datain=acq_param.txt --topup=rs_topup --out=rs0_unwarped
 
 outfile = fullfile(folder,sprintf('uw_%s',orig(1:end-4)));
+if isfile(outfile)
+    disp(sprintf('(applytopup) Unwarping has already been run: File %s exists, skipping.',outfile));
+    return
+end
+disp(sprintf('(apply) apply for: %s',outfile));
 tu = fullfile(tfolder,tu);
 acqFile = fullfile(folder,'acq_params.txt');
 command = sprintf('applytopup --imain=%s --inindex=1 --method=jac --datain=%s --topup=%s --out=%s',fullfile(folder,orig(1:end-4)),acqFile,tu,outfile);
@@ -280,6 +313,11 @@ function outfile = hlpr_topup(merge,pos,tfolder,folder)
 
 outfile = sprintf('topup_%02.0f',pos);
 outfull = fullfile(tfolder,outfile);
+if isfile(outfull)
+    disp(sprintf('(topup) Topup already calculated: File %s exists, skipping.',outfile));
+    return
+end
+disp(sprintf('(topup) topup for: %s',outfile));
 merge = fullfile(tfolder,merge);
 acqFile = fullfile(folder,'acq_params.txt');
 command = sprintf('topup --imain=%s --datain=%s --config=b02b0.cnf --out=%s',merge,acqFile,outfull);
@@ -289,6 +327,11 @@ function outfile = hlpr_fslmerge(scan0,scan1,pos,folder)
 
 outfile = sprintf('merge_%02.0f',pos);
 outfull = fullfile(folder,outfile);
+if isfile(outfull)
+    disp(sprintf('(merge) Merge already calculated: File %s exists, skipping.',outfile));
+    return
+end
+disp(sprintf('(merge) Merge for: %s',outfile));
 scan0 = fullfile(folder,scan0);
 scan1 = fullfile(folder,scan1);
 command = sprintf('fslmerge -t %s %s %s',outfull,scan0,scan1);
@@ -298,6 +341,11 @@ function outfile = hlpr_fslroi(scan,pos,type,n1,n2,tfolder,folder)
 
 outfile = sprintf('pe%i_%02.0f',type,pos);
 outfull = fullfile(tfolder,outfile);
+if isfile(outfull)
+    disp(sprintf('(roi) ROI already calculated: File %s exists, skipping.',outfile));
+    return
+end
+disp(sprintf('(roi) ROI for: %s',outfile));
 scan = fullfile(folder,scan);
 command = sprintf('fslroi %s %s %i %i',scan,outfull,n1,n2);
 system(command);
