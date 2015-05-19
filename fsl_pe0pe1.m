@@ -288,7 +288,11 @@ for i = 1:length(unwarp.EPIfiles)
 end
 
 %% cleanup
-system(sprintf('rm -rf %s',tfolder));
+
+% I removed this, the folder is only like 50 MB. Better to keep it around
+% in case you re-run the whole thing, and this way you don't have to re-do
+% the top[up calculations (you still have to apply it).
+% system(sprintf('rm -rf %s',tfolder));
 
 %% disp result
 T = toc;
