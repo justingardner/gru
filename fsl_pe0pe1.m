@@ -1,13 +1,13 @@
-%% FSL Combine pe0 and pe1 calibration scans (mux8 acquisitions)
+%% FSL Combine EPIfiles and calfiles calibration scans (mux8 acquisitions)
 % Based on code from Bob Dougherty (CNI)
 % Dan Birman (2015-05)
 % dbirman@stanford.edu
 %
-% Call: [str, unwarp] = fsl_pe0pe1('/path/to/your/directory',doUnwarp=False)
+% Call: [str, unwarp] = fsl_EPIfilescalfiles('/path/to/your/directory')
 %       returns only a string which can be disp() to see what will be
 %       unwarped.
 %
-% Call: fsl_pe0pe1('/path/to/your/directory',doUnwarp=True,unwarp)
+% Call: fsl_EPIfilescalfiles('/path/to/your/directory',unwarp)
 %       Performs the unwarping for the files in 'unwarp' (from a previous
 %       doUnwarp=False call).
 %
@@ -20,16 +20,16 @@
 % # topup for rs data mux8 hcp resting state data:
 % 
 % # To compute the echo train length, run:
-% # fslhd rs_pe0.nii.gz | grep desc
+% # fslhd rs_EPIfiles.nii.gz | grep desc
 % # and compute acq[0]*ec/1000
 % echo '0 1 0 0.05720' > acq_params.txt
 % echo '0 -1 0 0.05720' >> acq_params.txt
-% fslroi rs_pe0.nii.gz bu 1 1
-% fslroi rs_pe1.nii.gz bd 1 1
+% fslroi rs_EPIfiles.nii.gz bu 1 1
+% fslroi rs_calfiles.nii.gz bd 1 1
 % fslmerge -t bud bu bd
 % topup --imain=bud --datain=acq_param.txt --config=b02b0.cnf --out=rs_topup
-% applytopup --imain=rs_pe0 --inindex=1 --method=jac --datain=acq_param.txt --topup=rs_topup --out=rs0_unwarped
-% applytopup --imain=rs_pe1 --inindex=2 --method=jac --datain=acq_param.txt --topup=rs_topup --out=rs1_unwarped
+% applytopup --imain=rs_EPIfiles --inindex=1 --method=jac --datain=acq_param.txt --topup=rs_topup --out=rs0_unwarped
+% applytopup --imain=rs_calfiles --inindex=2 --method=jac --datain=acq_param.txt --topup=rs_topup --out=rs1_unwarped
 %
 % FSL Requests that we include the following text in any manuscripts that
 % use this function:
@@ -39,25 +39,31 @@
 % 
 % [Smith 2004] S.M. Smith, M. Jenkinson, M.W. Woolrich, C.F. Beckmann, T.E.J. Behrens, H. Johansen-Berg, P.R. Bannister, M. De Luca, I. Drobnjak, D.E. Flitney, R. Niazy, J. Saunders, J. Vickers, Y. Zhang, N. De Stefano, J.M. Brady, and P.M. Matthews. Advances in functional and structural MR image analysis and implementation as FSL. NeuroImage, 23(S1):208-219, 2004. 
 
-function [str, unwarp] = fsl_pe0pe1(folder,doUnwarp,unwarp)
+function [str, unwarp] = fsl_EPIfilescalfiles(folder,unwarp)
 
 
 [s, r] = system('fslroi');
 if s==127
     str = 'failed';
-    disp('(fsl_pe0pe1) FSL may not be properly installed. Check your PATH');
+    disp('(fsl_EPIfilescalfiles) FSL may not be properly installed. Check your PATH');
     return
 end
 
+if ~exist('unwarp')
+    doUnwarp = 0;
+else
+    doUnwarp = 1;
+end
+
 if doUnwarp
-    disp(sprintf('(fsl_pe0pe1) Unwarping in %s',folder));
+    disp(sprintf('(fsl_EPIfilescalfiles) Unwarping in %s',folder));
     tic
 else
-    disp(sprintf('(fsl_pe0pe1) Checking %s for unwarp files',folder));
+    disp(sprintf('(fsl_EPIfilescalfiles) Checking %s for unwarp files',folder));
 end
 
 if ~exist(folder)
-    disp('(fsl_pe0pe1) Folder doesn''t exist... Failed');
+    disp('(fsl_EPIfilescalfiles) Folder doesn''t exist... Failed');
     str = 'failed';
     return
 end
@@ -66,20 +72,15 @@ tfolder = fullfile(folder,'temp');
 mkdir(tfolder);
 files = dir(folder);
 
-if doUnwarp && ~exist('unwarp')
-    str = 'failure';
-    disp(sprintf('(fsl_pe0pe1) Failure: No ''unwarp'' structure passed.\nRun this first:\n[s, unwarp] = fsl_pe0pe1(folder,false);\nThen run:\nfsl_pe0pe1(folder,true,unwarp);'));
-end
-
 findFiles = 0;
 if ~exist('unwarp')
-    unwarp.pe0files = {};
-    unwarp.pe1files = {};
+    unwarp.EPIfiles = {};
+    unwarp.calfiles = {};
     findFiles = 1;
 end
 
-% Currently I wrote this to find one pe1 file, and use that for all of the
-% pe0 files.
+% Currently I wrote this to find one calfiles file, and use that for all of the
+% EPIfiles files.
 
 found_acq_params = 0;
 
@@ -91,15 +92,15 @@ if findFiles
             found_acq_params = 1;
         elseif strfind(fi.name,'uw_')
             % skip files that might have already been unwarped
-        elseif ~isempty(strfind(fi.name,'pe1')) || ~isempty(strfind(fi.name,'CAL'))
-            unwarp.pe1files{end+1} = fi.name;
-        elseif ~isempty(strfind(fi.name,'pe0')) || ~isempty(strfind(fi.name,'mux8'))
+        elseif ~isempty(strfind(fi.name,'calfiles')) || ~isempty(strfind(fi.name,'CAL'))
+            unwarp.calfiles{end+1} = fi.name;
+        elseif ~isempty(strfind(fi.name,'EPIfiles')) || ~isempty(strfind(fi.name,'mux8'))
             if fi.bytes > 100000000 % 1 mega byte
-                unwarp.pe0files{end+1} = fi.name;
+                unwarp.EPIfiles{end+1} = fi.name;
             else
-                disp(sprintf('(fsl_pe0pe1) File size < 100 mB. Likely a cancelled scan: %s',fi.name));
+                disp(sprintf('(fsl_EPIfilescalfiles) File size < 100 mB. Likely a cancelled scan: %s',fi.name));
                 if strcmp(input('Include? [y/n]: ','s'),'y')
-                    unwarp.pe0files{end+1} = fi.name;
+                    unwarp.EPIfiles{end+1} = fi.name;
                 end
             end
         end
@@ -113,21 +114,28 @@ if findFiles
         system(sprintf('echo ''0 -1 0 1'' >> %s',acqFile));
     end
 
-    %% Check if we have multiple pe1 scans
+    %% Check if we have multiple calfiles scans
 
-    if length(unwarp.pe1files) > 1
-        disp('(fsl_pe0pe1) Multiple pe1 scans found, using last scan.\nYou can implement different functionality...');
+    if length(unwarp.calfiles) > 1
+        disp('(fsl_EPIfilescalfiles) Multiple calfiles scans found, using last scan.\nYou can implement different functionality...');
         scanchoice = 0;
         while ~scanchoice
-            in = input('(fsl_pe0pe1) Use first or last scan? [f/l]','s');
+            in = input('(fsl_EPIfilescalfiles) Use first or last scan? [f/l]','s');
             if strcmp(in,'f')
-                unwarp.pe1files = unwarp.pe1files(1); scanchoice=1;
+                unwarp.calfiles = unwarp.calfiles(1); scanchoice=1;
             elseif strcmp(in,'l')
-                unwarp.pe1files = unwarp.pe1files(end); scanchoice=1;
+                unwarp.calfiles = unwarp.calfiles(end); scanchoice=1;
             else
-                in = input('(fsl_pe0pe1) Incorrect input. Use first or last scan? [f/l]','s');
+                in = input('(fsl_EPIfilescalfiles) Incorrect input. Use first or last scan? [f/l]','s');
             end
         end
+    end
+else
+
+    acqFile = fullfile(folder,'acq_params.txt');
+    if ~isfile(acqFile)
+        system(sprintf('echo ''0 1 0 1'' > %s',acqFile));
+        system(sprintf('echo ''0 -1 0 1'' >> %s',acqFile));
     end
 end
 
@@ -135,10 +143,10 @@ end
 
 str = '';
 str = strcat(str,'\n','**********************************************************');
-for i = 1:length(unwarp.pe0files)
-    str = strcat(str,'\n',sprintf('Unwarping %s',unwarp.pe0files{i}));
+for i = 1:length(unwarp.EPIfiles)
+    str = strcat(str,'\n',sprintf('Unwarping %s',unwarp.EPIfiles{i}));
 end
-str = strcat(str,'\n',sprintf('Using calibration file %s',unwarp.pe1files{1}));
+str = strcat(str,'\n',sprintf('Using calibration file %s',unwarp.calfiles{1}));
 str = strcat(str,'\n','**********************************************************');
 str = sprintf(str);
 
@@ -151,21 +159,28 @@ disp(str);
 
 %% Run fslroi
 
-% pe1
+% calfiles
 roi1files = {};
-roi1files{1} = hlpr_fslroi(unwarp.pe1files{1},1,1,1,1,tfolder,folder);
-% pe0
+roi1files{1} = hlpr_fslroi(unwarp.calfiles{1},1,1,1,1,tfolder,folder);
+% EPIfiles
 roi0files = {};
 disppercent(-inf,'Calculating ROIs...');
-for i = 1:length(unwarp.pe0files)
-    roi0files{i} = hlpr_fslroi(unwarp.pe0files{i},i,0,1,1,tfolder,folder);
-    disppercent(i/length(unwarp.pe0files));
+drop = [];
+for i = 1:length(unwarp.EPIfiles)
+    if ~isempty(strfind(unwarp.EPIfiles{i},'CAL'))
+        disp('(fsl_pe0pe1) !!! For some reason you included a CAL file in with your EPIs. Ignoring...');
+        drop = [drop i];
+    else
+        roi0files{i} = hlpr_fslroi(unwarp.EPIfiles{i},i,0,1,1,tfolder,folder);
+    end
+    disppercent(i/length(unwarp.EPIfiles));
 end
+roi0files(drop) = [];
 disppercent(inf);
 
 %% fslmerge
 mergefiles = {};
-disppercent(-inf,'Merging pe0 and pe1 files...');
+disppercent(-inf,'Merging EPIfiles and calfiles files...');
 for i = 1:length(roi0files)
     mergefiles{i} = hlpr_fslmerge(roi0files{i},roi1files{1},i,tfolder);
     disppercent(i/length(roi0files));
@@ -186,7 +201,7 @@ disppercent(inf);
 disppercent(-inf,'Applying topup...');
 finalfiles = {};
 for i = 1:length(tufiles)
-    finalfiles{i} = hlpr_applytopup(tufiles{i},unwarp.pe0files{i},tfolder,folder);
+    finalfiles{i} = hlpr_applytopup(tufiles{i},unwarp.EPIfiles{i},tfolder,folder);
     disppercent(i/length(tufiles));
 end
 disppercent(inf);
@@ -229,14 +244,14 @@ system(sprintf('rm %s',fullfile(folder,'acq_params.txt')));
 system(sprintf('rm -rf %s',tfolder));
 
 %% Backup + rename
-% Move all of the original files (unwarp.pe0files) to folder//unwarp_orig
+% Move all of the original files (unwarp.EPIfiles) to folder//unwarp_orig
 % Then renamne the uw_ files to the original names
 if ~isdir(fullfile(folder,'unwarp_orig'))
     mkdir(fullfile(folder,'unwarp_orig'));
 end
 
-for i = 1:length(unwarp.pe0files)
-    file = unwarp.pe0files{i};
+for i = 1:length(unwarp.EPIfiles)
+    file = unwarp.EPIfiles{i};
     fileLoc = fullfile(folder,file);
     backupLoc = fullfile(folder,'unwarp_orig',file);
     % make backup
@@ -249,11 +264,11 @@ end
 
 %% disp result
 T = toc;
-disp(sprintf('(fsl_pe0pe1) Unwarping completed successfully for %s',folder));
-disp(sprintf('(fsl_pe0pe1) Elapsed time %04.2f s',T));
+disp(sprintf('(fsl_EPIfilescalfiles) Unwarping completed successfully for %s',folder));
+disp(sprintf('(fsl_EPIfilescalfiles) Elapsed time %04.2f s',T));
 
 function outfile = hlpr_applytopup(tu,orig,tfolder,folder)
-% applytopup --imain=rs_pe0 --inindex=1 --method=jac --datain=acq_param.txt --topup=rs_topup --out=rs0_unwarped
+% applytopup --imain=rs_EPIfiles --inindex=1 --method=jac --datain=acq_param.txt --topup=rs_topup --out=rs0_unwarped
 
 outfile = fullfile(folder,sprintf('uw_%s',orig(1:end-4)));
 tu = fullfile(tfolder,tu);
