@@ -599,7 +599,7 @@ if isempty(s.calibrationFile)
   dispConOrLog(sprintf('(dofmricni:doFSLunwarp) !!! No calibration file found. Skipping unwarping !!!!',~doit));
   return
 else
-  if ~isfield(s,'unwarp')
+  if ~isstruct(s.unwarp)
     % put the calibration files in pe1
     for i = 1:length(s.calibrationFile)
       s.unwarp.calfiles{i} = s.fileList(s.calibrationFile(i)).toName;
@@ -629,7 +629,7 @@ else
 end
 
 % now actually do it
-if doit && s.unwarp
+if doit && isfield(s,'unwarp')
   retval = fsl_pe0pe1(fullfile(s.localSessionDir,'Pre'),s.unwarp);
 end
 
@@ -911,7 +911,7 @@ for i = 1:length(s.fileList)
 end
 
 % distortion correction with fsl
-if s.unwarp
+if isfield(s,'unwarp')
   dispConOrLog(sprintf('=============================================='),justDisplay,true);
   dispConOrLog(sprintf('FSL distortion correction'),justDisplay,true);
   dispConOrLog(sprintf('=============================================='),justDisplay,true)
