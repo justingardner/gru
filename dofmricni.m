@@ -519,7 +519,7 @@ for i = 1:s.numMotionComp
   v = newView;
   if ~isempty(v)
     [v params] = motionComp(v,[],'justGetParams=1');
-    keyboard
+    v = motionComp(v,params);
   end
 end
 
@@ -770,7 +770,7 @@ if (acqTriggers ~= stimfileInfo.numVols) || (s.spoofTriggers && triggerEverySlic
 	framePeriod = boldScan.tr/1000;
 	dispConOrLog(sprintf('(dofmricni) Spoofing volumes every %ss in %s',num2str(framePeriod),stimfileName));
         % get all the volumes we need to add, and add them
-	addTimes = (volTimes(1)+framePeriod):framePeriod:volTimes(1)+(acqTriggers-1)*framePeriod;
+	addTimes = (volTimes(1)+framePeriod):framePeriod:volTimes(1)+(nVols-s.removeInitialVols-1)*framePeriod;
 	stimfile = addVolEvents(stimfile,addTimes);
 	stimfile.myscreen.modifiedDate = datestr(now);
 	% save the stimfile back
