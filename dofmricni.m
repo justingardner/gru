@@ -180,6 +180,8 @@ for i = 1:length(fileList)
   fileList(i).dicomInfo = getDicomInfo(fileList(i).dicom,s);
   fileList(i).tr = nan;
   fileList(i).te = nan;
+  % get xform, just testing here
+%  fileList(i).xform = dicom2xform(fileList(i).dicomInfo);
   % pull out info from dicom header
   if ~isempty(fileList(i).dicomInfo) 
     % pull out tr
@@ -1820,3 +1822,53 @@ if (retval == 0)
 else
   username = 'unknown';
 end
+
+%%%%%%%%%%%%%%%%%%%%%
+%    dicom2xofmr    %
+%%%%%%%%%%%%%%%%%%%%%
+function xform = dicom2xform(dicomInfo)
+
+xform = [];
+
+% fields to check and how long they should be
+checkFields = {'PixelSpacing','SpacingBetweenSlices','ImagePositionPatient','ImageOrientationPatient'};
+fieldLengths = [2 1 3 6];
+for iField = 1:length(checkFields)
+  if ~isfield(dicomInfo,checkFields{iField})
+    disp(sprintf('(dicom2xform) Field %s not found',checkFields{iField}));
+    return
+  elseif length(dicomInfo.(checkFields{iField})) ~= fieldLengths(iField)
+    disp(sprintf('(dicom2xform) Field %s expected to have length %i but had %i',fieldLengths(iField),length(dicomInfo.(checkFields{iField}))));
+    return
+  end
+end
+
+% ok get spacing
+xSpacing = dicomInfo.PixelSpacing(1);
+ySpacing = dicomInfo.PixelSpacing(2);
+
+% get spacing between slices
+zSpacing = dicomInfo.SpacingBetweenSlices;
+
+% get voxel dimensions (these are in mm)
+voxDim = [xSpacing ySpacing zSpacing];
+
+% get origin
+origin = dicomInfo.ImagePositionPatient(:) .* [-1 -1 1]';
+
+% get orientation variables
+rowCos = dicomInfo.ImageOrientationPatient(1:3);
+colCos = dicomInfo.ImageOrientationPatient(4:6);
+sliceNorm = cross(rowCos,colCos);
+
+% compute rotationMatrix
+rotMatrix = [-rowCos(1) -colCos(1) -sliceNorm(1);...
+	     -rowCos(2) -colCos(2) -sliceNorm(2);...
+	      rowCos(3)  colCos(3)  sliceNorm(3)];
+
+% now create the xform
+xform = zeros(4,4);
+xform(1:3,1:3) = rotMatrix*diag(voxDim);
+xform(1:3,4) = origin;
+xform(4,4) = 1;
+
