@@ -46,14 +46,14 @@ function retval = dofmricni(varargin)
 % what we are using these days
 
 % Default arguments
-getArgs(varargin,{'stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','stimComputerName=oban','stimComputerUserName=gru','username=[]','unwarp=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1'});
+getArgs(varargin,{'stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','stimComputerName=oban','stimComputerUserName=gru','username=[]','unwarp=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1','fixMuxXform=2'});
 
 % clear screen
 clc;
 
 % set up system variable (which gets passed around with important system info) - this
 % means we have to copy these variables into s.
-sParams = {'cniComputerName','username','stimComputerUserName','stimComputerName','stimfileDir','numMotionComp','minVolumes','removeInitialVols','stimfileRemoveInitialVols','calibrationNameStrings','cleanUp','useLocalData','spoofTriggers','unwarp'};
+sParams = {'cniComputerName','username','stimComputerUserName','stimComputerName','stimfileDir','numMotionComp','minVolumes','removeInitialVols','stimfileRemoveInitialVols','calibrationNameStrings','cleanUp','useLocalData','spoofTriggers','unwarp','fixMuxXform'};
 for iParam = 1:length(sParams)
   s.(sParams{iParam}) = eval(sParams{iParam});
 end
@@ -180,8 +180,6 @@ for i = 1:length(fileList)
   fileList(i).dicomInfo = getDicomInfo(fileList(i).dicom,s);
   fileList(i).tr = nan;
   fileList(i).te = nan;
-  % get xform, just testing here
-%  fileList(i).xform = dicom2xform(fileList(i).dicomInfo);
   % pull out info from dicom header
   if ~isempty(fileList(i).dicomInfo) 
     % pull out tr
@@ -287,7 +285,7 @@ for i = 1:length(fileList)
     muxloc = findstr('mux',lower(fileList(i).filename));
     fileList(i).mux = [];
     if ~isempty(muxloc)
-      fileList(i).mux = str2num(strtok(fileList(i).filename(muxloc(1)+3:end),'_ '));
+      fileList(i).mux = str2num(strtok(fileList(i).filename(muxloc(1)+3:end),'_ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'));
     end
     % update bold count
     s.boldScans(end+1) = i;
@@ -300,10 +298,11 @@ end
 % get list of anat scans
 anatNum = 0;
 for i = 1:length(fileList)
-  % check by whether name contains BOLD or TR is in range
+  % check by whether name contains t1w
   if ~isempty(findstr('t1w',lower(fileList(i).filename))) 
     fileList(i).anat = true;
     anatNum = anatNum+1;
+    s.anatScans(anatNum) = i;
     fileList(i).toName = setext(sprintf('anat%02i_%s',anatNum,fileList(i).filename),fileList(i).niftiExt);
   else
     fileList(i).anat = false;
@@ -638,7 +637,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    doRemoveInitialsVols    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function doRemoveInitialVols(s,justDisplay)
+function s = doRemoveInitialVols(s,justDisplay)
 
 for iBOLD = 1:length(s.boldScans)
   % get scan info
@@ -648,12 +647,41 @@ for iBOLD = 1:length(s.boldScans)
   nVolsAfter = nVols-s.removeInitialVols;
   % display which one it is
   dispConOrLog(sprintf('%i: %s (%i->%i vols)',iBOLD,boldScan.filename,nVols,nVolsAfter),justDisplay);
+  % we also fix the muxXform here (since we are already saving and loading)
+  if s.fixMuxXform && ~isempty(boldScan.mux) && (boldScan.mux > 1)
+    % get slices/mux factor
+    dicomSlices = boldScan.dicomInfo.numSlices;
+    muxSlices = boldScan.h.dim(3);
+    mux = boldScan.mux;
+    shiftSlice = -(muxSlices-dicomSlices)/2;
+    % computed shifted xform
+    xform = boldScan.dicomInfo.xform;
+    s.fileList(s.boldScans(iBOLD)).muxXform = xform*[1 0 0 0;0 1 0 0;0 0 1 shiftSlice;0 0 0 1];
+    % display what we are doing
+    dispConOrLog(sprintf('(dofmricni) Fixing xform (mux=%i nDicomSlices=%i muxSlices: %i) Shift by %0.2f slices',mux,dicomSlices,muxSlices,shiftSlice),justDisplay);
+    % check xform
+    if (s.fixMuxXform > 1) && (iBOLD == 1)
+      % load epi and anat
+      disppercent(-inf,sprintf('Loading epi: %s and anat: %s to check fixed header',getLastDir(boldScan.nifti),getLastDir(s.fileList(s.anatScans(1)).nifti)));
+      [epid epih] = mlrImageLoad(boldScan.nifti);
+      [anatd anath] = mlrImageLoad(s.fileList(s.anatScans(1)).nifti);
+      disppercent(inf);
+      epih.sform = s.fileList(s.boldScans(iBOLD)).muxXform;
+      mlrVol(anatd,anath,epid,epih);
+    end
+  end
   if ~justDisplay
     % go ahead and remove them, first load the file
     filename = fullfile(s.localSessionDir,'Raw','TSeries',boldScan.toName);
     [d h] = mlrImageLoad(filename);
     % remove the appropriate number of voulems
     d = d(:,:,:,1+s.removeInitialVols:end);
+    % fix header if necessary
+    if isfield(boldScan,'muxXform')
+      h.qform = boldScan.muxXform;
+      keyboard
+      h.sform = h.qform;
+    end
     % write it back
     mlrImageSave(filename,d,h);
   end
@@ -913,7 +941,7 @@ for i = 1:length(s.fileList)
 end
 
 % distortion correction with fsl
-if isfield(s,'unwarp')
+if isfield(s,'unwarp') && isfield(s.unwarp,'calfiles')
   dispConOrLog(sprintf('=============================================='),justDisplay,true);
   dispConOrLog(sprintf('FSL distortion correction'),justDisplay,true);
   dispConOrLog(sprintf('=============================================='),justDisplay,true)
@@ -969,12 +997,12 @@ if ~isempty(s.stimfileMatch)
   dispStimfileMatch(s,s.stimfileMatch,false);
 end
 
-% disp the stimfile match
+% remove initial volumes
 if ~isempty(s.removeInitialVols)
   dispConOrLog(sprintf('=============================================='),justDisplay,true);
   dispConOrLog(sprintf('Remove %i initial (steady-state) volumes',s.removeInitialVols),justDisplay,true);
   dispConOrLog(sprintf('=============================================='),justDisplay,true)
-  doRemoveInitialVols(s,justDisplay);
+  s = doRemoveInitialVols(s,justDisplay);
 end
 
 % clean up
@@ -1167,6 +1195,40 @@ for i = 1:length(infoFieldNames)
   if strncmp(lower('Patient'),lower(infoFieldNames{i}),7)
     info = rmfield(info,infoFieldNames{i});
   end
+end
+
+% if we are trying to fix the mux x form, then load a sequence, making sure we get the one with the top slice number
+if s.fixMuxXform
+  % cycle over reading of dicom headers until we get one as being the top slice
+  % (this way we do not assume anything about slice order)
+  foundFirstSlice = false;
+  % get the first xform
+  refDicomNum = 1;
+  refXform = dicom2xform(fullfile(stripext(filename),d(refDicomNum).name));
+  % start by assuming this is the top slice
+  topSliceXform = refXform;
+  minSliceNum = 0;
+  sliceNum = [];
+  % start by loading each xform
+  iDicom = refDicomNum+1;
+  while ~foundFirstSlice
+    % get the slice x form for this dicom
+    sliceXform = dicom2xform(fullfile(stripext(filename),d(iDicom).name));
+    % find out the slice number
+    slice2slice = inv(refXform)*sliceXform;
+    sliceNum(end+1) = round(slice2slice(3,4));
+    % if slice number is the lowest, then replace
+    if sliceNum(end) < minSliceNum
+      topSliceXform = sliceXform
+      minSliceNum = sliceNum(end);
+    end
+    iDicom = iDicom+1;
+    % stop when we cycle back to the same reference slice
+    if (sliceNum(end) == 0) || (iDicom>length(d)),foundFirstSlice = true;end
+  end
+  % set it in the return
+  info.xform = topSliceXform;
+  info.numSlices = length(unique(sliceNum));
 end
 
 %%%%%%%%%%%%%%%%%%
@@ -1822,53 +1884,4 @@ if (retval == 0)
 else
   username = 'unknown';
 end
-
-%%%%%%%%%%%%%%%%%%%%%
-%    dicom2xofmr    %
-%%%%%%%%%%%%%%%%%%%%%
-function xform = dicom2xform(dicomInfo)
-
-xform = [];
-
-% fields to check and how long they should be
-checkFields = {'PixelSpacing','SpacingBetweenSlices','ImagePositionPatient','ImageOrientationPatient'};
-fieldLengths = [2 1 3 6];
-for iField = 1:length(checkFields)
-  if ~isfield(dicomInfo,checkFields{iField})
-    disp(sprintf('(dicom2xform) Field %s not found',checkFields{iField}));
-    return
-  elseif length(dicomInfo.(checkFields{iField})) ~= fieldLengths(iField)
-    disp(sprintf('(dicom2xform) Field %s expected to have length %i but had %i',fieldLengths(iField),length(dicomInfo.(checkFields{iField}))));
-    return
-  end
-end
-
-% ok get spacing
-xSpacing = dicomInfo.PixelSpacing(1);
-ySpacing = dicomInfo.PixelSpacing(2);
-
-% get spacing between slices
-zSpacing = dicomInfo.SpacingBetweenSlices;
-
-% get voxel dimensions (these are in mm)
-voxDim = [xSpacing ySpacing zSpacing];
-
-% get origin
-origin = dicomInfo.ImagePositionPatient(:) .* [-1 -1 1]';
-
-% get orientation variables
-rowCos = dicomInfo.ImageOrientationPatient(1:3);
-colCos = dicomInfo.ImageOrientationPatient(4:6);
-sliceNorm = cross(rowCos,colCos);
-
-% compute rotationMatrix
-rotMatrix = [-rowCos(1) -colCos(1) -sliceNorm(1);...
-	     -rowCos(2) -colCos(2) -sliceNorm(2);...
-	      rowCos(3)  colCos(3)  sliceNorm(3)];
-
-% now create the xform
-xform = zeros(4,4);
-xform(1:3,1:3) = rotMatrix*diag(voxDim);
-xform(1:3,4) = origin;
-xform(4,4) = 1;
 
