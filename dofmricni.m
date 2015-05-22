@@ -700,9 +700,9 @@ nSlices = boldScan.h.dim(3);
 % or number of volumes * slices/mux 
 if abs(stimfileInfo.numVols-nVols) < abs(stimfileInfo.numVols-nVols*nSlices/mux)
   % we had a trigger for every slice
-  triggerEverySlice = true;
-else
   triggerEverySlice = false;
+else
+  triggerEverySlice = true;
 end
 
 % check whether the correct number of initial volumes were received
@@ -714,28 +714,37 @@ else
 end
 
 % now check to see if it matches
-if stimfileInfo.ignoredInitialVols ~= calibrationTriggers
+missingIgnoredVols = stimfileInfo.ignoredInitialVols - calibrationTriggers;
+if missingIgnoredVols ~= 0
+  keyboard
   if triggerEverySlice
     dispConOrLog(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to nSlices*initialVolumes %ix%i=%i but was set to %i',nSlices,s.removeInitialVols,calibrationTriggers,stimfileInfo.ignoredInitialVols),justDisplay);
   else
     dispConOrLog(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to mux*initialVolumes %ix%i=%i, but was set to %i',boldScan.mux,s.removeInitialVols,calibrationTriggers,stimfileInfo.ignoredInitialVols),justDisplay);
   end
-  disp(sprintf('!!! Need to write code to fix this - show this to Justin...!!!'));
-  keyboard
+  if missingIgnoredVols > 0
+    % this case is where you have ignored too many...
+    % need an example to debug on
+    disp(sprintf('!!! Need to write code to fix this - show this to Justin...!!!'));
+    keyboard
+  end
 end
 
 % calculate how many acq pulses we expect
-if triggerEverySlice
-  acqTriggers = nVols-s.removeInitialVols;
-else
-  acqTriggers = (nVols-s.removeInitialVols)*nSlices/mux;
-end
+acqTriggers = nVols-s.removeInitialVols;
+
 
 % and see if we have a match. If not, we will fix them
-if (acqTriggers ~= stimfileInfo.numVols) || (s.spoofTriggers && triggerEverySlice)
+spoofTriggers = false;
+if s.spoofTriggers && ((acqTriggers ~= (stimfileInfo.numVols+missingIgnoredVols)) || triggerEverySlice)
   % display warning
   dispConOrLog(sprintf('%s (%i vols)',boldScan.filename,boldScan.h.dim(4)-s.removeInitialVols));
-  dispConOrLog(sprintf('(dofmricni) !!! Stimfile expected to have %i acquisiton triggers but had %i !!!',acqTriggers,stimfileInfo.numVols));
+  dispConOrLog(sprintf('(dofmricni) !!! Stimfile expected to have %i acquisiton triggers but had %i !!!',acqTriggers,stimfileInfo.numVols+missingIgnoredVols));
+  % triggers needed to be added
+  spoofTriggers = true;
+end
+
+if missingIgnoredVols || spoofTriggers
   % get the stimfile directory
   if justDisplay
     stimfileDir = s.localDir;
@@ -745,13 +754,18 @@ if (acqTriggers ~= stimfileInfo.numVols) || (s.spoofTriggers && triggerEverySlic
   % and load the stimfile
   stimfileName = fullfile(stimfileDir,stimfileInfo.name);
   stimfile = load(stimfileName);
+  % fix any missing ignored vols
+  if missingIgnoredVols && ~justDisplay
+    stimfile = removeTriggers(stimfile,1:-missingIgnoredVols);
+    keyboard
+  end
   % get volume events
   e = stimfile.myscreen.events;
   volTrace = find(strcmp('volume',stimfile.myscreen.traceNames));
   volEvents = find(e.tracenum==volTrace);
   volTimes = e.time(volEvents);
   % fix the triggers by spoofing
-  if s.spoofTriggers
+  if spoofTriggers
     if justDisplay 
       if askuser('Do you want to fix the acq triggers')
 	s.stimfileInfo(stimfileNum).fixAcq = true;
@@ -779,11 +793,6 @@ if (acqTriggers ~= stimfileInfo.numVols) || (s.spoofTriggers && triggerEverySlic
     end
   end
 end
-
-%keyboard
-%if removeVols 
-%  removeTriggers(fullfile(s.localSessionDir,'Etc',stimfileInfo.name),1:removeVols);
-%end
 
 %%%%%%%%%%%%%%%%%%%%%%
 %    addVolEvents    %
