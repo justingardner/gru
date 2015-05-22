@@ -777,9 +777,9 @@ if s.spoofTriggers && ((acqTriggers ~= (stimfileInfo.numVols+missingIgnoredVols)
   dispConOrLog(sprintf('(dofmricni) !!! Stimfile expected to have %i acquisiton triggers but had %i !!!',acqTriggers,stimfileInfo.numVols+missingIgnoredVols));
   if justDisplay 
     if askuser('Do you want to fix the acq triggers')
-      s.stimfileInfo(stimfileNum).fixAcq = true;
+      stimfileInfo.fixAcq = true;
     else
-      s.stimfileInfo(stimfileNum).fixAcq = false;
+      stimfileInfo.fixAcq = false;
     end
   end
   % triggers needed to be added
