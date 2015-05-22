@@ -778,8 +778,10 @@ if s.spoofTriggers && ((acqTriggers ~= (stimfileInfo.numVols+missingIgnoredVols)
   if justDisplay 
     if askuser('Do you want to fix the acq triggers')
       stimfileInfo.fixAcq = true;
+      s.stimfileInfo(stimfileNum).fixAcq = true;
     else
       stimfileInfo.fixAcq = false;
+      s.stimfileInfo(stimfileNum).fixAcq = false;
     end
   end
   % triggers needed to be added
