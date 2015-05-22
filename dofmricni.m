@@ -660,7 +660,7 @@ for iBOLD = 1:length(s.boldScans)
     % display what we are doing
     dispConOrLog(sprintf('(dofmricni) Fixing xform (mux=%i nDicomSlices=%i muxSlices: %i) Shift by %0.2f slices',mux,dicomSlices,muxSlices,shiftSlice),justDisplay);
     % check xform
-    if (s.fixMuxXform > 1) && (iBOLD == 1)
+    if (s.fixMuxXform > 1) && (iBOLD == 1) && justDisplay
       % load epi and anat
       disppercent(-inf,sprintf('Loading epi: %s and anat: %s to check fixed header',getLastDir(boldScan.nifti),getLastDir(s.fileList(s.anatScans(1)).nifti)));
       [epid epih] = mlrImageLoad(boldScan.nifti);
@@ -679,7 +679,6 @@ for iBOLD = 1:length(s.boldScans)
     % fix header if necessary
     if isfield(boldScan,'muxXform')
       h.qform = boldScan.muxXform;
-      keyboard
       h.sform = h.qform;
     end
     % write it back
@@ -691,6 +690,10 @@ for iBOLD = 1:length(s.boldScans)
   if length(s.stimfileMatch) >= iBOLD && s.stimfileMatch(iBOLD)~=0
     % get stimfileInfo for this trial
     stimfileInfo = s.stimfileInfo(s.stimfileMatch(iBOLD));
+    % check for missing igorded volumes
+    if stimfileInfo.missingIgnoredVols
+      dispConOrLog(sprintf('  Fixing missing ignored triggers by %i for associated stimfile: %s (ignoredInitialVols: %i nVols: %i)',stimfileInfo.missingIgnoredVols,stimfileInfo.name,stimfileInfo.ignoredInitialVols,stimfileInfo.numVols),justDisplay);
+    end
     % it should have already been called when we matched stimfile
     % to check if we need to fixAcq, so display that info here
     if isfield(stimfileInfo,'fixAcq') && stimfileInfo.fixAcq
@@ -738,20 +741,22 @@ end
 % check whether the correct number of initial volumes were received
 % We expect mux * calibration volumes (which is usually 2 - passed in argument)
 if triggerEverySlice
-  calibrationTriggers = boldScan.mux*s.removeInitialVols;
-else
   calibrationTriggers = nSlices*s.removeInitialVols;
+else
+  calibrationTriggers = boldScan.mux*s.removeInitialVols;
 end
 
 % now check to see if it matches
 missingIgnoredVols = stimfileInfo.ignoredInitialVols - calibrationTriggers;
+s.stimfileInfo(stimfileNum).missingIgnoredVols = missingIgnoredVols;
 if missingIgnoredVols ~= 0
-  keyboard
+  % print warning message
   if triggerEverySlice
     dispConOrLog(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to nSlices*initialVolumes %ix%i=%i but was set to %i',nSlices,s.removeInitialVols,calibrationTriggers,stimfileInfo.ignoredInitialVols),justDisplay);
   else
     dispConOrLog(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to mux*initialVolumes %ix%i=%i, but was set to %i',boldScan.mux,s.removeInitialVols,calibrationTriggers,stimfileInfo.ignoredInitialVols),justDisplay);
   end
+  % check for case we have not coded yet
   if missingIgnoredVols > 0
     % this case is where you have ignored too many...
     % need an example to debug on
@@ -770,10 +775,18 @@ if s.spoofTriggers && ((acqTriggers ~= (stimfileInfo.numVols+missingIgnoredVols)
   % display warning
   dispConOrLog(sprintf('%s (%i vols)',boldScan.filename,boldScan.h.dim(4)-s.removeInitialVols));
   dispConOrLog(sprintf('(dofmricni) !!! Stimfile expected to have %i acquisiton triggers but had %i !!!',acqTriggers,stimfileInfo.numVols+missingIgnoredVols));
+  if justDisplay 
+    if askuser('Do you want to fix the acq triggers')
+      s.stimfileInfo(stimfileNum).fixAcq = true;
+    else
+      s.stimfileInfo(stimfileNum).fixAcq = false;
+    end
+  end
   % triggers needed to be added
   spoofTriggers = true;
 end
 
+% this is the code that actually adjusts the stimfiles
 if missingIgnoredVols || spoofTriggers
   % get the stimfile directory
   if justDisplay
@@ -784,10 +797,14 @@ if missingIgnoredVols || spoofTriggers
   % and load the stimfile
   stimfileName = fullfile(stimfileDir,stimfileInfo.name);
   stimfile = load(stimfileName);
+  % save original
+  if ~justDisplay
+    % save original
+    save(sprintf('%s_original.mat',stripext(stimfileName)),'-struct','stimfile');
+  end
   % fix any missing ignored vols
   if missingIgnoredVols && ~justDisplay
     stimfile = removeTriggers(stimfile,1:-missingIgnoredVols);
-    keyboard
   end
   % get volume events
   e = stimfile.myscreen.events;
@@ -796,31 +813,24 @@ if missingIgnoredVols || spoofTriggers
   volTimes = e.time(volEvents);
   % fix the triggers by spoofing
   if spoofTriggers
-    if justDisplay 
-      if askuser('Do you want to fix the acq triggers')
-	s.stimfileInfo(stimfileNum).fixAcq = true;
-      else
-	s.stimfileInfo(stimfileNum).fixAcq = false;
-      end
-    else
-      % otherwise fix (note there is code for actually putting back missing
-      % triggers, but removed it - should be in the git repo b0ce70f on May 18, 2015)
-      if stimfileInfo.fixAcq
-	% save original
-	save(sprintf('%s_original.mat',stripext(stimfileName)),'-struct','stimfile');
-	% remove all volumes, but the first
-	stimfile = removeTriggers(stimfile,2:stimfileInfo.numVols);
-	% now add volumes for where events should have happened
-	framePeriod = boldScan.tr/1000;
-	dispConOrLog(sprintf('(dofmricni) Spoofing volumes every %ss in %s',num2str(framePeriod),stimfileName));
-        % get all the volumes we need to add, and add them
-	addTimes = (volTimes(1)+framePeriod):framePeriod:volTimes(1)+(nVols-s.removeInitialVols-1)*framePeriod;
-	stimfile = addVolEvents(stimfile,addTimes);
-	stimfile.myscreen.modifiedDate = datestr(now);
-	% save the stimfile back
-	save(stimfileName,'-struct','stimfile');
-      end
+    % fix (note there is code for actually putting back missing
+    % triggers, but removed it - should be in the git repo b0ce70f on May 18, 2015)
+    if stimfileInfo.fixAcq
+      % remove all volumes, but the first
+      stimfile = removeTriggers(stimfile,2:stimfileInfo.numVols);
+      % now add volumes for where events should have happened
+      framePeriod = boldScan.tr/1000;
+      dispConOrLog(sprintf('(dofmricni) Spoofing volumes every %ss in %s',num2str(framePeriod),stimfileName));
+      % get all the volumes we need to add, and add them
+      addTimes = (volTimes(1)+framePeriod):framePeriod:volTimes(1)+(nVols-s.removeInitialVols-1)*framePeriod;
+      stimfile = addVolEvents(stimfile,addTimes);
+      stimfile.myscreen.modifiedDate = datestr(now);
     end
+  end
+  % save
+  if ~justDisplay
+    % save the stimfile back
+    save(stimfileName,'-struct','stimfile');
   end
 end
 
