@@ -653,6 +653,7 @@ for iBOLD = 1:length(s.boldScans)
     dicomSlices = boldScan.dicomInfo.numSlices;
     muxSlices = boldScan.h.dim(3);
     mux = boldScan.mux;
+    % compute number of slices to shift
     shiftSlice = -(muxSlices-dicomSlices)/2;
     % computed shifted xform
     xform = boldScan.dicomInfo.xform;
@@ -1217,10 +1218,10 @@ for i = 1:length(infoFieldNames)
 end
 
 % if we are trying to fix the mux x form, then load a sequence, making sure we get the one with the top slice number
-if s.fixMuxXform
+if s.fixMuxXform && (length(d)>1)
   % cycle over reading of dicom headers until we get one as being the top slice
   % (this way we do not assume anything about slice order)
-  foundFirstSlice = false;
+  foundFirstSlice = 0;
   % get the first xform
   refDicomNum = 1;
   refXform = dicom2xform(fullfile(stripext(filename),d(refDicomNum).name));
@@ -1230,7 +1231,7 @@ if s.fixMuxXform
   sliceNum = [];
   % start by loading each xform
   iDicom = refDicomNum+1;
-  while ~foundFirstSlice
+  while foundFirstSlice < 2
     % get the slice x form for this dicom
     sliceXform = dicom2xform(fullfile(stripext(filename),d(iDicom).name));
     % find out the slice number
@@ -1238,12 +1239,17 @@ if s.fixMuxXform
     sliceNum(end+1) = round(slice2slice(3,4));
     % if slice number is the lowest, then replace
     if sliceNum(end) < minSliceNum
-      topSliceXform = sliceXform
+      topSliceXform = sliceXform;
       minSliceNum = sliceNum(end);
     end
     iDicom = iDicom+1;
     % stop when we cycle back to the same reference slice
-    if (sliceNum(end) == 0) || (iDicom>length(d)),foundFirstSlice = true;end
+    if (sliceNum(end) == 0) 
+      % increment how many times we found first slice
+      foundFirstSlice = foundFirstSlice+1;
+    end
+    % check that we have not run out
+    if iDicom>length(d),foundFirstSlice = inf;end
   end
   % set it in the return
   info.xform = topSliceXform;
