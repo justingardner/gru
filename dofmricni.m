@@ -651,6 +651,10 @@ for iBOLD = 1:length(s.boldScans)
   if s.fixMuxXform && ~isempty(boldScan.mux) && (boldScan.mux > 1)
     % get slices/mux factor
     dicomSlices = boldScan.dicomInfo.numSlices;
+    while dicomSlices < 5
+        disp('Warning: # of dicomSlices doesn''t make sense. Something went wrong.');
+        dicomSlices = input('How many slices did you expect? [#]: ','i');
+    end 
     muxSlices = boldScan.h.dim(3);
     mux = boldScan.mux;
     shiftSlice = -(muxSlices-dicomSlices)/2;
@@ -696,7 +700,7 @@ for iBOLD = 1:length(s.boldScans)
     end
     % it should have already been called when we matched stimfile
     % to check if we need to fixAcq, so display that info here
-    if isfield(stimfileInfo,'fixAcq') && stimfileInfo.fixAcq
+    if isfield(stimfileInfo,'fixAcq') && ~isempty(stimfileInfo.fixAcq) && stimfileInfo.fixAcq
       dispConOrLog(sprintf('  Fixing acq triggers = %i for associated stimfile: %s (old values->ignoredInitialVols: %i nVols: %i)',nVolsAfter,stimfileInfo.name,stimfileInfo.ignoredInitialVols,stimfileInfo.numVols),justDisplay);
     end
     % actually do the change
@@ -778,10 +782,10 @@ if s.spoofTriggers && ((acqTriggers ~= (stimfileInfo.numVols+missingIgnoredVols)
   if justDisplay 
     if askuser('Do you want to fix the acq triggers')
       stimfileInfo.fixAcq = true;
-      s.stimfileInfo(stimfileNum).fixAcq = true;
+      s.stimfileInfo(stimfileNum).fixAcq = 1;
     else
       stimfileInfo.fixAcq = false;
-      s.stimfileInfo(stimfileNum).fixAcq = false;
+      s.stimfileInfo(stimfileNum).fixAcq = 0;
     end
   end
   % triggers needed to be added
