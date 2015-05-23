@@ -651,10 +651,6 @@ for iBOLD = 1:length(s.boldScans)
   if s.fixMuxXform && ~isempty(boldScan.mux) && (boldScan.mux > 1)
     % get slices/mux factor
     dicomSlices = boldScan.dicomInfo.numSlices;
-    while dicomSlices < 5
-        disp('Warning: # of dicomSlices doesn''t make sense. Something went wrong.');
-        dicomSlices = input('How many slices did you expect? [#]: ','i');
-    end 
     muxSlices = boldScan.h.dim(3);
     mux = boldScan.mux;
     shiftSlice = -(muxSlices-dicomSlices)/2;
