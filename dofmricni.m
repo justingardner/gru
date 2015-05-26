@@ -769,7 +769,6 @@ end
 % calculate how many acq pulses we expect
 acqTriggers = nVols-s.removeInitialVols;
 
-
 % and see if we have a match. If not, we will fix them
 spoofTriggers = false;
 if s.spoofTriggers && ((acqTriggers ~= (stimfileInfo.numVols+missingIgnoredVols)) || triggerEverySlice)
