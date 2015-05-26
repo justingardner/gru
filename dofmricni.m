@@ -788,23 +788,16 @@ if s.spoofTriggers && ((acqTriggers ~= (stimfileInfo.numVols+missingIgnoredVols)
 end
 
 % this is the code that actually adjusts the stimfiles
-if missingIgnoredVols || spoofTriggers 
+if ~justDisplay && (missingIgnoredVols || spoofTriggers)
   % get the stimfile directory
-  if justDisplay
-    stimfileDir = s.localDir;
-  else
-    stimfileDir = fullfile(s.localSessionDir,'Etc');
-  end
+  stimfileDir = fullfile(s.localSessionDir,'Etc');
   % and load the stimfile
   stimfileName = fullfile(stimfileDir,stimfileInfo.name);
   stimfile = load(stimfileName);
   % save original
-  if ~justDisplay
-    % save original
-    save(sprintf('%s_original.mat',stripext(stimfileName)),'-struct','stimfile');
-  end
+  save(sprintf('%s_original.mat',stripext(stimfileName)),'-struct','stimfile');
   % fix any missing ignored vols
-  if missingIgnoredVols && ~justDisplay
+  if missingIgnoredVols
     if missingIgnoredVols < 0
       stimfile = removeTriggers(stimfile,1:-missingIgnoredVols);
     else
@@ -820,7 +813,7 @@ if missingIgnoredVols || spoofTriggers
   volEvents = find(e.tracenum==volTrace);
   volTimes = e.time(volEvents);
   % fix the triggers by spoofing
-  if spoofTriggers %&& ~justDisplay
+  if spoofTriggers
     % fix (note there is code for actually putting back missing
     % triggers, but removed it - should be in the git repo b0ce70f on May 18, 2015)
     if stimfileInfo.fixAcq
@@ -835,11 +828,8 @@ if missingIgnoredVols || spoofTriggers
       stimfile.myscreen.modifiedDate = datestr(now);
     end
   end
-  % save
-  if ~justDisplay
-    % save the stimfile back
-    save(stimfileName,'-struct','stimfile');
-  end
+  % save the stimfile back
+  save(stimfileName,'-struct','stimfile');
 end
 
 %%%%%%%%%%%%%%%%%%%%%%
