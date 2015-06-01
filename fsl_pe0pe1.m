@@ -92,9 +92,9 @@ if findFiles
             found_acq_params = 1;
         elseif strfind(fi.name,'uw_')
             % skip files that might have already been unwarped
-        elseif ~isempty(strfind(fi.name,'calfiles')) || ~isempty(strfind(fi.name,'CAL'))
+        elseif ~isempty(strfind(fi.name,'pe1')) || ~isempty(strfind(fi.name,'CAL'))
             unwarp.calfiles{end+1} = fi.name;
-        elseif ~isempty(strfind(fi.name,'EPIfiles')) || ~isempty(strfind(fi.name,'mux8'))
+        elseif ~isempty(strfind(fi.name,'pe0')) || ~isempty(strfind(fi.name,'mux8'))
             if fi.bytes > 100000000 % 1 mega byte
                 unwarp.EPIfiles{end+1} = fi.name;
             else
