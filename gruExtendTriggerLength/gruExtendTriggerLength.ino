@@ -6,7 +6,7 @@
 volatile int state = LOW;
 int outputPin = 13;
 // length of output trigger in milliseconds
-int gOutTriggerLen = 15;
+int gOutTriggerLen = 45;
 // time of last trigger
 unsigned long gTriggerMillis = 0;
 // triggered
