@@ -1,10 +1,6 @@
 dbstop('if','error');
 
-<<<<<<< HEAD
 pathNames = {'~/proj/matlab','~/proj/mrTools','~/proj/mgl','~/proj/gru','~/proj/grustim','~/proj/matlab/plugins','~/proj/steeve'};
-=======
-pathNames = {'~/proj/mrTools','~/proj/mgl','~/proj/gru','~/proj/grustim','~/proj/matlab/plugins'};
->>>>>>> 8c4d6fec82e2670c1939f1e9fec87b4f2d6c49e3
 
 for i = 1:length(pathNames)
   if isdir(pathNames{i})
