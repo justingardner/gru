@@ -805,8 +805,16 @@ if ~justDisplay && (missingIgnoredVols || spoofTriggers)
     end
     % update stimfileInfo
     stimfileInfo.numVols = stimfile.myscreen.volnum;
-    stimfileInfo.ignoredInitialVols = stimfile.myscreen.ignoredInitialVols;
+    
+    %check that myscreen had ignoredInitialVols 
+    if ~isfield(stimfile.myscreen,'ignoredInitialVols')
+        stimfileInfo.ignoredInitialVols = 0;
+        fprintf('(fixStimefileTriggers) Myscreen had no ignoredInitialVols field. Ignoring. \n')
+    else
+        stimfileInfo.ignoredInitialVols = stimfile.myscreen.ignoredInitialVols;
+    end
   end
+  
   % get volume events
   e = stimfile.myscreen.events;
   volTrace = find(strcmp('volume',stimfile.myscreen.traceNames));
