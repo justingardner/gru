@@ -1,6 +1,6 @@
 dbstop('if','error');
 
-pathNames = {'~/proj/matlab','~/proj/mrTools','~/proj/mgl','~/proj/gru','~/proj/grustim','~/proj/matlab/plugins','~/proj/steeve'};
+pathNames = {'~/proj/mrTools','~/proj/mgl','~/proj/gru','~/proj/grustim','~/proj/matlab/plugins','~/proj/steeve'};
 
 for i = 1:length(pathNames)
   if isdir(pathNames{i})
