@@ -463,6 +463,7 @@ tf = false;
 curpwd = pwd;
 cd(s.localSessionDir);
 
+stimfileMatchList = {};
 % create stimfile list to pass into mrInit
 for i = 1:length(s.stimfileMatch)
   if s.stimfileMatch(i)~=0
@@ -482,6 +483,7 @@ disp(sprintf('(dofmricni1) Setup mrInit for your directory'));
 mrInit(sessionParams,groupParams,'makeReadme=0');
 
 % now set the dicom info
+mrQuit;
 v = newView;
 nScans = viewGet(v,'nScans');
 if ~isempty(v)
