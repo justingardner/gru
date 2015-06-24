@@ -1,6 +1,6 @@
 dbstop('if','error');
 
-pathNames = {'~/proj/matlab','~/proj/mrTools','~/proj/mgl','~/proj/gru','~/proj/grustim','~/proj/matlab/plugins'};
+pathNames = {'~/proj/matlab','~/proj/mrTools','~/proj/mgl','~/proj/gru','~/proj/grustim','~/proj/matlab/plugins','~/proj/steeve'};
 
 for i = 1:length(pathNames)
   if isdir(pathNames{i})
@@ -19,7 +19,7 @@ mrSetPref('site','Stanford');
 mrSetPref('magnet',{'GE Discovery MR750','other'} ); 
 mrSetPref('coil',{'Nova Medical 32-channel','Nova Medical 16-channel', 'other'} ); 
 mrSetPref('pulseSequence',{'epi','tsense','gre', 'se', 'sense','other'} );
-mrSetPref('pluginPaths','~/proj/matlab/plugins');
+mrSetPref('pluginPaths','~/proj/gru/plugins');
 
 % select some plugins
 selectedPlugins = mrGetPref('selectedPlugins');

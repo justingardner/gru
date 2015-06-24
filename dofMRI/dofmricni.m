@@ -463,6 +463,7 @@ tf = false;
 curpwd = pwd;
 cd(s.localSessionDir);
 
+stimfileMatchList = {};
 % create stimfile list to pass into mrInit
 for i = 1:length(s.stimfileMatch)
   if s.stimfileMatch(i)~=0
@@ -482,6 +483,7 @@ disp(sprintf('(dofmricni1) Setup mrInit for your directory'));
 mrInit(sessionParams,groupParams,'makeReadme=0');
 
 % now set the dicom info
+mrQuit;
 v = newView;
 nScans = viewGet(v,'nScans');
 if ~isempty(v)
@@ -806,8 +808,16 @@ if ~justDisplay && (missingIgnoredVols || spoofTriggers)
     end
     % update stimfileInfo
     stimfileInfo.numVols = stimfile.myscreen.volnum;
-    stimfileInfo.ignoredInitialVols = stimfile.myscreen.ignoredInitialVols;
+    
+    %check that myscreen had ignoredInitialVols 
+    if ~isfield(stimfile.myscreen,'ignoredInitialVols')
+        stimfileInfo.ignoredInitialVols = 0;
+        fprintf('(fixStimefileTriggers) Myscreen had no ignoredInitialVols field. Ignoring. \n')
+    else
+        stimfileInfo.ignoredInitialVols = stimfile.myscreen.ignoredInitialVols;
+    end
   end
+  
   % get volume events
   e = stimfile.myscreen.events;
   volTrace = find(strcmp('volume',stimfile.myscreen.traceNames));
