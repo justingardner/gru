@@ -680,8 +680,9 @@ for iBOLD = 1:length(s.boldScans)
     % fix header if necessary
     if isfield(boldScan,'muxXform')
       h.qform = boldScan.muxXform;
-      h.sform = h.qform;
     end
+    % always set sform to empty
+    h.sform = [];
     % write it back
     mlrImageSave(filename,d,h);
   end
