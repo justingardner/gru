@@ -46,14 +46,14 @@ function retval = dofmricni(varargin)
 % what we are using these days
 
 % Default arguments
-getArgs(varargin,{'stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','stimComputerName=oban','stimComputerUserName=gru','username=[]','unwarp=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1','fixMuxXform=2'});
+getArgs(varargin,{'PI=jlg','idWarning=true','stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','stimComputerName=oban','stimComputerUserName=gru','username=[]','unwarp=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1','fixMuxXform=2'});
 
 % clear screen
 clc;
 
 % set up system variable (which gets passed around with important system info) - this
 % means we have to copy these variables into s.
-sParams = {'cniComputerName','username','stimComputerUserName','stimComputerName','stimfileDir','numMotionComp','minVolumes','removeInitialVols','stimfileRemoveInitialVols','calibrationNameStrings','cleanUp','useLocalData','spoofTriggers','unwarp','fixMuxXform'};
+sParams = {'PI','idWarning','cniComputerName','username','stimComputerUserName','stimComputerName','stimfileDir','numMotionComp','minVolumes','removeInitialVols','stimfileRemoveInitialVols','calibrationNameStrings','cleanUp','useLocalData','spoofTriggers','unwarp','fixMuxXform'};
 for iParam = 1:length(sParams)
   s.(sParams{iParam}) = eval(sParams{iParam});
 end
@@ -1204,7 +1204,10 @@ subjectID = [];
 if isfield(info,'PatientName') && isfield(info.PatientName,'FamilyName')
   subjectID = info.PatientName.FamilyName;
   if ~isempty(subjectID) && (~any(length(subjectID) == [4 5]) || ~isequal(lower(subjectID(1)),'s'))
-    mrWarnDlg('(dofmricni) PatientName should always be set to a subjectID (not the real name)!!!');
+    if s.idWarning
+      mrWarnDlg('(dofmricni) PatientName should always be set to a subjectID (not the real name)!!!');
+    else
+    end
     subjectID = [];
   end
 end
@@ -1212,7 +1215,10 @@ if isempty(subjectID)
   if isfield(info,'PatientName') && isfield(info.PatientName,'GivenName')
     subjectID = info.PatientName.GivenName;
     if ~isempty(subjectID) && (~any(length(subjectID) == [4 5]) || ~isequal(lower(subjectID(1)),'s'))
-      mrWarnDlg('(dofmricni) PatientName should always be set to a subjectID (not the real name)!!!');
+      if s.idWarning
+        mrWarnDlg('(dofmricni) PatientName should always be set to a subjectID (not the real name)!!!');
+      else
+      end
     end
   end
 end
@@ -1468,7 +1474,7 @@ end
 
 % default sunetID to be username
 s.sunetID = mglGetParam('sunetID');
-if isempty(s.sunetID),s.sunetID = s.username;,end
+if isempty(s.sunetID),s.sunetID = s.username;end
 
 % put up dialog making sure info is correct
 mrParams = {{'cniComputerName',s.cniComputerName,'The name of the computer to ssh into'},...
@@ -1484,7 +1490,7 @@ s.sunetID = params.sunetID;
 s.cniComputerName = params.cniComputerName;
   
 % get the list of directoris that live on the cni computer
-result = doRemoteCommand(s.sunetID,s.cniComputerName,'/home/jlg/bin/gruDispData');
+result = doRemoteCommand(s.sunetID,s.cniComputerName,sprintf('/home/%s/bin/gruDispData -pi %s',s.sunetID,s.PI));
 if isempty(result),return,end
 
 % parse the results
@@ -1585,7 +1591,7 @@ disp(sprintf('You can continue where you left off by running dofmricni again'))
 dispHeader;
 
 % get dicoms
-fromDir = fullfile('/nimsfs/raw/jlg',s.cniDir);
+fromDir = sprintf('/nimsfs/raw/%s/%s',s.PI,s.cniDir);
 disp(sprintf('(dofmricni) Get files'));
 command = sprintf('rsync -rtv --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s/ %s',s.sunetID,s.cniComputerName,fromDir,s.localDir);
 disp(command);
