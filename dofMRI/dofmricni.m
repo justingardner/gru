@@ -104,6 +104,8 @@ if s.getStimFiles
     [tf s] = matchStimfiles(s);
     if ~tf,return,end
 else
+    s.stimfileInfo = {};
+    s.stimfileMatch = [];
 end
 
 % setup FSL distortion correction
