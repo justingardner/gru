@@ -10,7 +10,15 @@
 %             To use this, just call dofmricni and select the session you
 %             want to bring to your local computer. It will connect to the
 %             cniComputer (you can change computer name with cniComputerName)
-%             You must put in your password. You will see a list of sessions
+%
+%             You must put in your password. So it is best if you setup passwordless
+%             access to the computer by adding your .ssh/id_rsa.pub to the .ssh/authorized_keys
+%             in your account on cni (see http://gru.stanford.edu/doku.php/gruprivate/sshpassless)
+%
+%             Note that this requires that tje function gruDispData be executable and on the path on the
+%             cni computer (this should already be setup for you in Gardner lab).
+%
+%             You will see a list of sessions
 %             When you have selected which one you want to load then
 %             you will need to put your password in again so that it can 
 %             copy the files locally. It will put files into the correct directories
