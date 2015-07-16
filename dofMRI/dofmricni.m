@@ -275,8 +275,8 @@ boldNum = 0;
 s.seriesDescription = [];
 s.boldScans = [];
 for i = 1:length(fileList)
-  % check by whether name contains BOLD or TE is in range 
-  if ~isempty(findstr('bold',lower(fileList(i).filename))) || (~isempty(fileList(i).te) && (fileList(i).te >= s.teLower) && fileList(i).te <= s.teHigher)
+  % check by whether name contains BOLD or mux or TE is in range 
+  if ~isempty(findstr('mux',lower(fileList(i).filename))) || ~isempty(findstr('bold',lower(fileList(i).filename))) || (~isempty(fileList(i).te) && (fileList(i).te >= s.teLower) && fileList(i).te <= s.teHigher)
     fileList(i).bold = true;
     fileList(i).flipAngle = nan;
     % also get receiverCoilName and sequence type info
@@ -362,9 +362,20 @@ for i = 1:length(fileList)
       end
     end
   end
-  % get flip angle
-  if isfield(fileList(i),'descrip') && isfield(fileList(i).descrip,'fa')
-    fileList(i).flipAngle = fileList(i).descrip.fa;
+  % get things from descrip field
+  if isfield(fileList(i),'descrip') 
+    % get flip angle
+    if isfield(fileList(i).descrip,'fa')
+      fileList(i).flipAngle = fileList(i).descrip.fa;
+    end
+    % get te if not already set from dicom
+    if (~isfield(fileList(i),'te') || isnan(fileList(i).te)) && isfield(fileList(i).descrip,'te')
+      fileList(i).te = fileList(i).descrip.te;
+    end
+    % get tr if not already set from dicom
+    if (~isfield(fileList(i),'tr') || isnan(fileList(i).tr)) && isfield(fileList(i).descrip,'tr')
+      fileList(i).tr = fileList(i).descrip.tr;
+    end
   end
   % see if this is a calibration scan
   calibrationFile = false;
@@ -641,6 +652,65 @@ if doit && isfield(s,'unwarp')
   retval = fsl_pe0pe1(fullfile(s.localSessionDir,'Pre'),s.unwarp);
 end
 
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%    doFixMuxXform    %
+%%%%%%%%%%%%%%%%%%%%%%%
+function s = doFixMuxXform(s,scanNum,justDisplay)
+
+% get the scan
+boldScan = s.fileList(scanNum);
+
+% check if we have dicom info
+if ~isfield(boldScan,'dicomInfo') || isempty(boldScan.dicomInfo)
+  % go display all bold scans with dicomInfo and see if user wants to use one of those
+  dicomList = [];
+  dispHeader;
+  for iBOLD = s.boldScans
+    thisBOLDScan = s.fileList(iBOLD);
+    if isfield(thisBOLDScan,'dicomInfo') && ~isempty(thisBOLDScan.dicomInfo)
+      dicomList(end+1) = iBOLD;
+      disp(sprintf('%i: %s',length(dicomList),thisBOLDScan.filename));
+    end
+  end
+  % if we have some bold scans with dicom then ask the user which one
+  % they want to copy from to make header
+  if ~isempty(dicomList)
+    n = getnum(sprintf('(dofmricni:doFixMuxXform) Scan %s is missing dicom information which is needed to fix the xform. Choose which of the above scans you want to use to copy the dicom info from. If you want to skip fixing the xform, then enter 0: ',boldScan.filename),0:length(dicomList));
+    if n ~= 0
+      % copy over dicom info
+      s.fileList(scanNum).dicomInfo = s.fileList(dicomList(n)).dicomInfo;
+      boldScan = s.fileList(scanNum);
+    end
+  end
+  % if we still have no dicom info then give up at this point
+  if ~isfield(boldScan,'dicomInfo') || isempty(boldScan.dicomInfo)
+    return
+  end
+end
+
+% get slices/mux factor
+dicomSlices = boldScan.dicomInfo.numSlices;
+muxSlices = boldScan.h.dim(3);
+mux = boldScan.mux;
+% compute number of slices to shift
+shiftSlice = -(muxSlices-dicomSlices)/2;
+% computed shifted xform
+xform = boldScan.dicomInfo.xform;
+s.fileList(scanNum).muxXform = xform*[1 0 0 0;0 1 0 0;0 0 1 shiftSlice;0 0 0 1];
+% display what we are doing
+dispConOrLog(sprintf('(dofmricni) Fixing xform (mux=%i nDicomSlices=%i muxSlices: %i) Shift by %0.2f slices',mux,dicomSlices,muxSlices,shiftSlice),justDisplay);
+% check xform (display only if first time
+if (s.fixMuxXform > 1) && isequal(find(scanNum == s.boldScans),1) && justDisplay
+  % load epi and anat
+  disppercent(-inf,sprintf('Loading epi: %s and anat: %s to check fixed header',getLastDir(boldScan.nifti),getLastDir(s.fileList(s.anatScans(1)).nifti)));
+  [epid epih] = mlrImageLoad(boldScan.nifti);
+  [anatd anath] = mlrImageLoad(s.fileList(s.anatScans(1)).nifti);
+  disppercent(inf);
+  epih.sform = s.fileList(scanNum).muxXform;
+  mlrVol(anatd,anath,epid,epih);
+end
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    doRemoveInitialsVols    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -656,27 +726,7 @@ for iBOLD = 1:length(s.boldScans)
   dispConOrLog(sprintf('%i: %s (%i->%i vols)',iBOLD,boldScan.filename,nVols,nVolsAfter),justDisplay);
   % we also fix the muxXform here (since we are already saving and loading)
   if s.fixMuxXform && ~isempty(boldScan.mux) && (boldScan.mux > 1)
-    % get slices/mux factor
-    dicomSlices = boldScan.dicomInfo.numSlices;
-    muxSlices = boldScan.h.dim(3);
-    mux = boldScan.mux;
-    % compute number of slices to shift
-    shiftSlice = -(muxSlices-dicomSlices)/2;
-    % computed shifted xform
-    xform = boldScan.dicomInfo.xform;
-    s.fileList(s.boldScans(iBOLD)).muxXform = xform*[1 0 0 0;0 1 0 0;0 0 1 shiftSlice;0 0 0 1];
-    % display what we are doing
-    dispConOrLog(sprintf('(dofmricni) Fixing xform (mux=%i nDicomSlices=%i muxSlices: %i) Shift by %0.2f slices',mux,dicomSlices,muxSlices,shiftSlice),justDisplay);
-    % check xform
-    if (s.fixMuxXform > 1) && (iBOLD == 1) && justDisplay
-      % load epi and anat
-      disppercent(-inf,sprintf('Loading epi: %s and anat: %s to check fixed header',getLastDir(boldScan.nifti),getLastDir(s.fileList(s.anatScans(1)).nifti)));
-      [epid epih] = mlrImageLoad(boldScan.nifti);
-      [anatd anath] = mlrImageLoad(s.fileList(s.anatScans(1)).nifti);
-      disppercent(inf);
-      epih.sform = s.fileList(s.boldScans(iBOLD)).muxXform;
-      mlrVol(anatd,anath,epid,epih);
-    end
+    s = doFixMuxXform(s,s.boldScans(iBOLD),justDisplay);
   end
   if ~justDisplay
     % go ahead and remove them, first load the file
@@ -1079,14 +1129,31 @@ if nargin < 2,justDisplay = true;end
 dispStr = {};
 for i = 1:length(s.fileList)
   if ~isinf(s.fileList(i).startTime)
+    % has dicom info with start time
     if ~isempty(s.fileList(i).h)
+      % has nifti header
       pixdim = s.fileList(i).h.pixdim;
       dim = s.fileList(i).h.dim;
       flipAngle = s.fileList(i).flipAngle;
+      % display everything
       dispConOrLog(sprintf('%i) %02i:%02i %s [%s] [%s] TR: %0.2f TE: %s flipAngle: %s -> %s',i,s.fileList(i).startHour,s.fileList(i).startMin,s.fileList(i).filename,mlrnum2str(pixdim,'compact=1'),mlrnum2str(dim,'compact=1','sigfigs=0'),s.fileList(i).tr,mlrnum2str(s.fileList(i).te,'compact=1'),mlrnum2str(s.fileList(i).flipAngle,'compact=1'),s.fileList(i).toName),justDisplay);
     else
+      % display dicom info only
       dispConOrLog(sprintf('%i) %02i:%02i %s TR: %0.2f TE: %s -> %s',i,s.fileList(i).startHour,s.fileList(i).startMin,s.fileList(i).filename,s.fileList(i).tr,mlrnum2str(s.fileList(i).te,'compact=1'),s.fileList(i).toName),justDisplay);
       
+    end
+  else
+    % no dicom
+    if ~isempty(s.fileList(i).h)
+      % has nifti header
+      pixdim = s.fileList(i).h.pixdim;
+      dim = s.fileList(i).h.dim;
+      flipAngle = s.fileList(i).flipAngle;
+      % display everything
+      dispConOrLog(sprintf('%i) [NO DICOM] %s [%s] [%s] TR: %0.2f TE: %s flipAngle: %s -> %s',i,s.fileList(i).filename,mlrnum2str(pixdim,'compact=1'),mlrnum2str(dim,'compact=1','sigfigs=0'),s.fileList(i).tr,mlrnum2str(s.fileList(i).te,'compact=1'),mlrnum2str(s.fileList(i).flipAngle,'compact=1'),s.fileList(i).toName),justDisplay);
+    else
+      % no dicom, no nifti
+      dispConOrLog(sprintf('%i) %s',i,s.fileList(i).filename),justDisplay);
     end
   end
 end
