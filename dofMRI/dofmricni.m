@@ -1586,7 +1586,10 @@ dispHeader;
 % get dicoms
 fromDir = fullfile('/nimsfs/raw/jlg',s.cniDir);
 disp(sprintf('(dofmricni) Get files'));
-command = sprintf('rsync -rtv --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s/ %s',s.sunetID,s.cniComputerName,fromDir,s.localDir);
+% rsync - setting permission to user and group rwx for directories
+% and rw for files. FOr others, set to rx and r. Exclude files that we do
+% not need
+command = sprintf('rsync -prtv --chmod=Dug=rwx,Do=rx,Fug=rw,Fo=r --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s/ %s',s.sunetID,s.cniComputerName,fromDir,s.localDir);
 disp(command);
 system(command,'-echo');
 
