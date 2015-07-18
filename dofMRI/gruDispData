@@ -1,0 +1,32 @@
+#!/bin/bash
+#
+#  by: justin gardner
+#     date: 04/05/2015
+#  purpose: just display what is in nims directories /nimsfs/${pi} so that we can easily get the info via ssh
+#           example: gruDispData -pi amnorcia 
+#           This needs to be in the path on the cni server to use dofmricni and you have to make sure to do chmod +x to make it executable
+#    usage: gruDispData 
+#
+
+CNT=0
+while [ "$1" != "" ]; do
+    case $1 in
+		-pi | -PI )             shift
+								PI=$1
+	                            ;;
+    esac
+    shift
+done
+
+if [[ -z "${PI}" ]]; then
+	TOP='/nimsfs/jlg'
+else
+	TOP='/nimsfs/'${PI}
+fi
+
+for file in $( ls -d ${TOP}/* )
+do
+	echo -n `basename $file`,
+	ls $file | awk '{printf $file":"}'
+	echo 
+done
