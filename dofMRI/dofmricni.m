@@ -687,8 +687,9 @@ for iBOLD = 1:length(s.boldScans)
     % fix header if necessary
     if isfield(boldScan,'muxXform')
       h.qform = boldScan.muxXform;
-      h.sform = h.qform;
     end
+    % always set sform to empty
+    h.sform = [];
     % write it back
     mlrImageSave(filename,d,h);
   end
@@ -1597,7 +1598,10 @@ dispHeader;
 % get dicoms
 fromDir = sprintf('/nimsfs/raw/%s/%s',s.PI,s.cniDir);
 disp(sprintf('(dofmricni) Get files'));
-command = sprintf('rsync -rtv --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s/ %s',s.sunetID,s.cniComputerName,fromDir,s.localDir);
+% rsync - setting permission to user and group rwx for directories
+% and rw for files. FOr others, set to rx and r. Exclude files that we do
+% not need
+command = sprintf('rsync -prtv --chmod=Dug=rwx,Do=rx,Fug=rw,Fo=r --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s/ %s',s.sunetID,s.cniComputerName,fromDir,s.localDir);
 disp(command);
 system(command,'-echo');
 
