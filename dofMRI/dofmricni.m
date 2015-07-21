@@ -347,6 +347,26 @@ for i = 1:length(fileList)
 end
 disppercent(inf);
 
+% include file in preprocessing
+origIdx = find(cat(1,fileList(:).bold));
+boldList = {fileList(origIdx).filename};
+for z=1:length(s.calibrationNameStrings)
+    boldIdx(z,:) = cellfun(@(x) ~isempty(strfind(x,s.calibrationNameStrings{z})),boldList);
+end
+boldList = boldList(~sum(boldIdx,1));
+origIdx = origIdx(~sum(boldIdx,1));
+[boldList,sortIdx]=sort(boldList);
+notInclude = ones(1,length(boldList));
+notInclude(listdlg('PromptString','Select scans to include:',...
+                'SelectionMode','multiple',...
+                'ListSize',[250 length(boldList)*15],...
+                'InitialValue',1:length(boldList),...
+                'Name','Select which scans to include:',...
+                'ListString',boldList))=0;
+notIncludeIdx = origIdx(sortIdx(notInclude==1));
+fileList(notIncludeIdx).bold = false;
+s.boldScans = setdiff(s.boldScans,notIncludeIdx);  
+
 % read nifti headers
 % initialze to know calibration files
 s.calibrationFile = [];
