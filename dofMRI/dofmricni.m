@@ -364,7 +364,9 @@ notInclude(listdlg('PromptString','Select scans to include:',...
                 'Name','Select which scans to include:',...
                 'ListString',boldList))=0;
 notIncludeIdx = origIdx(sortIdx(notInclude==1));
-fileList(notIncludeIdx).bold = false;
+if ~isempty(notIncludeIdx)
+    fileList(notIncludeIdx).bold = false;
+end
 s.boldScans = setdiff(s.boldScans,notIncludeIdx);  
 
 % read nifti headers
