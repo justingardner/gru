@@ -1246,6 +1246,8 @@ for i = 1:length(dirList)
   match = 0;
   % skip all . files
   if dirList(i).name(1) == '.',continue,end
+  % skip non-directories
+  if ~dirList(i).isdir,continue,end
   % keep the name and date of the file
   fileList(end+1).filename = dirList(i).name;
   fileList(end).fullfile = fullfile(dirname,dirList(i).name);
