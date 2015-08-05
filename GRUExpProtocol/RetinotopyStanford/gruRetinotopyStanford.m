@@ -2,6 +2,7 @@
 % gruRetinotopyStanford.m
 % 
 %                 date: 06/04/2015
+%               author: steeve
 %              Purpose: fMRI mux8 sequences for retinotopy
 %                Usage: 
 %
@@ -23,9 +24,14 @@
 %Bars
 %----
 %
-%"phase per location": 472 vols
-% duration: 3:55 min
+%"phase per location": 480 vols
+% duration: 4 min
 
+%MT localizer
+%------------
+%
+%"phase per location" : 548 vols
+% duration: 4:33 min
 
 
 %% Wedges and rings
@@ -52,6 +58,8 @@ mglRetinotopy('displayName=fMRIproj16','wedges=1','direction=1','numCycles=10','
 %% CW wedges
 mglRetinotopy('displayName=fMRIproj16','wedges=1','direction=-1','numCycles=10','stimulusPeriod=24','stepsPerCycle',48,'doEyeCalib=0','initialHalfCycle=0');
 
+
+
 %% BARS
 
 %details:
@@ -68,6 +76,10 @@ mglRetinotopy('displayName=fMRIproj16','bars=1','fixedRandom=1','stimulusPeriod=
 mglRetinotopy('displayName=fMRIproj16','bars=1','fixedRandom=1','stimulusPeriod=24','stepsPerCycle',48,'blanks=3','doEyeCalib=0');
 
 
+%% MT localizer
+
+%%
+Mtloc('0%',.5)
 
 
 
