@@ -20,7 +20,7 @@
 %Bars
 %----
 %
-%"phase per location": 480 vols
+%"phase per location": 484 vols
 % duration : 4 min
 
 
