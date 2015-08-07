@@ -22,6 +22,7 @@ cniComputerName = 'cnic7.stanford.edu';
 localDataDir = '~/data';
 
 % set up system variable (which gets passed around with important system info)
+s.sunetID = mglGetParam('sunetID');
 s.cniComputerName = cniComputerName;
 s.localDataDir = mlrReplaceTilde(localDataDir);
 s.dispNiftiHeaderInfo = false;
@@ -33,7 +34,6 @@ s.teHigher = 35;
 % choose which directory to download from cni
 s = getCNIDir(s);
 if isempty(s.cniDir),return,end
-
 
 %% Check if we are at Stanford in GRU lab (171.64.40.***)
 % disp('Checking ip address...');
@@ -57,50 +57,70 @@ end
 s.tempPath = fullfile('/data/temp/',s.subjectID);
 s.fstempPath = fullfile('/data/freesurfer/subjects/',s.subjectID);
 
-%% Connect to LXC Server
+
+
+%% test zone
+
 try
-    curDir = pwd;
-    cd('~/proj/gru');
-    addpath(genpath('~/proj/gru/ssh2_v2_m1_r6'));
-    ssh2_conn = ssh2_config(s.cniComputerName,s.sunetID,input('Password: ','s'));
-    cd(curDir);
+    command = sprintf('ssh %s@%s ls %s',s.sunetID,s.cniComputerName,s.cniDirFull);
+    disp(command);
+    disp('Enter password: ');
+    [status,result] = system(command);
 catch e
-    warning('Something went wrong with ssh2, are you sure you have the ssh2 folder on your path?');
+    warning('Something went wrong with ssh.');
     error(e);
 end
-s.conn = ssh2_conn;
 
 %% Check that our folder is correct
-ssh2_conn = ssh2_command(ssh2_conn,sprintf('ls %s',s.cniDirFull));
-if isempty(ssh2_conn.command_result)
+if isempty(result)
     error('Failed to find your folder, are you sure everything is set up correctly?');
 end
 
-rs = ssh2_conn.command_result;
+%% Replace result with a cell array
+newLines = [1 strfind(result,char(10))];
+
+resultc = {};
+for i = 1:length(newLines)-1
+    resultc{end+1} = strrep(result(newLines(i):newLines(i+1)),char(10),'');
+end
+
+%% Make temp directories
+
+command = sprintf('ssh %s@%s mkdir %s',s.sunetID,s.cniComputerName,'/data/temp');
+disp(command);
+disp('Enter password: ');
+[status,result] = system(command);
+command = sprintf('ssh %s@%s mkdir %s',s.sunetID,s.cniComputerName,s.tempPath);
+disp(command);
+disp('Enter password: ');
+[status,result] = system(command);
+
 %% Figure out which FILE is ours, first try finding a single T1
-corrFile = cellfun(@strfind,ssh2_conn.command_result,repmat({'T1w_9mm'},size(ssh2_conn.command_result)),'UniformOutput',false);
+corrFile = cellfun(@strfind,resultc,repmat({'T1w_9mm'},size(resultc)),'UniformOutput',false);
 pos = logical(1-cellfun(@isempty,corrFile));
-
 filePos = find(pos==1);
-
 
 reconStr = '';
 for i = 1:length(filePos)
     pos = filePos(i);
-    cFile = rs{pos};
-    tempWithFile = fullfile(s.cniDirFull,cFile);
-    
-    if isempty(rs{i})
+    cFile = resultc{pos};
+    if isempty(cFile)
         error('Failed to find your sequence...');
     end
+    tempWithFile = fullfile(s.cniDirFull,cFile);
+    
     % copy files
-    ssh2_conn = ssh2_command(ssh2_conn,sprintf('mkdir %s','/data/temp'));
-    ssh2_conn = ssh2_command(ssh2_conn,sprintf('mkdir %s',s.tempPath));
     curFilePath = fullfile(s.tempPath,strcat(s.subjectID,'_',num2str(i),'_','c.nii.gz'));
-    ssh2_conn = ssh2_command(ssh2_conn,sprintf('cp %s %s',fullfile(tempWithFile,'*.nii.gz'),curFilePath));
+    command = sprintf('ssh %s@%s cp %s %s',s.sunetID,s.cniComputerName,fullfile(tempWithFile,'*.nii.gz'),curFilePath);
+    disp(command);
+    disp('Enter password: ');
+    [status,result] = system(command);
     % gunzip
     pause(.1)
-    ssh2_conn = ssh2_command(ssh2_conn,sprintf('gunzip -d %s',fullfile(curFilePath)));
+    command = sprintf('ssh %s@%s gunzip -d %s',s.sunetID,s.cniComputerName,fullfile(curFilePath));
+    disp(command);
+    disp('Enter password: ');
+    [status,result] = system(command);
     curFilePath = fullfile(s.tempPath,strcat(s.subjectID,'_',num2str(i),'_','c.nii'));
     
     pause(.1)
@@ -108,17 +128,22 @@ for i = 1:length(filePos)
     reconStr = sprintf('%s -i %s',reconStr,curFilePath);
 end
 
+%% Make freesurfer folder
+command = sprintf('ssh %s@%s mkdir %s',s.sunetID,s.cniComputerName,'/data/freesurfer');
+disp(command);
+disp('Enter password: ');
+[status,result] = system(command);
+
+command = sprintf('ssh %s@%s mkdir %s',s.sunetID,s.cniComputerName,'/data/freesurfer/subjects');
+disp(command);
+disp('Enter password: ');
+[status,result] = system(command);
 %% Recon-All
 reconCommand = sprintf('recon-all -subject %s %s -all',s.subjectID,reconStr);
 
-% I don't have this working, so for now you have to do the next step by
-% hand.
+% You have to do this into a new terminal, it won't run through MATLAB
+% directly.
 disp(sprintf('\n\nAll of your files are now organized. Open a new terminal window.\nLeave the terminal window open until these commands complete:\n\nssh -XY %s@cnic7.stanford.edu\n%s\n\nThat''s it!',s.sunetID,reconCommand));
-
-%% Close the LXC Server
-ssh2_conn = ssh2_close(ssh2_conn);
-
-clear ssh2_conn
 
 %%%%%%%%%%%%%%%%%%%
 %%   getCNIDir   %%
@@ -127,7 +152,6 @@ function s = getCNIDir(s)
 
 s.cniDir = [];
 
-s.sunetID = mglGetParam('sunetID');
 if isempty(s.sunetID),s.sunetID = getusername;,end
 
 % put up dialog making sure info is correct
@@ -137,7 +161,7 @@ params = mrParamsDialog(mrParams,'Login information');
 if isempty(params),return,end
 
 % save sunetID
-if ~isempty(params.sunetID) mglSetParam('sunetID',params.sunetID,1);end
+if ~isempty(params.sunetID), mglSetParam('sunetID',params.sunetID,1);end
 
 % get some variables into system variable
 s.sunetID = params.sunetID;

@@ -10,7 +10,15 @@
 %             To use this, just call dofmricni and select the session you
 %             want to bring to your local computer. It will connect to the
 %             cniComputer (you can change computer name with cniComputerName)
-%             You must put in your password. You will see a list of sessions
+%
+%             You must put in your password. So it is best if you setup passwordless
+%             access to the computer by adding your .ssh/id_rsa.pub to the .ssh/authorized_keys
+%             in your account on cni (see http://gru.stanford.edu/doku.php/gruprivate/sshpassless)
+%
+%             Note that this requires that tje function gruDispData be executable and on the path on the
+%             cni computer (this should already be setup for you in Gardner lab).
+%
+%             You will see a list of sessions
 %             When you have selected which one you want to load then
 %             you will need to put your password in again so that it can 
 %             copy the files locally. It will put files into the correct directories
@@ -46,14 +54,14 @@ function retval = dofmricni(varargin)
 % what we are using these days
 
 % Default arguments
-getArgs(varargin,{'stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','stimComputerName=oban','stimComputerUserName=gru','username=[]','unwarp=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1','fixMuxXform=2'});
+getArgs(varargin,{'PI=jlg','idWarning=true','stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','getStimFiles=true','stimComputerName=oban','stimComputerUserName=gru','username=[]','unwarp=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1','fixMuxXform=2'});
 
 % clear screen
 clc;
 
 % set up system variable (which gets passed around with important system info) - this
 % means we have to copy these variables into s.
-sParams = {'cniComputerName','username','stimComputerUserName','stimComputerName','stimfileDir','numMotionComp','minVolumes','removeInitialVols','stimfileRemoveInitialVols','calibrationNameStrings','cleanUp','useLocalData','spoofTriggers','unwarp','fixMuxXform'};
+sParams = {'PI','idWarning','cniComputerName','username','stimComputerUserName','getStimFiles','stimComputerName','stimfileDir','numMotionComp','minVolumes','removeInitialVols','stimfileRemoveInitialVols','calibrationNameStrings','cleanUp','useLocalData','spoofTriggers','unwarp','fixMuxXform'};
 for iParam = 1:length(sParams)
   s.(sParams{iParam}) = eval(sParams{iParam});
 end
@@ -96,12 +104,17 @@ mlrPath mrTools;
 if ~tf,return,end
 
 % get stimfiles
-[tf s] = getStimfiles(s);
-if ~tf,return,end
+if s.getStimFiles
+    [tf s] = getStimfiles(s);
+    if ~tf,return,end
 
-% match stimfiles
-[tf s] = matchStimfiles(s);
-if ~tf,return,end
+    % match stimfiles
+    [tf s] = matchStimfiles(s);
+    if ~tf,return,end
+else
+    s.stimfileInfo = {};
+    s.stimfileMatch = [];
+end
 
 % setup FSL distortion correction
 if s.unwarp
@@ -270,26 +283,38 @@ boldNum = 0;
 s.seriesDescription = [];
 s.boldScans = [];
 for i = 1:length(fileList)
-  % check by whether name contains BOLD or TE is in range 
-  if ~isempty(findstr('bold',lower(fileList(i).filename))) || (~isempty(fileList(i).te) && (fileList(i).te >= s.teLower) && fileList(i).te <= s.teHigher)
-    fileList(i).bold = true;
-    fileList(i).flipAngle = nan;
-    % also get receiverCoilName and sequence type info
-    if isfield(fileList(i).dicomInfo,'SeriesDescription')
-      % keep the first one in the list as the series description
-      if isempty(s.seriesDescription)
-	s.seriesDescription = fileList(i).dicomInfo.SeriesDescription;
+  % check by whether name contains BOLD or mux or TE is in range 
+  if ~isempty(findstr('mux',lower(fileList(i).filename))) || ~isempty(findstr('bold',lower(fileList(i).filename))) || (~isempty(fileList(i).te) && (fileList(i).te >= s.teLower) && fileList(i).te <= s.teHigher) 
+    % check for missing nifti
+    if isempty(fileList(i).nifti)
+      % missing nifti file
+      fileList(i).ignore = true;
+      fileList(i).bold = false;
+      disp(sprintf('========================================================================================'));
+      disp(sprintf('(dofmricni) !!!Scan %s is missing nifti file. Perhaps it did not reconstruct properly!!!',fileList(i).filename));
+      disp(sprintf('========================================================================================'));
+      fileList(i).dispMessage = '[!!! No nifti - recon failure? !!!]';
+    else
+      % this is a bold scan
+      fileList(i).bold = true;
+      fileList(i).flipAngle = nan;
+      % also get receiverCoilName and sequence type info
+      if isfield(fileList(i).dicomInfo,'SeriesDescription')
+	% keep the first one in the list as the series description
+	if isempty(s.seriesDescription)
+	  s.seriesDescription = fileList(i).dicomInfo.SeriesDescription;
+	end
       end
+      % get mux factor from name
+      muxloc = findstr('mux',lower(fileList(i).filename));
+      fileList(i).mux = [];
+      if ~isempty(muxloc)
+	fileList(i).mux = str2num(strtok(fileList(i).filename(muxloc(1)+3:end),'_ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'));
+      end
+      % update bold count
+      s.boldScans(end+1) = i;
+      boldNum = boldNum+1;
     end
-    % get mux factor from name
-    muxloc = findstr('mux',lower(fileList(i).filename));
-    fileList(i).mux = [];
-    if ~isempty(muxloc)
-      fileList(i).mux = str2num(strtok(fileList(i).filename(muxloc(1)+3:end),'_ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'));
-    end
-    % update bold count
-    s.boldScans(end+1) = i;
-    boldNum = boldNum+1;
   else
     fileList(i).bold = false;
   end
@@ -304,6 +329,13 @@ for i = 1:length(fileList)
     anatNum = anatNum+1;
     s.anatScans(anatNum) = i;
     fileList(i).toName = setext(sprintf('anat%02i_%s',anatNum,fileList(i).filename),fileList(i).niftiExt);
+    % check for missing nifti
+    if isempty(fileList(i).nifti)
+      % missing nifti file
+      fileList(i).ignore = true;
+      disp(sprintf('(dofmricni) !!!Scan %s is missing nifti file. Perhaps it did not reconstruct properly!!!',fileList(i).filename));
+      fileList(i).dispMessage = '[No nifti - recon failure?]';
+    end
   else
     fileList(i).anat = false;
   end
@@ -334,66 +366,101 @@ for i = 1:length(fileList)
 end
 disppercent(inf);
 
+% include file in preprocessing
+origIdx = find(cat(1,fileList(:).bold));
+boldList = {fileList(origIdx).filename};
+for z=1:length(s.calibrationNameStrings)
+    boldIdx(z,:) = cellfun(@(x) ~isempty(strfind(x,s.calibrationNameStrings{z})),boldList);
+end
+boldList = boldList(~sum(boldIdx,1));
+origIdx = origIdx(~sum(boldIdx,1));
+[boldList,sortIdx]=sort(boldList);
+notInclude = ones(1,length(boldList));
+notInclude(listdlg('PromptString','Select scans to include:',...
+                'SelectionMode','multiple',...
+                'ListSize',[250 length(boldList)*15],...
+                'InitialValue',1:length(boldList),...
+                'Name','Select which scans to include:',...
+                'ListString',boldList))=0;
+notIncludeIdx = origIdx(sortIdx(notInclude==1));
+if ~isempty(notIncludeIdx)
+    fileList(notIncludeIdx).bold = false;
+end
+s.boldScans = setdiff(s.boldScans,notIncludeIdx);  
+
 % read nifti headers
 % initialze to know calibration files
 s.calibrationFile = [];
 disppercent(-inf,'(dofmricni) Reading nifti headers');
 for i = 1:length(fileList)
-  if ~isempty(fileList(i).nifti)
-    system(sprintf('chmod 644 %s',fileList(i).nifti));
-    fileList(i).h = mlrImageHeaderLoad(fileList(i).nifti);
-  else
-    fileList(i).h = [];
-  end
-  % get other info from description field
-  if isfield(fileList(i).h,'hdr') && isfield(fileList(i).h.hdr,'descrip')
-    descrip = fileList(i).h.hdr.descrip;
-    % parse it
-    while ~isempty(descrip)
-      [thisVar descrip] = strtok(descrip,';');
-      [varName varValue] = strtok(thisVar,'=');
-      if ~isempty(deblank(varName))
-	fileList(i).descrip.(varName) = str2num(varValue(2:end));
+  if ~fileList(i).ignore
+    if ~isempty(fileList(i).nifti)
+      system(sprintf('chmod 644 %s',fileList(i).nifti));
+      fileList(i).h = mlrImageHeaderLoad(fileList(i).nifti);
+    else
+      fileList(i).h = [];
+    end
+    % get other info from description field
+    if isfield(fileList(i).h,'hdr') && isfield(fileList(i).h.hdr,'descrip')
+      descrip = fileList(i).h.hdr.descrip;
+      % parse it
+      while ~isempty(descrip)
+	[thisVar descrip] = strtok(descrip,';');
+	[varName varValue] = strtok(thisVar,'=');
+	if ~isempty(deblank(varName))
+	  fileList(i).descrip.(varName) = str2num(varValue(2:end));
+	end
       end
     end
-  end
-  % get flip angle
-  if isfield(fileList(i),'descrip') && isfield(fileList(i).descrip,'fa')
-    fileList(i).flipAngle = fileList(i).descrip.fa;
-  end
-  % see if this is a calibration scan
-  calibrationFile = false;
-  for iString = 1:length(s.calibrationNameStrings)
-    if ~isempty(findstr(fileList(i).filename,s.calibrationNameStrings{iString}))
-      calibrationFile = true;
-      s.calibrationFile(end+1) = i;
-      % remove it from the bold list
-      if fileList(i).bold
+    % get things from descrip field
+    if isfield(fileList(i),'descrip') 
+      % get flip angle
+      if isfield(fileList(i).descrip,'fa')
+	fileList(i).flipAngle = fileList(i).descrip.fa;
+      end
+      % get te if not already set from dicom
+      if (~isfield(fileList(i),'te') || isnan(fileList(i).te)) && isfield(fileList(i).descrip,'te')
+	fileList(i).te = fileList(i).descrip.te;
+      end
+      % get tr if not already set from dicom
+      if (~isfield(fileList(i),'tr') || isnan(fileList(i).tr)) && isfield(fileList(i).descrip,'tr')
+	fileList(i).tr = fileList(i).descrip.tr;
+      end
+    end
+    % see if this is a calibration scan
+    calibrationFile = false;
+    for iString = 1:length(s.calibrationNameStrings)
+      if ~isempty(findstr(fileList(i).filename,s.calibrationNameStrings{iString}))
+	calibrationFile = true;
+	s.calibrationFile(end+1) = i;
+	% remove it from the bold list
+	if fileList(i).bold
+	  fileList(i).bold = false;
+	  s.boldScans = setdiff(s.boldScans,i);
+	end
+	% set its too name
+	fileList(i).toName = sprintf('%02i_CAL_%s',length(s.calibrationFile),getLastDir(fileList(i).nifti));
+      end
+    end
+    % check if this is a bold
+    if fileList(i).bold
+      % if it is and we do not have a nifti header then remove from list
+      % or if we have too few volumes
+      if isempty(fileList(i).h) || size(fileList(i).h.dim,2) < 4 || (fileList(i).h.dim(4) < s.minVolumes)
+	if isempty(fileList(i).h)
+	  disp(sprintf('(dofmricni) !!! Scan %s has no nifti header, removing from list of BOLD scans !!!',fileList(i).filename));
+	else
+	  % tell  user we are dropping
+	  if size(fileList(i).h.dim,2) < 4
+	    disp(sprintf('\n(dofmricni) !!! Scan %s has 0 volumes, removing from list of BOLD scans.',fileList(i).filename));
+	  else
+	    disp(sprintf('\n(dofmricni) !!! Scan %s has only %i volumes, removing from list of BOLD scans. Decrease minVolumes setting in dofmricni to keep. !!!',fileList(i).filename,fileList(i).h.dim(4)));
+	  end
+	end
+	% remove from list
 	fileList(i).bold = false;
 	s.boldScans = setdiff(s.boldScans,i);
       end
-      % set its too name
-      fileList(i).toName = sprintf('%02i_CAL_%s',length(s.calibrationFile),getLastDir(fileList(i).nifti));
-    end
-  end
-  % check if this is a bold
-  if fileList(i).bold
-    % if it is and we do not have a nifti header then remove from list
-    % or if we have too few volumes
-    if isempty(fileList(i).h) || size(fileList(i).h.dim,2) < 4 || (fileList(i).h.dim(4) < s.minVolumes)
-      if isempty(fileList(i).h)
-	disp(sprintf('(dofmricni) !!! Scan %s has no nifti header, removing from list of BOLD scans !!!',fileList(i).filename));
-      else
-	% tell  user we are dropping
-	if size(fileList(i).h.dim,2) < 4
-	  disp(sprintf('\n(dofmricni) !!! Scan %s has 0 volumes, removing from list of BOLD scans.',fileList(i).filename));
-	else
-	  disp(sprintf('\n(dofmricni) !!! Scan %s has only %i volumes, removing from list of BOLD scans. Decrease minVolumes setting in dofmricni to keep. !!!',fileList(i).filename,fileList(i).h.dim(4)));
-	end
-      end
-      % remove from list
-      fileList(i).bold = false;
-      s.boldScans = setdiff(s.boldScans,i);
     end
   end
   disppercent(i/length(fileList));
@@ -402,7 +469,9 @@ disppercent(inf);
 
 % set the bold scans toName
 for iBOLD = 1:length(s.boldScans)
-  fileList(s.boldScans(iBOLD)).toName = sprintf('%03i_BOLD_%s',iBOLD,getLastDir(fileList(s.boldScans(iBOLD)).nifti));
+  if ~fileList(s.boldScans(iBOLD)).ignore
+    fileList(s.boldScans(iBOLD)).toName = sprintf('%03i_BOLD_%s',iBOLD,getLastDir(fileList(s.boldScans(iBOLD)).nifti));
+  end
 end
 
 % get the subject id
@@ -636,6 +705,65 @@ if doit && isfield(s,'unwarp')
   retval = fsl_pe0pe1(fullfile(s.localSessionDir,'Pre'),s.unwarp);
 end
 
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%    doFixMuxXform    %
+%%%%%%%%%%%%%%%%%%%%%%%
+function s = doFixMuxXform(s,scanNum,justDisplay)
+
+% get the scan
+boldScan = s.fileList(scanNum);
+
+% check if we have dicom info
+if ~isfield(boldScan,'dicomInfo') || isempty(boldScan.dicomInfo)
+  % go display all bold scans with dicomInfo and see if user wants to use one of those
+  dicomList = [];
+  dispHeader;
+  for iBOLD = s.boldScans
+    thisBOLDScan = s.fileList(iBOLD);
+    if isfield(thisBOLDScan,'dicomInfo') && ~isempty(thisBOLDScan.dicomInfo)
+      dicomList(end+1) = iBOLD;
+      disp(sprintf('%i: %s',length(dicomList),thisBOLDScan.filename));
+    end
+  end
+  % if we have some bold scans with dicom then ask the user which one
+  % they want to copy from to make header
+  if ~isempty(dicomList)
+    n = getnum(sprintf('(dofmricni:doFixMuxXform) Scan %s is missing dicom information which is needed to fix the xform. Choose which of the above scans you want to use to copy the dicom info from. If you want to skip fixing the xform, then enter 0: ',boldScan.filename),0:length(dicomList));
+    if n ~= 0
+      % copy over dicom info
+      s.fileList(scanNum).dicomInfo = s.fileList(dicomList(n)).dicomInfo;
+      boldScan = s.fileList(scanNum);
+    end
+  end
+  % if we still have no dicom info then give up at this point
+  if ~isfield(boldScan,'dicomInfo') || isempty(boldScan.dicomInfo)
+    return
+  end
+end
+
+% get slices/mux factor
+dicomSlices = boldScan.dicomInfo.numSlices;
+muxSlices = boldScan.h.dim(3);
+mux = boldScan.mux;
+% compute number of slices to shift
+shiftSlice = -(muxSlices-dicomSlices)/2;
+% computed shifted xform
+xform = boldScan.dicomInfo.xform;
+s.fileList(scanNum).muxXform = xform*[1 0 0 0;0 1 0 0;0 0 1 shiftSlice;0 0 0 1];
+% display what we are doing
+dispConOrLog(sprintf('(dofmricni) Fixing xform (mux=%i nDicomSlices=%i muxSlices: %i) Shift by %0.2f slices',mux,dicomSlices,muxSlices,shiftSlice),justDisplay);
+% check xform (display only if first time
+if (s.fixMuxXform > 1) && isequal(find(scanNum == s.boldScans),1) && justDisplay
+  % load epi and anat
+  disppercent(-inf,sprintf('Loading epi: %s and anat: %s to check fixed header',getLastDir(boldScan.nifti),getLastDir(s.fileList(s.anatScans(1)).nifti)));
+  [epid epih] = mlrImageLoad(boldScan.nifti);
+  [anatd anath] = mlrImageLoad(s.fileList(s.anatScans(1)).nifti);
+  disppercent(inf);
+  epih.sform = s.fileList(scanNum).muxXform;
+  mlrVol(anatd,anath,epid,epih);
+end
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    doRemoveInitialsVols    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -651,27 +779,7 @@ for iBOLD = 1:length(s.boldScans)
   dispConOrLog(sprintf('%i: %s (%i->%i vols)',iBOLD,boldScan.filename,nVols,nVolsAfter),justDisplay);
   % we also fix the muxXform here (since we are already saving and loading)
   if s.fixMuxXform && ~isempty(boldScan.mux) && (boldScan.mux > 1)
-    % get slices/mux factor
-    dicomSlices = boldScan.dicomInfo.numSlices;
-    muxSlices = boldScan.h.dim(3);
-    mux = boldScan.mux;
-    % compute number of slices to shift
-    shiftSlice = -(muxSlices-dicomSlices)/2;
-    % computed shifted xform
-    xform = boldScan.dicomInfo.xform;
-    s.fileList(s.boldScans(iBOLD)).muxXform = xform*[1 0 0 0;0 1 0 0;0 0 1 shiftSlice;0 0 0 1];
-    % display what we are doing
-    dispConOrLog(sprintf('(dofmricni) Fixing xform (mux=%i nDicomSlices=%i muxSlices: %i) Shift by %0.2f slices',mux,dicomSlices,muxSlices,shiftSlice),justDisplay);
-    % check xform
-    if (s.fixMuxXform > 1) && (iBOLD == 1) && justDisplay
-      % load epi and anat
-      disppercent(-inf,sprintf('Loading epi: %s and anat: %s to check fixed header',getLastDir(boldScan.nifti),getLastDir(s.fileList(s.anatScans(1)).nifti)));
-      [epid epih] = mlrImageLoad(boldScan.nifti);
-      [anatd anath] = mlrImageLoad(s.fileList(s.anatScans(1)).nifti);
-      disppercent(inf);
-      epih.sform = s.fileList(s.boldScans(iBOLD)).muxXform;
-      mlrVol(anatd,anath,epid,epih);
-    end
+    s = doFixMuxXform(s,s.boldScans(iBOLD),justDisplay);
   end
   if ~justDisplay
     % go ahead and remove them, first load the file
@@ -682,8 +790,9 @@ for iBOLD = 1:length(s.boldScans)
     % fix header if necessary
     if isfield(boldScan,'muxXform')
       h.qform = boldScan.muxXform;
-      h.sform = h.qform;
     end
+    % always set sform to empty
+    h.sform = [];
     % write it back
     mlrImageSave(filename,d,h);
   end
@@ -1074,14 +1183,31 @@ if nargin < 2,justDisplay = true;end
 dispStr = {};
 for i = 1:length(s.fileList)
   if ~isinf(s.fileList(i).startTime)
+    % has dicom info with start time
     if ~isempty(s.fileList(i).h)
+      % has nifti header
       pixdim = s.fileList(i).h.pixdim;
       dim = s.fileList(i).h.dim;
       flipAngle = s.fileList(i).flipAngle;
-      dispConOrLog(sprintf('%i) %02i:%02i %s [%s] [%s] TR: %0.2f TE: %s flipAngle: %s -> %s',i,s.fileList(i).startHour,s.fileList(i).startMin,s.fileList(i).filename,mlrnum2str(pixdim,'compact=1'),mlrnum2str(dim,'compact=1','sigfigs=0'),s.fileList(i).tr,mlrnum2str(s.fileList(i).te,'compact=1'),mlrnum2str(s.fileList(i).flipAngle,'compact=1'),s.fileList(i).toName),justDisplay);
+      % display everything
+      dispConOrLog(sprintf('%i) %02i:%02i %s [%s] [%s] TR: %0.2f TE: %s flipAngle: %s -> %s %s',i,s.fileList(i).startHour,s.fileList(i).startMin,s.fileList(i).filename,mlrnum2str(pixdim,'compact=1'),mlrnum2str(dim,'compact=1','sigfigs=0'),s.fileList(i).tr,mlrnum2str(s.fileList(i).te,'compact=1'),mlrnum2str(s.fileList(i).flipAngle,'compact=1'),s.fileList(i).toName,s.fileList(i).dispMessage),justDisplay);
     else
-      dispConOrLog(sprintf('%i) %02i:%02i %s TR: %0.2f TE: %s -> %s',i,s.fileList(i).startHour,s.fileList(i).startMin,s.fileList(i).filename,s.fileList(i).tr,mlrnum2str(s.fileList(i).te,'compact=1'),s.fileList(i).toName),justDisplay);
+      % display dicom info only
+      dispConOrLog(sprintf('%i) %02i:%02i %s TR: %0.2f TE: %s -> %s %s',i,s.fileList(i).startHour,s.fileList(i).startMin,s.fileList(i).filename,s.fileList(i).tr,mlrnum2str(s.fileList(i).te,'compact=1'),s.fileList(i).toName,s.fileList(i).dispMessage),justDisplay);
       
+    end
+  else
+    % no dicom
+    if ~isempty(s.fileList(i).h)
+      % has nifti header
+      pixdim = s.fileList(i).h.pixdim;
+      dim = s.fileList(i).h.dim;
+      flipAngle = s.fileList(i).flipAngle;
+      % display everything
+      dispConOrLog(sprintf('%i) [NO DICOM] %s [%s] [%s] TR: %0.2f TE: %s flipAngle: %s -> %s %s',i,s.fileList(i).filename,mlrnum2str(pixdim,'compact=1'),mlrnum2str(dim,'compact=1','sigfigs=0'),s.fileList(i).tr,mlrnum2str(s.fileList(i).te,'compact=1'),mlrnum2str(s.fileList(i).flipAngle,'compact=1'),s.fileList(i).toName,s.fileList(i).dispMessage),justDisplay);
+    else
+      % no dicom, no nifti
+      dispConOrLog(sprintf('%i) %s',i,s.fileList(i).filename),justDisplay);
     end
   end
 end
@@ -1120,13 +1246,17 @@ for i = 1:length(dirList)
   match = 0;
   % skip all . files
   if dirList(i).name(1) == '.',continue,end
+  % skip non-directories
+  if ~dirList(i).isdir,continue,end
   % keep the name and date of the file
   fileList(end+1).filename = dirList(i).name;
   fileList(end).fullfile = fullfile(dirname,dirList(i).name);
   fileList(end).date = dirList(i).date;
   fileList(end).datenum = dirList(i).datenum;
-  % set ignore to false (this gets set if something goes wrong)
+  % set ignore to false (this gets set if something goes wrong) - and dispMessage a string
+  % that can be printed to let you know what the problem was.
   fileList(end).ignore = false;
+  fileList(end).dispMessage = '';
   % get name of nifti
   % first look for uncompressed nifti
   fileList(end).nifti = dir(sprintf('%s/*.nii',fullfile(dirname,dirList(i).name)));
@@ -1203,7 +1333,10 @@ subjectID = [];
 if isfield(info,'PatientName') && isfield(info.PatientName,'FamilyName')
   subjectID = info.PatientName.FamilyName;
   if ~isempty(subjectID) && (~any(length(subjectID) == [4 5]) || ~isequal(lower(subjectID(1)),'s'))
-    mrWarnDlg('(dofmricni) PatientName should always be set to a subjectID (not the real name)!!!');
+    if s.idWarning
+      mrWarnDlg('(dofmricni) PatientName should always be set to a subjectID (not the real name)!!!');
+    else
+    end
     subjectID = [];
   end
 end
@@ -1211,7 +1344,10 @@ if isempty(subjectID)
   if isfield(info,'PatientName') && isfield(info.PatientName,'GivenName')
     subjectID = info.PatientName.GivenName;
     if ~isempty(subjectID) && (~any(length(subjectID) == [4 5]) || ~isequal(lower(subjectID(1)),'s'))
-      mrWarnDlg('(dofmricni) PatientName should always be set to a subjectID (not the real name)!!!');
+      if s.idWarning
+        mrWarnDlg('(dofmricni) PatientName should always be set to a subjectID (not the real name)!!!');
+      else
+      end
     end
   end
 end
@@ -1467,7 +1603,7 @@ end
 
 % default sunetID to be username
 s.sunetID = mglGetParam('sunetID');
-if isempty(s.sunetID),s.sunetID = s.username;,end
+if isempty(s.sunetID),s.sunetID = s.username;end
 
 % put up dialog making sure info is correct
 mrParams = {{'cniComputerName',s.cniComputerName,'The name of the computer to ssh into'},...
@@ -1483,7 +1619,7 @@ s.sunetID = params.sunetID;
 s.cniComputerName = params.cniComputerName;
   
 % get the list of directoris that live on the cni computer
-result = doRemoteCommand(s.sunetID,s.cniComputerName,'/home/jlg/bin/gruDispData');
+result = doRemoteCommand(s.sunetID,s.cniComputerName,sprintf('/home/%s/bin/gruDispData -pi %s',s.sunetID,s.PI));
 if isempty(result),return,end
 
 % parse the results
@@ -1584,9 +1720,12 @@ disp(sprintf('You can continue where you left off by running dofmricni again'))
 dispHeader;
 
 % get dicoms
-fromDir = fullfile('/nimsfs/raw/jlg',s.cniDir);
+fromDir = sprintf('/nimsfs/raw/%s/%s',s.PI,s.cniDir);
 disp(sprintf('(dofmricni) Get files'));
-command = sprintf('rsync -rtv --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s/ %s',s.sunetID,s.cniComputerName,fromDir,s.localDir);
+% rsync - setting permission to user and group rwx for directories
+% and rw for files. FOr others, set to rx and r. Exclude files that we do
+% not need
+command = sprintf('rsync -prtv --chmod=Dug=rwx,Do=rx,Fug=rw,Fo=r --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s/ %s',s.sunetID,s.cniComputerName,fromDir,s.localDir);
 disp(command);
 system(command,'-echo');
 
@@ -1803,14 +1942,16 @@ end
 for iBOLD = 1:length(s.boldScans)
   % get the scan info
   bold = s.fileList(s.boldScans(iBOLD));
-  % if we have a match, display it
-  if stimfileMatch(iBOLD) ~= 0
-    % stimfile info for this stimfile
-    stimfile = s.stimfileInfo(stimfileMatch(iBOLD));
-    disp(sprintf('%i->%i: %s (%i vols %s) -> %s (%i vols %s %s)',iBOLD,stimfileMatch(iBOLD),bold.filename,bold.h.dim(4),bold.startDate,stimfile.name,stimfile.numVols,stimfile.startTime,stimfile.endTime));
-  else
-    % otherwise display no match
-    disp(sprintf('%i->X: %s (%i vols %s) -> None',iBOLD,bold.filename,bold.h.dim(4),bold.startDate));
+  if ~bold.ignore
+    % if we have a match, display it
+    if stimfileMatch(iBOLD) ~= 0
+      % stimfile info for this stimfile
+      stimfile = s.stimfileInfo(stimfileMatch(iBOLD));
+      disp(sprintf('%i->%i: %s (%i vols %s) -> %s (%i vols %s %s)',iBOLD,stimfileMatch(iBOLD),bold.filename,bold.h.dim(4),bold.startDate,stimfile.name,stimfile.numVols,stimfile.startTime,stimfile.endTime));
+    else
+      % otherwise display no match
+      disp(sprintf('%i->X: %s (%i vols %s) -> None',iBOLD,bold.filename,bold.h.dim(4),bold.startDate));
+    end
   end
 end
 

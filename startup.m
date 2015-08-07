@@ -1,10 +1,11 @@
 dbstop('if','error');
 
-pathNames = {'~/proj/matlab','~/proj/mrTools','~/proj/mgl','~/proj/gru','~/proj/grustim','~/proj/matlab/plugins','~/proj/steeve'};
+pathNames = {'~/proj/mrTools','~/proj/mgl','~/proj/gru','~/proj/grustim','~/proj/matlab/plugins','~/proj/steeve','~/proj/vistasoft','~/proj/mba'};
 
+addpath('~/proj/gru/mac_helpers');
 for i = 1:length(pathNames)
   if isdir(pathNames{i})
-    addpath(genpath(pathNames{i}));
+    addpath(genpath_exclude(pathNames{i},{'.git','.svn'}));
   end
 end
 

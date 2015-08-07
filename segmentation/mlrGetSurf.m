@@ -8,21 +8,14 @@ function mlrGetSurf()
 %   which you should have already initialized with mrInit.
 %
 % USAGE:
-%   success = mlrGetSurf(project,password)
-%
-% project       Current project, e.g. 'retinotopy'
-% password      Your suid password
-%
-% RETURNS:
-%   success     1 when your files were successfully moved onto this local
-%               computer. 0 otherwise.
+%   mlrGetSurf()
 
 %% Search the LXC server for subjects
 s.localDataDir= '~/data/mlrAnatDB';
 s.cniComputerName = 'cnic7.stanford.edu';
+s.sunetID = mglGetParam('sunetID');
 
-s = getInfo(s);
-
+disp(sprintf('\n\n\n\n'));
 command = sprintf('ssh %s@%s ls /data/freesurfer/subjects/',s.sunetID,s.cniComputerName);
 disp(command);
 disp('Enter password: ');
@@ -77,93 +70,42 @@ end
 %     error('mlrReconAll and mlrGetSurf are only intended for use at Stanford!');
 % end
 
-%% Folder Structure
-if ~isdir(s.aDBLocal)
-%     disp(sprintf('Please copy into a terminal, then dbcont:'));
-    command = sprintf('hg clone %s %s',s.aDBServ,s.aDBLocal);
-    system(command);
-else
-    disp('Anatomy Database exists for subject. ');
-    cur = pwd;
-    cd(s.aDBLocal);
-    system('hg pull');
-    cd(cur);
-end
-base = {'3D','mlrBaseAnatomies','niftiROIS','localizers','mlrROIs'};
-    
-succ = 1;
-
-if ~isdir(s.aDBLocal)            
-    succ = 0;
-else
-    succ = 1;
-    for i = 1:length(base)
-        if ~isdir(fullfile(s.aDBLocal,base{i}))
-            succ = 0;
-        end
-    end
-end
-if ~succ
-    error(sprintf('Anatomy Database folder structure for %s is not correct.',s.subjectID));
-end
-
-%% Connect to LXC Server
-try
-    curDir = pwd;
-    cd('~/proj/gru');
-    addpath(genpath('~/proj/gru/ssh2_v2_m1_r6'));
-    s.conn = ssh2_config(s.cniComputerName,s.sunetID,input('Password: ','s'));
-    cd(curDir);
-catch e
-    warning('Something went wrong with ssh2, are you sure you have the ssh2 folder on your path?');
-    error(e);
-end
-s.conn = s.conn;
-
 %% Check if FreeSurfer is finished
 
 s.fstempPath = fullfile('/data/freesurfer/subjects/',folder);
 s.fstempPathMRI = fullfile(s.fstempPath,'mri');
 s.fstempPathSurf = fullfile(s.fstempPath,'surf');
 
-%% Check for Surfaces
-command = sprintf('ls %s',s.fstempPathSurf);
-s.conn = ssh2_command(s.conn,command);
+%% Check for Surfaces 
+disp(sprintf('\n\n\n\n'));
+command = sprintf('ssh %s@%s ls %s',s.sunetID,s.cniComputerName,s.fstempPathSurf);
+disp(command);
+disp('Enter password: ');
+[status,result] = system(command);
 
-exist_surf = 1;
-if ~findFile(s.conn,'lh.pial') || ~findFile(s.conn,'rh.pial') || ~findFile(s.conn,'lh.smoothwm') || ~findFile(s.conn,'rh.smoothwm')
+if isempty(strfind(result,'lh.pial')) || isempty(strfind(result,'rh.pial')) || isempty(strfind(result,'lh.smoothwm')) || isempty(strfind(result,'rh.smoothwm'))
     warning('FreeSurfer didn''t finish running. Re-run this later to copy the surfaces.');
-    exist_surf = 0;
     return
 end
 
-if exist_surf
-    disp('FreeSurfer appears to have completed, will copy surfaces.');
+disp('FreeSurfer appears to have completed, copying surfaces.');
+
+%% SCP Files to /temp/
+s.tempPath = fullfile('~/data/temp/mlrGetSurf/');
+s.fullLocal = fullfile(s.tempPath,s.subjectID);
+if ~isdir('~/data/temp')
+    mkdir('~/data/temp');
+end
+if ~isdir(s.tempPath)
+    mkdir(s.tempPath);
 end
 
-%% SCP Files to /data/
-i = 1;
-if ~isdir(fullfile(s.aDBLocal,'mlrBaseAnatomies','FS'))
-    mkdir(fullfile(s.aDBLocal,'mlrBaseAnatomies','FS'));
-end
-s.fullLocal = fullfile(s.aDBLocal,'mlrBaseAnatomies','FS',num2str(i));
-while isdir(s.fullLocal)
-    warning('Found existing directory %s.',s.fullLocal);
-    in = input('Do you want to overwrite? [y/n]: ','s');
-    if strcmp(in,'y')
-        warning('Overwriting a directory may not work correctly--scp sometimes fails. In addition, you may be over-writing data. A better practice is to simply copy into a new folder /FS/2 by saying no to the ovewr-write. [dbcont]');
-        keyboard
-        break
-    end
-    i = i+1;
-    s.fullLocal = fullfile(s.aDBLocal,'mlrBaseAnatomies','FS',num2str(i));
-end
-
-scpCommand = sprintf('scp -r %s@%s:%s %s',s.sunetID,s.cniComputerName,s.fstempPath,s.fullLocal);
-
-disp('Copying files locally.');
-disp(scpCommand);
-system(scpCommand);
+disp(sprintf('\n\n\n\n'));
+command = sprintf('scp -r %s@%s:%s %s',s.sunetID,s.cniComputerName,s.fstempPath,s.tempPath);
+disp(command);
+disp('This could take up to a minute...');
+disp('Enter password: ');
+[status,result] = system(command);
 
 %% Check that SCP succeeded
 [s_t1, s_surf] = checkForSurfFiles(s.fullLocal);
@@ -185,62 +127,25 @@ if s_surf
     cd(cDir);
 end
 
-%% Copy canonical from mlrImport
-files = {sprintf('%s_mprage_pp.nii',s.subjectID)};
+%% Run Justin's import code
 
-for i = 1:length(files)
-    file = fullfile(s.fullLocal,'surfRelax',files{i});
-    nfile = fullfile(s.aDBLocal,'3D',sprintf('%sc.nii',s.subjectID));
-    disp(sprintf('Copying %s to %s',file,nfile));
-    suc = copyfile(file,nfile);
-    if ~suc
-        warning('File copy failed... check?');
-    end
-    nfile = fullfile(s.aDBLocal,'mlrBaseAnatomies',sprintf('%sc.nii',s.subjectID));
-    disp(sprintf('Copying %s to %s',file,nfile));
-    suc = copyfile(file,nfile);
-    if ~suc
-        warning('File copy failed... check?');
-    end
-end
+s.subjNum = mrStr2num(strrep(s.subjectID,'s',''));
 
-%% Copy freesurfer files up
-files = {sprintf('%s_left_Curv.vff',s.subjectID), sprintf('%s_left_GM.off',s.subjectID), ...
-    sprintf('%s_left_Inf.off',s.subjectID), sprintf('%s_left_WM.off',s.subjectID), ...
-    sprintf('%s_right_Curv.vff',s.subjectID), sprintf('%s_right_GM.off',s.subjectID), ...
-    sprintf('%s_right_Inf.off',s.subjectID), sprintf('%s_right_WM.off',s.subjectID)};
-
-for i = 1:length(files)
-    file = fullfile(s.fullLocal,'surfRelax',files{i});
-    nfile = fullfile(s.aDBLocal,'mlrBaseAnatomies',files{i});
-    disp(sprintf('Copying %s to %s',file,nfile));
-    suc = copyfile(file,nfile);
-    if ~suc
-        warning('File copy failed... check?');
-    end
-end
-
-%% Push to hg server
-cur = pwd;
-cd(s.aDBLocal);
-disp('Pushing local changes to AnatDB Server: warning--this may take some time!');
-system('hg add');
-system(sprintf('hg commit -m "Added segmentation files for %s on %s"',s.subjectID,datestr(now)));
-system(sprintf('hg push -v'));
-cd(cur);
+%%mlrAnatDBPut(s.subjNum,s.fullLocal,'freesurfer');
 
 %% Cleanup the server, get rid of the /data/temp/s#### and /data/freesurfer/subjects/s####
+disp(sprintf('\n\n\n\n'));
 if s_t1 && s_surf
     if strcmp(input('Do you want to remove the folders on the LXC server? y/n: ','s'),'y')
-        s.conn = ssh2_command(s.conn,sprintf('rm -rf %s',fullfile('/data/temp/',s.subjectID)));
-        s.conn = ssh2_command(s.conn,sprintf('rm -rf %s',fullfile(s.fstempPath)));
-        disp('Files removed...');
+
+        command1 = sprintf('ssh %s@%s rm -rf %s',s.sunetID,s.cniComputerName,s.fstempPath);
+        command2 = sprintf('ssh %s@%s rm -rf %s',s.sunetID,s.cniComputerName,fullfile('/data/temp/',s.subjectID));
+        disp(command1);
+        disp(command2);
+        disp('Enter password: ');
+        [status,result] = system(command1);
     end
 end
-
-%% Close lxc
-ssh2_close(s.conn);
-s.conn = struct;
 
 %% 
 disp(sprintf('mlrGetSurf for subject %s is complete.',s.subjectID));
