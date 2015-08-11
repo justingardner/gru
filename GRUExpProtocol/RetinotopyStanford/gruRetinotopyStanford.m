@@ -1,7 +1,7 @@
 
 % gruRetinotopyStanford.m
 % 
-%                 date: 06/04/2015
+%                 date: 06/04/2015 updated 08/10/2015
 %               author: steeve
 %              Purpose: fMRI mux8 sequences for retinotopy
 %                Usage: 
@@ -11,6 +11,7 @@
 %Sequence info
 %-------------
 %
+%32 channels coil
 %MUX 8 ARC 1
 %TR 0.5s
 %7 slices per vol
@@ -26,7 +27,7 @@
 %
 %"phase per location": 480 vols
 % duration: 4 min
-
+%
 %MT localizer
 %------------
 %
@@ -41,22 +42,22 @@
 %10*48 + 16 = 496 vols
 
 %CCW wedges
-mglRetinotopy('displayName=fMRIproj16','wedges=1','direction=1','numCycles=10','stimulusPeriod=24','stepsPerCycle',48,'doEyeCalib=0','initialHalfCycle=0');
+mglRetinotopy('displayName=fMRIproj32','wedges=1','direction=1','numCycles=10','stimulusPeriod=24','stepsPerCycle',48,'doEyeCalib=0','initialHalfCycle=0');
 
 %% CW wedges
-mglRetinotopy('displayName=fMRIproj16','wedges=1','direction=-1','numCycles=10','stimulusPeriod=24','stepsPerCycle',48,'doEyeCalib=0','initialHalfCycle=0');
+mglRetinotopy('displayName=fMRIproj32','wedges=1','direction=-1','numCycles=10','stimulusPeriod=24','stepsPerCycle',48,'doEyeCalib=0','initialHalfCycle=0');
 
 %% expanding rings
-mglRetinotopy('displayName=fMRIproj16','rings=1','direction=1','numCycles=10','stimulusPeriod=24','stepsPerCycle',48,'doEyeCalib=0','initialHalfCycle=0');
+mglRetinotopy('displayName=fMRIproj32','rings=1','direction=1','numCycles=10','stimulusPeriod=24','stepsPerCycle',48,'doEyeCalib=0','initialHalfCycle=0');
 
 %% contracting rings
-mglRetinotopy('displayName=fMRIproj16','rings=1','direction=-1','numCycles=10','stimulusPeriod=24','stepsPerCycle',48,'doEyeCalib=0','initialHalfCycle=0');
+mglRetinotopy('displayName=fMRIproj32','rings=1','direction=-1','numCycles=10','stimulusPeriod=24','stepsPerCycle',48,'doEyeCalib=0','initialHalfCycle=0');
 
 %% CCW wedges
-mglRetinotopy('displayName=fMRIproj16','wedges=1','direction=1','numCycles=10','stimulusPeriod=24','stepsPerCycle',48,'doEyeCalib=0','initialHalfCycle=0');
+mglRetinotopy('displayName=fMRIproj32','wedges=1','direction=1','numCycles=10','stimulusPeriod=24','stepsPerCycle',48,'doEyeCalib=0','initialHalfCycle=0');
 
 %% CW wedges
-mglRetinotopy('displayName=fMRIproj16','wedges=1','direction=-1','numCycles=10','stimulusPeriod=24','stepsPerCycle',48,'doEyeCalib=0','initialHalfCycle=0');
+mglRetinotopy('displayName=fMRIproj32','wedges=1','direction=-1','numCycles=10','stimulusPeriod=24','stepsPerCycle',48,'doEyeCalib=0','initialHalfCycle=0');
 
 
 
@@ -64,16 +65,16 @@ mglRetinotopy('displayName=fMRIproj16','wedges=1','direction=-1','numCycles=10',
 
 %details:
 %for mux 8 arc 1 we set: same with 0.5s TR , 48 vols/cycle , 8*48 + 3*24 = 456 vols + mux8*nummux = 472 vols (3:55 min)
-mglRetinotopy('displayName=fMRIproj16','bars=1','fixedRandom=1','stimulusPeriod=24','stepsPerCycle',48,'blanks=3','doEyeCalib=0');
+mglRetinotopy('displayName=fMRIproj32','bars=1','fixedRandom=1','stimulusPeriod=24','stepsPerCycle',48,'blanks=3','doEyeCalib=0');
 
 %%
-mglRetinotopy('displayName=fMRIproj16','bars=1','fixedRandom=1','stimulusPeriod=24','stepsPerCycle',48,'blanks=3','doEyeCalib=0');
+mglRetinotopy('displayName=fMRIproj32','bars=1','fixedRandom=1','stimulusPeriod=24','stepsPerCycle',48,'blanks=3','doEyeCalib=0');
 
 %%
-mglRetinotopy('displayName=fMRIproj16','bars=1','fixedRandom=1','stimulusPeriod=24','stepsPerCycle',48,'blanks=3','doEyeCalib=0');
+mglRetinotopy('displayName=fMRIproj32','bars=1','fixedRandom=1','stimulusPeriod=24','stepsPerCycle',48,'blanks=3','doEyeCalib=0');
 
 %%
-mglRetinotopy('displayName=fMRIproj16','bars=1','fixedRandom=1','stimulusPeriod=24','stepsPerCycle',48,'blanks=3','doEyeCalib=0');
+mglRetinotopy('displayName=fMRIproj32','bars=1','fixedRandom=1','stimulusPeriod=24','stepsPerCycle',48,'blanks=3','doEyeCalib=0');
 
 
 %% MT localizer
