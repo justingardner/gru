@@ -26,6 +26,7 @@ s.sunetID = mglGetParam('sunetID');
 s.cniComputerName = cniComputerName;
 s.localDataDir = mlrReplaceTilde(localDataDir);
 s.dispNiftiHeaderInfo = false;
+s.PI = 'jlg';
 % range for te to be considered a BODL scan
 s.teLower = 25;
 s.teHigher = 35;
@@ -152,7 +153,14 @@ function s = getCNIDir(s)
 
 s.cniDir = [];
 
-if isempty(s.sunetID),s.sunetID = getusername;,end
+% get the username
+if isempty(s.sunetID)
+  s.sunetID = getusername;
+end
+
+% default sunetID to be username
+s.sunetID = mglGetParam('sunetID');
+if isempty(s.sunetID),s.sunetID = s.sunetID;end
 
 % put up dialog making sure info is correct
 mrParams = {{'cniComputerName',s.cniComputerName,'The name of the computer to ssh into'},...
@@ -161,23 +169,15 @@ params = mrParamsDialog(mrParams,'Login information');
 if isempty(params),return,end
 
 % save sunetID
-if ~isempty(params.sunetID), mglSetParam('sunetID',params.sunetID,1);end
+if ~isempty(params.sunetID) mglSetParam('sunetID',params.sunetID,1);end
 
 % get some variables into system variable
 s.sunetID = params.sunetID;
 s.cniComputerName = params.cniComputerName;
   
 % get the list of directoris that live on the cni computer
-command = sprintf('ssh %s@%s /home/jlg/bin/gruDispData',s.sunetID,s.cniComputerName);
-disp(command);
-disp('Enter password: ');
-[status,result] = system(command);
-
-% check return
-if ~isequal(status,0) || isempty(result)
-  disp(sprintf('(dofmricni:cniDir) Error getting data directories from cni'));
-  return
-end
+result = doRemoteCommand(s.sunetID,s.cniComputerName,sprintf('/home/%s/bin/gruDispData -pi %s',s.sunetID,s.PI));
+if isempty(result),return,end
 
 % parse the results
 cniDir = [];
@@ -231,7 +231,7 @@ params = mrParamsDialog(mrParams);
 if isempty(params),return,end
 
 % get the scan name at top of list
-scanName = params.scanName{1};
+scanName = params.scanName{params.chooseNum};
 
 % get the directory
 if params.chooseNum == 1
@@ -249,6 +249,35 @@ end
 % set cniDir in system variable
 s.cniDir = fullfile(dirName,scanName);
 disp(sprintf('(dofmricni:getCNIDir) Directory chosen is: %s',s.cniDir))
+
+% set the directory to which we resync data
+toDir = mlrReplaceTilde(fullfile(s.localDataDir,'temp/dofmricni'));
+if ~isdir(toDir)
+  try
+    mkdir(toDir);
+  catch
+    mrWarnDlg(sprintf('(dofmricni) Cannot make directory %s. Either you do not have permissions, or perhaps you have a line to a drive that is not currently mounted?',toDir));
+    return
+  end
+end
+s.localDir = fullfile(toDir,getLastDir(s.cniDir));
+
+%%%%%%%%%%%%%%%%%%%%%%%%%
+%    doRemoteCommand    %
+%%%%%%%%%%%%%%%%%%%%%%%%%
+function retval = doRemoteCommand(username,computerName,commandName)
+
+retval = [];
+command = sprintf('ssh %s@%s %s',username,computerName,commandName);
+disp(sprintf('(dofrmicni) Doing remote command: %s',command));
+disp(sprintf('If you have not yet set passwordless ssh (see: http://gru.stanford.edu/doku.php/gruprivate/sshpassless) then enter your password here: ',computerName));
+[status,retval] = system(command,'-echo');
+if status~=0
+  disp(sprintf('(dofmricni) Could not ssh in to do remote command on: %s@%s',username,computerName));
+  return
+end
+disp(sprintf('(dofmricni) Remote command on %s successful',computerName));
+
 
 %%%%%%%%%%%%%%%%%%%%%
 %%   getusername   %%
