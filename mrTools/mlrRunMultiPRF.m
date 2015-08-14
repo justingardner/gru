@@ -63,8 +63,12 @@ while (getSessions)
   if isempty(v),mrQuit;continue,end
 
   % load the ROI
-  disp(sprintf('(mlrRunMultPRF) Load the ROIs that you want to run the pRF analysis'));
+  disp(sprintf('(mlrRunMultPRF) Load the ROIs that you want to run the pRF analysis on (ok to load none)'));
   v = loadROI(v);
+
+  % load any anatomies
+  disp(sprintf('(mlrRunMultPRF) Load any base anatomies that you want to run the pRF analysis on (ok to load none)'));
+  v = loadAnat(v);
 
   % select group
   groupNames = viewGet(v,'groupNames');
@@ -84,7 +88,11 @@ while (getSessions)
   sessionInfo(end+1).pRFSessionPath = pRFSessionPath;
   sessionInfo(end).groupName = params.groupName;
   sessionInfo(end).roiNames = viewGet(v,'roiNames');
+  sessionInfo(end).baseNames = viewGet(v,'baseNames');
   sessionInfo(end).params = params;
+  
+  % quit the session
+  mrQuit;
 end
 
 % show user what we are about to run
@@ -100,7 +108,14 @@ if askuser('Run the pRF Sessions listed in the command window?',0,1)
     cd(sessionInfo(iSession).pRFSessionPath);
     v = newView;
     v = viewSet(v,'curGroup',sessionInfo(iSession).groupName);
-    v = loadROI(v,sessionInfo(iSession).roiNames);
+    % load any rois
+    if ~isempty(sessionInfo(iSession).roiNames)
+      v = loadROI(v,sessionInfo(iSession).roiNames);
+    end
+    % load any bases
+    if ~isempty(sessionInfo(iSession).baseNames)
+      v = loadAnat(v,sessionInfo(iSession).baseNames);
+    end
     v = pRF(v,sessionInfo(iSession).params);
     mrQuit;
   end
