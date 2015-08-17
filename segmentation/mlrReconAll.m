@@ -50,7 +50,7 @@ s.cniDirFull = fullfile('/nimsfs','jlg',s.cniDir);
 % get the subject id
 if ~isfield(s,'subjectID') || isempty(s.subjectID)
   mrParams = {{'subjectID',0,'incdec=[-1 1]','minmax=[0 inf]','Subject ID'}};
-  params = mrParamsDialog(mrParams,'Set subject ID');
+  params = mrParamsDialog(mrParams,'Set subject ID (Numbers Only, s0021 = 21)');
   if isempty(params),return,end
   s.subjectID = sprintf('s%04i',params.subjectID);
 end
