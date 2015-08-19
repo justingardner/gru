@@ -101,7 +101,7 @@ end
 % show user what we are about to run
 dispHeader
 for iSession = 1:length(sessionInfo)
-  disp(sprintf('%i: %s',iSession,sessionInfo(iSession).pRFSessionPath));
+  disp(sprintf('%i: %s %s',iSession,sessionInfo(iSession).pRFSessionPath,sessionInfo(end).groupName));
 end
 dispHeader
 
