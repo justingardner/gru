@@ -50,7 +50,7 @@ s.cniDirFull = fullfile('/nimsfs','jlg',s.cniDir);
 % get the subject id
 if ~isfield(s,'subjectID') || isempty(s.subjectID)
   mrParams = {{'subjectID',0,'incdec=[-1 1]','minmax=[0 inf]','Subject ID'}};
-  params = mrParamsDialog(mrParams,'Set subject ID');
+  params = mrParamsDialog(mrParams,'Set subject ID (Numbers Only, s0021 = 21)');
   if isempty(params),return,end
   s.subjectID = sprintf('s%04i',params.subjectID);
 end
@@ -88,13 +88,11 @@ end
 %% Make temp directories
 
 command = sprintf('ssh %s@%s mkdir %s',s.sunetID,s.cniComputerName,'/data/temp');
-disp(command);
-disp('Enter password: ');
-[status,result] = system(command);
+result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
+command = sprintf('ssh %s@%s chmod 777 %s',s.sunetID,s.cniComputerName,'/data/temp');
+result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
 command = sprintf('ssh %s@%s mkdir %s',s.sunetID,s.cniComputerName,s.tempPath);
-disp(command);
-disp('Enter password: ');
-[status,result] = system(command);
+result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
 
 %% Figure out which FILE is ours, first try finding a single T1
 corrFile = cellfun(@strfind,resultc,repmat({'T1w_9mm'},size(resultc)),'UniformOutput',false);
@@ -113,15 +111,11 @@ for i = 1:length(filePos)
     % copy files
     curFilePath = fullfile(s.tempPath,strcat(s.subjectID,'_',num2str(i),'_','c.nii.gz'));
     command = sprintf('ssh %s@%s cp %s %s',s.sunetID,s.cniComputerName,fullfile(tempWithFile,'*.nii.gz'),curFilePath);
-    disp(command);
-    disp('Enter password: ');
-    [status,result] = system(command);
+    result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
     % gunzip
     pause(.1)
     command = sprintf('ssh %s@%s gunzip -d %s',s.sunetID,s.cniComputerName,fullfile(curFilePath));
-    disp(command);
-    disp('Enter password: ');
-    [status,result] = system(command);
+    result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
     curFilePath = fullfile(s.tempPath,strcat(s.subjectID,'_',num2str(i),'_','c.nii'));
     
     pause(.1)
@@ -131,20 +125,21 @@ end
 
 %% Make freesurfer folder
 command = sprintf('ssh %s@%s mkdir %s',s.sunetID,s.cniComputerName,'/data/freesurfer');
-disp(command);
-disp('Enter password: ');
-[status,result] = system(command);
+result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
+command = sprintf('ssh %s@%s chmod 777 %s',s.sunetID,s.cniComputerName,'/data/freesurfer');
+result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
+
 
 command = sprintf('ssh %s@%s mkdir %s',s.sunetID,s.cniComputerName,'/data/freesurfer/subjects');
-disp(command);
-disp('Enter password: ');
-[status,result] = system(command);
+result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
+command = sprintf('ssh %s@%s chmod 777 %s',s.sunetID,s.cniComputerName,'/data/freesurfer/subjects');
+result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
 %% Recon-All
 reconCommand = sprintf('recon-all -subject %s %s -all',s.subjectID,reconStr);
 
 % You have to do this into a new terminal, it won't run through MATLAB
 % directly.
-disp(sprintf('\n\nAll of your files are now organized. Open a new terminal window.\nLeave the terminal window open until these commands complete:\n\nssh -XY %s@cnic7.stanford.edu\n%s\n\nThat''s it!',s.sunetID,reconCommand));
+disp(sprintf('\n\nAll of your files are now organized. Open a new terminal window.\nLeave the terminal window open until these commands complete (6-10 hours):\n\nssh -XY %s@cnic7.stanford.edu\n%s\n\nThat''s it!',s.sunetID,reconCommand));
 
 %%%%%%%%%%%%%%%%%%%
 %%   getCNIDir   %%
