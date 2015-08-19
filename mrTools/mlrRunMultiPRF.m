@@ -50,6 +50,9 @@ while (getSessions)
   % get the session
   pRFSession = getPathStrDialog(dataDir,'Find pRF session to analyze (click on mrSession.mat file)','*.mat');
   if isempty(pRFSession),continue,end
+
+  % get the path for the next round
+  dataDir = fileparts(pRFSession);
   
   % cd to that session
   pRFSessionPath = fileparts(pRFSession);
@@ -101,13 +104,31 @@ end
 % show user what we are about to run
 dispHeader
 for iSession = 1:length(sessionInfo)
-  disp(sprintf('%i: %s %s',iSession,sessionInfo(iSession).pRFSessionPath,sessionInfo(end).groupName));
+  % get base name string
+  if strcmp(sessionInfo(iSession).params.restrict,'Base: ALL')
+    % get all base names
+    baseNames = '';
+    for iBase = 1:length(sessionInfo(iSession).baseNames)
+      baseNames = sprintf('%s%s, ',baseNames,sessionInfo(iSession).baseNames{iBase});
+    end
+    baseNames = baseNames(1:end-2);
+    % display what we are doing with list of base names
+    sessionInfo(iSession).dispStr = sprintf('%i) %s group:%s scans:%s restrict:%s (%s)',iSession,sessionInfo(iSession).pRFSessionPath,sessionInfo(iSession).groupName,num2str(sessionInfo(iSession).params.scanNum),sessionInfo(iSession).params.restrict,baseNames);
+  else
+    % set up display string
+    sessionInfo(iSession).dispStr = sprintf('%i) %s group:%s scans:%s restrict:%s',iSession,sessionInfo(iSession).pRFSessionPath,sessionInfo(iSession).groupName,num2str(sessionInfo(iSession).params.scanNum),sessionInfo(iSession).params.restrict);
+  end
+  % display what we are doing
+  disp(sessionInfo(iSession).dispStr);
 end
 dispHeader
 
 % then run them
 if askuser('Run the pRF Sessions listed in the command window?',0,1)
   for iSession = 1:length(sessionInfo)
+    dispHeader
+    disp(sessionInfo(iSession).dispStr);
+    dispHeader
     cd(sessionInfo(iSession).pRFSessionPath);
     v = newView;
     v = viewSet(v,'curGroup',sessionInfo(iSession).groupName);
