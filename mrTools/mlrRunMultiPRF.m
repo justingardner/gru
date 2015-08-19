@@ -8,16 +8,17 @@
 %             useful if you are processing multiple subjects data
 %             but don't want to run all of them concurrently (which
 %             might eat up data). This will step you through a few
-%             dialogs to choose scans that you want to run on and
-%             set parameters, then should just run.
+%             dialogs to choose scans that you want to run on, load
+%             bases to restrict on and set parameters, then should just run.
+% 
+%             If you want to restrict on ROIs instead of bases
+%             mlrRunMultiPRF('useROIs=1');
 %
-function retval = mlrRunMultiPRF()
+%
+function retval = mlrRunMultiPRF(varargin)
 
-% check arguments
-if ~any(nargin == [0])
-  help mlrRunMultiPRF
-  return
-end
+% arugments
+getArgs(varargin,{'useROIs=0'});
 
 % make sure we are running mrTools
 mlrPath('mrTools');
@@ -63,13 +64,15 @@ while (getSessions)
   if isempty(v),mrQuit;continue,end
 
   % load the ROI
-  disp(sprintf('(mlrRunMultPRF) Load the ROIs that you want to run the pRF analysis on (ok to load none)'));
-  v = loadROI(v);
-
-  % load any anatomies
-  disp(sprintf('(mlrRunMultPRF) Load any base anatomies that you want to run the pRF analysis on (ok to load none)'));
-  v = loadAnat(v);
-
+  if useROIs
+    disp(sprintf('(mlrRunMultPRF) Load the ROIs that you want to run the pRF analysis on (ok to load none)'));
+    v = loadROI(v);
+  else
+    % load any anatomies
+    disp(sprintf('(mlrRunMultPRF) Load any base anatomies that you want to run the pRF analysis on (ok to load none)'));
+    v = loadAnat(v);
+  end
+  
   % select group
   groupNames = viewGet(v,'groupNames');
   paramsInfo = {{'groupName',fliplr(groupNames),'Select which group you are going to run pRF on'}};
