@@ -131,7 +131,7 @@ end
 
 s.subjNum = mrStr2num(strrep(s.subjectID,'s',''));
 
-%%mlrAnatDBPut(s.subjNum,s.fullLocal,'freesurfer');
+mlrAnatDBPut(s.subjNum,s.fullLocal,'freesurfer');
 
 %% Cleanup the server, get rid of the /data/temp/s#### and /data/freesurfer/subjects/s####
 disp(sprintf('\n\n\n\n'));

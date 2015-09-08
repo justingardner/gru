@@ -20,8 +20,13 @@
 %Bars
 %----
 %
+<<<<<<< HEAD
 %"phase per location": 500 vols
 % duration : 4:09 min
+=======
+%"phase per location": 484 vols
+% duration : 4 min
+>>>>>>> 2dc9871b2c68714a8782510f7c51638eed6c3706
 
 
 %% BARS
