@@ -20,15 +20,20 @@
 %Bars
 %----
 %
+<<<<<<< HEAD
+%"phase per location": 500 vols
+% duration : 4:09 min
+=======
 %"phase per location": 484 vols
 % duration : 4 min
+>>>>>>> 2dc9871b2c68714a8782510f7c51638eed6c3706
 
 
 %% BARS
 
 %details:
 %for mux 8 arc 1 we set: same with 0.5s TR , 48 vols/cycle , 8*48 + 3*24 = 456 vols + mux8*nummux = 472 vols, but stim seems to last 
-%a bit longer so 480 vols (4 min)
+%but a bit longer so 500 vols (4 min)
 
 %% width 1
 mglRetinotopy('displayName=fMRIproj16','bars','barsTaskDefault','fixedRandom=1','barWidth=1','doEyeCalib=0');
