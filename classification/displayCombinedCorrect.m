@@ -47,7 +47,7 @@ else
 end
 
 % display
-smartfig(combinedTitle);clf;
+mlrSmartfig(combinedTitle);clf;
 
 % combine the values for ipsi and contra
 vals =100*[combined.ipsi;combined.contra]';

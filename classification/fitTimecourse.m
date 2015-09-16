@@ -387,7 +387,7 @@ if checkFit
   paramsInfo{end+1} = {'responseNum',1,'incdec=[-1 1]',sprintf('minmax=[1 %i]',d.nhdr),'callback',@fitTimecoursePlotCallback,'callbackArg',d};
   paramsInfo{end+1} = {'amplitude',num2cell(d.amplitude),'group=responseNum','type=numeric','editable=0'};
   mrParamsDialog(paramsInfo,'Check fit');
-  close(smartfig('fitTimecourseCheckFit','reuse'));
+  close(mlrSmartfig('fitTimecourseCheckFit','reuse'));
 end
   
 %%%%%%%%%%%%%%%%%%%
@@ -664,7 +664,7 @@ if checkFit
     paramsInfo{end+1} = {'exponent2',num2cell(d.p.exponent2),'group=responseNum','type=numeric','editable=0'};
   end
   mrParamsDialog(paramsInfo,'Check fit');
-  close(smartfig('fitTimecourseCheckFit','reuse'));
+  close(mlrSmartfig('fitTimecourseCheckFit','reuse'));
 end
 
 
@@ -693,7 +693,7 @@ residual = d.timecourse-eTimecourse;
 
 % display something
 if (mod(gComputeResidualCount,length(params)) == 1) && displayFit
-  smartfig('fitTimecourse','reuse');clf
+  mlrSmartfig('fitTimecourse','reuse');clf
   % get the fit
   if d.deconvModel
     % normally, when filtering is applied, we grab the fit by deconvolving the
@@ -834,7 +834,7 @@ end
 function fitTimecoursePlotCallback(d,params)
 
 % callback from checkFit parameters dialog
-smartfig('fitTimecourseCheckFit','reuse');
+mlrSmartfig('fitTimecourseCheckFit','reuse');
 plotFit('',d.deconv,d.amplitude,d.ehdr,d.time,params.responseNum);
 
 %%%%%%%%%%%%%%%%%
@@ -1052,7 +1052,7 @@ end
 
 % display the fit
 if nargin == 1
-  smartfig('fitTimecourse','reuse');
+  mlrSmartfig('fitTimecourse','reuse');
   clf;
 end
 subplot(subplot1(1),subplot1(2),subplot1(3));
