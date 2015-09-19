@@ -125,6 +125,7 @@ if (nargin < 2)
   return
 end
 
+global verbose;
 
 % see if we are passed in argument list (as in a recursive call)
 getArgs(varargin,{'args=[]'},'suppressUnknownArgMessage=1');
@@ -619,7 +620,7 @@ if d.useGLMforSTE
   % and pump them through the glm code to get amplitudes and amplitude
   % estimates
   disp(sprintf('(fitTimecourse:nonlinFit) Using glm to get standard errors'));
-  glmAmp = glmFit(d,'default',option,0,0,canonical);
+  glmAmp = glmFit(d,'default',option,0,0,canonical,[],1,[]);
   d.amplitude = glmAmp.amplitude;
   d.amplitudeSTE = glmAmp.amplitudeSTE;
   if isfield(glmAmp,'amplitudeSTD')
@@ -673,6 +674,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%
 function [residual,eTimecourse] = computeResidual(params,d,amplitudeType,displayFit)
 
+global verbose;
 % This function takes the timecourse, the stimulus convolution matrix, the
 % amplitude, timelag, offset, tau and exponent and convolves a gamma function
 % with these parameters with the stimulus timings and computes the difference
