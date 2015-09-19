@@ -87,11 +87,11 @@ end
 
 %% Make temp directories
 
-command = sprintf('ssh %s@%s mkdir %s',s.sunetID,s.cniComputerName,'/data/temp');
+command = sprintf('mkdir %s','/data/temp');
 result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
-command = sprintf('ssh %s@%s chmod 777 %s',s.sunetID,s.cniComputerName,'/data/temp');
+command = sprintf('chmod 777 %s','/data/temp');
 result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
-command = sprintf('ssh %s@%s mkdir %s',s.sunetID,s.cniComputerName,s.tempPath);
+command = sprintf('mkdir %s',s.tempPath);
 result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
 
 %% Figure out which FILE is ours, first try finding a single T1
@@ -110,11 +110,11 @@ for i = 1:length(filePos)
     
     % copy files
     curFilePath = fullfile(s.tempPath,strcat(s.subjectID,'_',num2str(i),'_','c.nii.gz'));
-    command = sprintf('ssh %s@%s cp %s %s',s.sunetID,s.cniComputerName,fullfile(tempWithFile,'*.nii.gz'),curFilePath);
+    command = sprintf('cp %s %s',fullfile(tempWithFile,'*.nii.gz'),curFilePath);
     result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
     % gunzip
     pause(.1)
-    command = sprintf('ssh %s@%s gunzip -d %s',s.sunetID,s.cniComputerName,fullfile(curFilePath));
+    command = sprintf('gunzip -d %s',fullfile(curFilePath));
     result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
     curFilePath = fullfile(s.tempPath,strcat(s.subjectID,'_',num2str(i),'_','c.nii'));
     
@@ -124,15 +124,15 @@ for i = 1:length(filePos)
 end
 
 %% Make freesurfer folder
-command = sprintf('ssh %s@%s mkdir %s',s.sunetID,s.cniComputerName,'/data/freesurfer');
+command = sprintf('mkdir %s','/data/freesurfer');
 result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
-command = sprintf('ssh %s@%s chmod 777 %s',s.sunetID,s.cniComputerName,'/data/freesurfer');
+command = sprintf('chmod 777 %s','/data/freesurfer');
 result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
 
 
-command = sprintf('ssh %s@%s mkdir %s',s.sunetID,s.cniComputerName,'/data/freesurfer/subjects');
+command = sprintf('mkdir %s','/data/freesurfer/subjects');
 result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
-command = sprintf('ssh %s@%s chmod 777 %s',s.sunetID,s.cniComputerName,'/data/freesurfer/subjects');
+command = sprintf('chmod 777 %s','/data/freesurfer/subjects');
 result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
 %% Recon-All
 reconCommand = sprintf('recon-all -subject %s %s -all',s.subjectID,reconStr);
