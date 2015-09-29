@@ -367,26 +367,66 @@ end
 disppercent(inf);
 
 % include file in preprocessing
-origIdx = find(cat(1,fileList(:).bold));
-boldList = {fileList(origIdx).filename};
-for z=1:length(s.calibrationNameStrings)
-    boldIdx(z,:) = cellfun(@(x) ~isempty(strfind(x,s.calibrationNameStrings{z})),boldList);
+
+% dan edited this to replace listdlg with a text input to allow
+% better selection. also I added comments.
+
+checkingScans = 1;
+while checkingScans
+    % get indexes of all BOLD files
+    boldScans = s.boldScans;
+    boldList = {fileList(boldScans).filename};
+    % remove CAL files
+    calScans = []; cali = [];
+    for z=1:length(s.calibrationNameStrings)
+        for x=1:length(boldList)
+            if ~isempty(strfind(boldList{x},s.calibrationNameStrings{z})) && ~any(calScans==x)
+                cali = [cali x];
+                calScans = [calScans boldScans(x)];
+            end
+        end
+    end
+    boldScans = setdiff(boldScans,calScans);
+    bsk = 1:length(boldList); bsk = setdiff(bsk,cali);
+    boldList = boldList(bsk);
+
+    % ask user whether to keep all of these scans
+    % note that we do NOT sort the list, otherwise it puts the scans in 1 10 11
+    % 2 order, which is annoying.
+    disp(sprintf('**************\n* BOLD Scans *\n**************'));
+    for i = 1:length(boldList)
+        disp(sprintf('Scan %i: %s',i,boldList{i}));
+    end
+    if ~askuser('Do you want to include the scans above?')
+        failed = 1;
+        while failed
+            include = getnum('Enter as an array [1 2 3] the scans you wish to include: ');
+
+            if ~any(include > length(boldList)) && ~any(include < 1)
+                % keep doing this until it works
+
+                boldListexc = boldList(include);
+                origIdxexc = boldScans(include);
+                for i = 1:length(origIdxexc)
+                    disp(sprintf('Scan %i: %s',i,boldListexc{i}));
+                end
+                if ~askuser('Does this look correct? [y/n]: ')
+                    warning('Scan choice failed');
+                else
+                    failed = 0;
+                    exclude = 1:length(boldList);
+                    exclude = setdiff(exclude,include);
+                    for j = exclude
+                        fileList(boldScans(j)).bold = false;
+                    end
+                    s.boldScans = setdiff(s.boldScans,boldScans(exclude));
+                end
+            end
+        end
+    else
+        checkingScans = 0;
+    end
 end
-boldList = boldList(~sum(boldIdx,1));
-origIdx = origIdx(~sum(boldIdx,1));
-[boldList,sortIdx]=sort(boldList);
-notInclude = ones(1,length(boldList));
-notInclude(listdlg('PromptString','Select scans to include:',...
-                'SelectionMode','multiple',...
-                'ListSize',[250 length(boldList)*15],...
-                'InitialValue',1:length(boldList),...
-                'Name','Select which scans to include:',...
-                'ListString',boldList))=0;
-notIncludeIdx = origIdx(sortIdx(notInclude==1));
-if ~isempty(notIncludeIdx)
-    fileList(notIncludeIdx).bold = false;
-end
-s.boldScans = setdiff(s.boldScans,notIncludeIdx);  
 
 % read nifti headers
 % initialze to know calibration files
