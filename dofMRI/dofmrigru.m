@@ -1272,8 +1272,8 @@ for i = 1:length(carMatchNum)
     if isfield(carList{carMatchNum(i)},'extfilename')
       disp('ext not found. not being copied...');
       command = sprintf('copyfile %s %s',fullfile(carList{carMatchNum(i)}.path,carList{carMatchNum(i)}.extfilename),fullfile('Pre',fidList{epiNums(i)}.filename));
+      if justDisplay,disp(command),else,eval(command);,end
     end
-    if justDisplay,disp(command),else,eval(command);,end
   end
 end
 
