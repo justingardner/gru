@@ -159,12 +159,17 @@ if isempty(groupColors)
     set(retval.barHandles(i),'FaceColor',withinGroupColors{i});
     set(retval.barHandles(i),'EdgeColor',[0 0 0]);
   end
-  % get barXpos
+
   for iWithinGroup = 1:nBarsInGroup
     groupHandle = get(retval.barHandles(iWithinGroup));
-    groupHandle = get(groupHandle.Children);
-    % get x position of bar
-    barXpos(iWithinGroup,:) = mean(groupHandle.XData);
+    if ~isempty(groupHandle) && isfield(groupHandle,'Children') && ~isempty(groupHandle.Children)
+      groupHandle = get(groupHandle.Children);
+      % get x position of bar
+      barXpos(iWithinGroup,:) = mean(groupHandle.XData);
+    else
+      % the above stopped working in Matlab 2015a - this is the new way
+      barXpos(iWithinGroup,:) = get(retval.barHandles(iWithinGroup),'XData')+get(retval.barHandles(iWithinGroup),'XOffset');;
+    end
   end
 else
   barXpos(1,1:nGroups) = 1:nGroups;
