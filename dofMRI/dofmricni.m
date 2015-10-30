@@ -1895,7 +1895,10 @@ if length(s.boldScans) && length(s.stimfileInfo)
   for iBOLD = 1:length(s.boldScans)
     % try to match to stimfile which is closest in time
     if ~isempty(availableStimfiles)
+      % default to inf time difference
       timeDiff = inf(1,length(stimfileInfo));
+      % remove any time differences that have already been matched
+      timeDiff(stimfileMatch) = nan;
       for iStimfile = availableStimfiles
 	if ~isempty(s.fileList(s.boldScans(iBOLD)).startDate)
 	  timeDiff(iStimfile) = abs(datenum(stimfileInfo(iStimfile).startTime)-datenum(s.fileList(s.boldScans(iBOLD)).startDate));
