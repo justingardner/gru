@@ -463,8 +463,12 @@ for i = 1:length(fileList)
 	fileList(i).te = fileList(i).descrip.te;
       end
       % get tr if not already set from dicom
-      if (~isfield(fileList(i),'tr') || isnan(fileList(i).tr)) && isfield(fileList(i).descrip,'tr')
-	fileList(i).tr = fileList(i).descrip.tr;
+      if (~isfield(fileList(i),'tr') || isnan(fileList(i).tr)) 
+	if isfield(fileList(i).descrip,'tr')
+	  fileList(i).tr = fileList(i).descrip.tr;
+	elseif isfield(fileList(i),'h') && ~isempty(fileList(i).h) && isfield(fileList(i).h,'pixdim') && (length(fileList(i).h.pixdim) >= 4)
+	  fileList(i).tr = fileList(i).h.pixdim(4);
+	end
       end
     end
     % see if this is a calibration scan
@@ -839,7 +843,7 @@ for iBOLD = 1:length(s.boldScans)
   % if there is a matching stimfile, then what are we to do ### DAN FIX:
   % added a check for zero to avoid stimfileMatch failing to get
   % stimfileInfo ####
-  if length(s.stimfileMatch) >= iBOLD && s.stimfileMatch(iBOLD)~=0
+  if (length(s.stimfileMatch) >= iBOLD) && (s.stimfileMatch(iBOLD)~=0)
     % get stimfileInfo for this trial
     stimfileInfo = s.stimfileInfo(s.stimfileMatch(iBOLD));
     % check for missing igorded volumes
@@ -975,12 +979,15 @@ if ~justDisplay && (missingIgnoredVols || spoofTriggers)
   if spoofTriggers
     % fix (note there is code for actually putting back missing
     % triggers, but removed it - should be in the git repo b0ce70f on May 18, 2015)
+    % this code, here just spoofs all the triggers by calculating when they
+    % should have arrived and starting them after the first volume
     if stimfileInfo.fixAcq
       % remove all volumes, but the first
       stimfile = removeTriggers(stimfile,2:stimfileInfo.numVols);
       % now add volumes for where events should have happened
       framePeriod = boldScan.tr/1000;
       dispConOrLog(sprintf('(dofmricni) Spoofing volumes every %ss in %s',num2str(framePeriod),stimfileName));
+      if isnan(framePeriod), dispConOrLog(sprintf('(dofmricni) !!! TR setting is invalid !!!'));keyboard;end
       % get all the volumes we need to add, and add them
       addTimes = (volTimes(1)+framePeriod):framePeriod:volTimes(1)+(nVols-s.removeInitialVols-1)*framePeriod;
       stimfile = addVolEvents(stimfile,addTimes);
@@ -2045,6 +2052,7 @@ command = sprintf('ssh %s@%s %s',username,computerName,commandName);
 disp(sprintf('(dofrmicni) Doing remote command: %s',command));
 disp(sprintf('If you have not yet set passwordless ssh (see: http://gru.stanford.edu/doku.php/gruprivate/sshpassless) then enter your password here: ',computerName));
 [status,retval] = system(command,'-echo');
+
 if status~=0
   disp(sprintf('(dofmricni) Could not ssh in to do remote command on: %s@%s',username,computerName));
   return
