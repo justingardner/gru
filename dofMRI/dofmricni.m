@@ -467,7 +467,7 @@ for i = 1:length(fileList)
 	if isfield(fileList(i).descrip,'tr')
 	  fileList(i).tr = fileList(i).descrip.tr;
 	elseif isfield(fileList(i),'h') && ~isempty(fileList(i).h) && isfield(fileList(i).h,'pixdim') && (length(fileList(i).h.pixdim) >= 4)
-	  fileList(i).tr = fileList(i).h.pixdim(4)/1000;
+	  fileList(i).tr = fileList(i).h.pixdim(4)*1000;
 	end
       end
     end
