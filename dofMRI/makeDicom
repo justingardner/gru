@@ -22,13 +22,6 @@ rawDataDir = '/nimsfs/raw/jlg'
 if not os.path.isdir(tmpDicomFix):
     os.mkdir(tmpDicomFix)
 
-# set path to tmp
-if os.path.isdir(tmpDicomFix):
-    os.chdir(tmpDicomFix)
-else:
-    print("(makeDicom) Could not find /tmp/dicomfix directory")
-    sys.ext();
-
 # set session name as input argumetn
 sessionName = sys.argv[1]
 
@@ -61,7 +54,7 @@ for subdir, dirs, files in os.walk(sessionName):
             # run epi fix on it
             if len(pfile[0]) != 0:
                 print("Creating dicom using EpiRehersalfrom: "+pfile[0])
-                os.system("/data/EpiRehearsal --pipeline EpiRecon --pfile "+pfile)
+                os.system("/data/EpiRehearsal --pipeline EpiRecon --pfile "+pfile[0])
             else:
                 print("(makeDicom) !!! Missing pfile !!!")
             # now we should have dicoms, rename them
