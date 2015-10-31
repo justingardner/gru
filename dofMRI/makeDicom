@@ -1,0 +1,92 @@
+#!/usr/bin/python
+#
+#
+#       by: justin gardner
+#     date: 10/30/2015
+#  purpose: To make dicoms for a data set in which dicoms were not 
+#           saved from pfiles
+#
+import os,sys,fnmatch,glob,re,shutil
+
+# check input arguments
+if len(sys.argv) < 2:
+    print "(makeDicom) Must provide directory name: makeDicom 20151006_1843_10879"
+    sys.exit()
+
+# tmp directory, where we will make a new copy
+# of the data directory with dicoms
+tmpDicomFix = '/tmp/dicomfix'
+rawDataDir = '/nimsfs/raw/jlg'
+
+#make the temp direcotry
+if not os.path.isdir(tmpDicomFix):
+    os.mkdir(tmpDicomFix)
+
+# set path to tmp
+if os.path.isdir(tmpDicomFix):
+    os.chdir(tmpDicomFix)
+else:
+    print("(makeDicom) Could not find /tmp/dicomfix directory")
+    sys.ext();
+
+# set session name as input argumetn
+sessionName = sys.argv[1]
+
+# check direcotry
+if not os.path.isdir(sessionName):
+    print "(makeDicom) " + sessionName + " is not a directory"
+    sys.exit()
+
+# make sure directory is writeable
+os.system("chmod -R 755 " + sessionName)
+
+# walk the session
+for subdir, dirs, files in os.walk(sessionName):
+    for file in files:
+        # find BOLD sequences pfiles
+        if fnmatch.fnmatch(subdir,'*_BOLD_*') and fnmatch.fnmatch(file,'*pfile.tgz'):
+            # get full pfile tar file name
+            pfileName = os.path.join(subdir,file)
+            # untar them
+            print("Untarring "+pfileName)
+            os.system("tar -kxf "+pfileName)
+            # get the pfile directory name
+            pfileDirName = os.path.split(os.path.splitext(pfileName)[0])[1]
+            # find filenames that look like the pfile
+            pfile = glob.glob(os.path.join(pfileDirName,'P*.[0123456789]'))
+            # if there is more than one, then get the shortest one
+            if len(pfile) > 1:
+                pfile = min(pfile,key=len)
+            print(pfile)
+            # run epi fix on it
+            if len(pfile[0]) != 0:
+                print("Creating dicom using EpiRehersalfrom: "+pfile[0])
+                os.system("/data/EpiRehearsal --pipeline EpiRecon --pfile "+pfile)
+            else:
+                print("(makeDicom) !!! Missing pfile !!!")
+            # now we should have dicoms, rename them
+            dicomName = re.sub('_pfile','_dicoms',pfileDirName)
+            print(dicomName)
+            if os.path.isdir(os.path.join(pfileDirName,'Dicoms')):
+                # rename to _dicom
+                if not os.path.isdir(dicomName):
+                    shutil.move(os.path.join(pfileDirName,'Dicoms'),dicomName)
+                # tar it
+                dicomTarName = dicomName + ".tgz"
+                os.system("tar -czf " + dicomTarName + " " + dicomName)
+                # move it back into the BOLD directory
+                dicomTarDestName = os.path.join(subdir,dicomTarName)
+                if not os.path.isfile(dicomTarDestName):
+                    shutil.move(dicomTarName,dicomTarDestName)
+                # clean up
+                if os.path.isdir(dicomName):
+                    shutil.rmtree(dicomName)
+                if os.path.isfile(dicomTarName):
+                    os.remove(dicomTarName)
+                if os.path.isdir(pfileDirName):
+                    shutil.rmtree(pfileDirName)
+                # display what we did
+                print("===> Created file: "+dicomTarDestName)
+            
+
+
