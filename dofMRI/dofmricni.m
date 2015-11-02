@@ -53,11 +53,11 @@ function retval = dofmricni(varargin)
 % todo: Also would be nice to default motionComp parameters to
 % what we are using these days
 
-% Default arguments
-getArgs(varargin,{'PI=jlg','idWarning=true','stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','getStimFiles=true','stimComputerName=oban','stimComputerUserName=gru','username=[]','unwarp=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1','fixMuxXform=2','dicomFix=0'});
-
 % clear screen
 clc;
+
+% Default arguments
+getArgs(varargin,{'PI=jlg','idWarning=true','stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','getStimFiles=true','stimComputerName=oban','stimComputerUserName=gru','username=[]','unwarp=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1','fixMuxXform=2','dicomFix=0'});
 
 % set up system variable (which gets passed around with important system info) - this
 % means we have to copy these variables into s.
