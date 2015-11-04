@@ -1771,7 +1771,7 @@ if s.dicomFix
   % if we are doing the dicom fix, then copy from the tmp directory
   % where we should have created a session that contains the dicom
   % files that are made from the pfiles using the makeDicom python script
-  fromDir = fullfile('/tmp/dicomfix',s.cniDir);
+  fromDir = fullfile('/data/dicomfix',s.cniDir);
   disp(sprintf('(dofmricni) Getting data from dicomfix directory: %s Make sure that you have copied the files over and run makeDicom on them',fromDir));
 else
   % usual direcotry
