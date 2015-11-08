@@ -1936,7 +1936,7 @@ if s.spoofTriggers && ((acqTriggers ~= (stimfileInfo.numVols+missingIgnoredVols)
       dispConOrLog(sprintf('(dofmricni) !!! There may be missing volumes (ones that are more than 1.5 TRs separated: %s). Recommended that you fix acq triggers.  !!!',num2str(stimfileInfo.missingVolumes)));
     % check for stimfile end
     elseif stimfileInfo.timeFromLastVolToEnd < stimfileInfo.tr
-      dispConOrLog(sprintf('(dofmricni) Looks like the stimulus program was stopped while acquisition was continuing. If do, then fixing acq triggers is not necessary.'));
+      dispConOrLog(sprintf('(dofmricni) Looks like the stimulus program was stopped while acquisition was continuing. If so, then fixing acq triggers is not necessary.'));
     end
     if justDisplay 
       if askuser('Do you want to fix the acq triggers')
