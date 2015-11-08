@@ -53,6 +53,8 @@ for subdir, dirs, files in os.walk(sessionName):
                 # if there is more than one, then get the shortest one
                 if len(pfile) > 1:
                     pfile = min(pfile,key=len)
+                if isinstance(pfile,list):
+                    pfile = pfile[0]
                 # run epi fix on it
                 if len(pfile) != 0:
                     print("Creating dicom using EpiRehersalfrom: "+pfile)
