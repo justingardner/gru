@@ -35,51 +35,54 @@ os.system("chmod -R 755 " + sessionName)
 
 # walk the session
 for subdir, dirs, files in os.walk(sessionName):
-    for file in files:
-        # find BOLD sequences pfiles
-        if fnmatch.fnmatch(subdir,'*_BOLD_*') and fnmatch.fnmatch(file,'*pfile.tgz'):
-            # get full pfile tar file name
-            pfileName = os.path.join(subdir,file)
-            # untar them
-            print("Untarring "+pfileName)
-            os.system("tar -kxf "+pfileName)
-            # get the pfile directory name
-            pfileDirName = os.path.split(os.path.splitext(pfileName)[0])[1]
-            # find filenames that look like the pfile
-            pfile = glob.glob(os.path.join(pfileDirName,'P*.[0123456789]'))
-            # if there is more than one, then get the shortest one
-            if len(pfile) > 1:
-                pfile = min(pfile,key=len)
-            print(pfile)
-            # run epi fix on it
-            if len(pfile[0]) != 0:
-                print("Creating dicom using EpiRehersalfrom: "+pfile[0])
-                os.system("/data/EpiRehearsal --pipeline EpiRecon --pfile "+pfile[0])
-            else:
-                print("(makeDicom) !!! Missing pfile !!!")
-            # now we should have dicoms, rename them
-            dicomName = re.sub('_pfile','_dicoms',pfileDirName)
-            print(dicomName)
-            if os.path.isdir(os.path.join(pfileDirName,'Dicoms')):
-                # rename to _dicom
-                if not os.path.isdir(dicomName):
-                    shutil.move(os.path.join(pfileDirName,'Dicoms'),dicomName)
-                # tar it
-                dicomTarName = dicomName + ".tgz"
-                os.system("tar -czf " + dicomTarName + " " + dicomName)
-                # move it back into the BOLD directory
-                dicomTarDestName = os.path.join(subdir,dicomTarName)
-                if not os.path.isfile(dicomTarDestName):
-                    shutil.move(dicomTarName,dicomTarDestName)
-                # clean up
-                if os.path.isdir(dicomName):
-                    shutil.rmtree(dicomName)
-                if os.path.isfile(dicomTarName):
-                    os.remove(dicomTarName)
-                if os.path.isdir(pfileDirName):
-                    shutil.rmtree(pfileDirName)
-                # display what we did
-                print("===> Created file: "+dicomTarDestName)
-            
+    # find BOLD sequences pfiles
+    if fnmatch.fnmatch(subdir,'*_BOLD_*'):
+        foundPfile = False
+        for file in files:
+            if fnmatch.fnmatch(file,'*pfile.tgz'):
+                foundPfile = True
+                # get full pfile tar file name
+                pfileName = os.path.join(subdir,file)
+                # untar them
+                print("Untarring "+pfileName)
+                os.system("tar -kxf "+pfileName)
+                # get the pfile directory name
+                pfileDirName = os.path.split(os.path.splitext(pfileName)[0])[1]
+                # find filenames that look like the pfile
+                pfile = glob.glob(os.path.join(pfileDirName,'P*.[0123456789]'))
+                # if there is more than one, then get the shortest one
+                if len(pfile) > 1:
+                    pfile = min(pfile,key=len)
+                # run epi fix on it
+                if len(pfile) != 0:
+                    print("Creating dicom using EpiRehersalfrom: "+pfile)
+                    os.system("/data/EpiRehearsal --pipeline EpiRecon --pfile "+pfile)
+                else:
+                    print("(makeDicom) !!! Missing pfile !!!")
+                # now we should have dicoms, rename them
+                dicomName = re.sub('_pfile','_dicoms',pfileDirName)
+                print(dicomName)
+                if os.path.isdir(os.path.join(pfileDirName,'Dicoms')):
+                    # rename to _dicom
+                    if not os.path.isdir(dicomName):
+                        shutil.move(os.path.join(pfileDirName,'Dicoms'),dicomName)
+                    # tar it
+                    dicomTarName = dicomName + ".tgz"
+                    os.system("tar -czf " + dicomTarName + " " + dicomName)
+                    # move it back into the BOLD directory
+                    dicomTarDestName = os.path.join(subdir,dicomTarName)
+                    if not os.path.isfile(dicomTarDestName):
+                        shutil.move(dicomTarName,dicomTarDestName)
+                    # clean up
+                    if os.path.isdir(dicomName):
+                        shutil.rmtree(dicomName)
+                    if os.path.isfile(dicomTarName):
+                        os.remove(dicomTarName)
+                    if os.path.isdir(pfileDirName):
+                        shutil.rmtree(pfileDirName)
+                    # display what we did
+                    print("===> Created file: "+dicomTarDestName)
+        if foundPfile == False:
+            print("(makeDicom) No pfile found in "+subdir+". Are you sure that you copied from /nimsfs/raw?")
 
 
