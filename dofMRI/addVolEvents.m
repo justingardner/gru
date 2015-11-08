@@ -31,15 +31,8 @@ for i = 1:length(addVolTimes)
   ticknum = round(e.ticknum(lastEntry)+thisFraction*(e.ticknum(nextEntry)-e.ticknum(lastEntry)));
   % ticknum may be nan if we are placing an event after the last event in the stimfile
   if isnan(ticknum)
-    % get the last event with a valid ticknum
-    lastGoodEvent = find(~isnan(e.ticknum(1:e.n)));
-    lastGoodEvent = lastGoodEvent(end);
-    % get last ticknum
-    lastGoodTicknum = e.ticknum(lastGoodEvent);
-    % compare its time to this event time and multiply that by ticksPerSecond
-    % and add to the ticknum from that last good event to get the ticknum
-    % that should have been put in this event
-    ticknum = lastGoodTicknum + round((volTime - e.time(lastGoodEvent))*stimfile.myscreen.framesPerSecond);
+    % get ticknum relative to last entry - find difference in time, and then multipy by framesPerSecond
+    ticknum = e.ticknum(lastEntry) + round((volTime - e.time(lastEntry))*stimfile.myscreen.framesPerSecond);
   end
   % save the event
   e.ticknum = [e.ticknum(1:addNum-1) ticknum e.ticknum(addNum:end)];
