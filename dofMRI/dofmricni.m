@@ -15,7 +15,7 @@
 %             access to the computer by adding your .ssh/id_rsa.pub to the .ssh/authorized_keys
 %             in your account on cni (see http://gru.stanford.edu/doku.php/gruprivate/sshpassless)
 %
-%             Note that this requires that tje function gruDispData be executable and on the path on the
+%             Note that this requires that the function gruDispData be executable and on the path on the
 %             cni computer (this should already be setup for you in Gardner lab).
 %
 %             You will see a list of sessions
@@ -47,6 +47,7 @@
 %                'useLocalData=0': Set this to 1 if you want to use already downloaded data
 %                   in your temp direcotry. Or set it to a string containing the path which
 %                   you want to use to get data from.
+%                'dicomFix=1': Use this for scans that we moved into /data/dicomfix and recreated dicoms for (11/2015)
 %
 function retval = dofmricni(varargin)
 
@@ -524,6 +525,8 @@ if isempty(s.subjectID)
   params = mrParamsDialog(mrParams,'Set subject ID');
   if isempty(params),return,end
   s.subjectID = gruSubjectNum2ID(params.subjectID);
+else
+  disp(sprintf('(dofmricni) SubjectID set to: %s',s.subjectID));
 end
 
 % set experiment name
@@ -863,189 +866,6 @@ for iBOLD = 1:length(s.boldScans)
   end
 end
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%    fixStimfileTriggers    %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function s = fixStimfileTriggers(s,stimfileNum,boldScan,justDisplay)
-
-% get the stimfile info
-stimfileInfo = s.stimfileInfo(stimfileNum);
-
-% number of volumes we should remove
-removeVols = s.stimfileRemoveInitialVols;
-
-% get the mux factor
-if isfield(boldScan,'mux') && ~isempty(boldScan.mux)
-  mux = boldScan.mux;
-else
-  mux = 1;
-end
-
-% info about scan
-nVols = boldScan.h.dim(4);
-nSlices = boldScan.h.dim(3);
-
-% check to see if we are closer to the number of volumes
-% or number of volumes * slices/mux 
-if abs(stimfileInfo.numVols-nVols) < abs(stimfileInfo.numVols-nVols*nSlices/mux)
-  % we had a trigger for every slice
-  triggerEverySlice = false;
-else
-  triggerEverySlice = true;
-end
-
-% check whether the correct number of initial volumes were received
-% We expect mux * calibration volumes (which is usually 2 - passed in argument)
-if triggerEverySlice
-  calibrationTriggers = nSlices*s.removeInitialVols;
-else
-  calibrationTriggers = boldScan.mux*s.removeInitialVols;
-end
-
-% now check to see if it matches
-missingIgnoredVols = stimfileInfo.ignoredInitialVols - calibrationTriggers;
-s.stimfileInfo(stimfileNum).missingIgnoredVols = missingIgnoredVols;
-if missingIgnoredVols ~= 0
-  % print warning message
-  if triggerEverySlice
-    dispConOrLog(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to nSlices*initialVolumes %ix%i=%i but was set to %i',nSlices,s.removeInitialVols,calibrationTriggers,stimfileInfo.ignoredInitialVols),justDisplay);
-  else
-    dispConOrLog(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to mux*initialVolumes %ix%i=%i, but was set to %i',boldScan.mux,s.removeInitialVols,calibrationTriggers,stimfileInfo.ignoredInitialVols),justDisplay);
-  end
-end
-
-% calculate how many acq pulses we expect
-acqTriggers = nVols-s.removeInitialVols;
-
-% and see if we have a match. If not, we will fix them
-spoofTriggers = false;
-if s.spoofTriggers && ((acqTriggers ~= (stimfileInfo.numVols+missingIgnoredVols)) || triggerEverySlice)
-  if (stimfileInfo.ignoredInitialVols+stimfileInfo.numVols) <= 0
-    % no volumes - totally busted
-    dispConOrLog(sprintf('(dofmricni) !!! No volumes found in stimfile !!!'),justDisplay);
-    askuser('   This stimfile has no usable information about the scan');
-  else
-    % display warning
-    dispConOrLog(sprintf('%s (%i vols)',boldScan.filename,boldScan.h.dim(4)-s.removeInitialVols));
-    dispConOrLog(sprintf('(dofmricni) !!! Stimfile expected to have %i acquisiton triggers but had %i !!!',acqTriggers,stimfileInfo.numVols+missingIgnoredVols));
-    if justDisplay 
-      if askuser('Do you want to fix the acq triggers')
-	stimfileInfo.fixAcq = true;
-	s.stimfileInfo(stimfileNum).fixAcq = 1;
-      else
-	stimfileInfo.fixAcq = false;
-	s.stimfileInfo(stimfileNum).fixAcq = 0;
-      end
-    end
-    % triggers needed to be added
-    spoofTriggers = true;
-  end
-end
-
-% this is the code that actually adjusts the stimfiles
-if ~justDisplay && (missingIgnoredVols || spoofTriggers)
-  % get the stimfile directory
-  stimfileDir = fullfile(s.localSessionDir,'Etc');
-  % and load the stimfile
-  stimfileName = fullfile(stimfileDir,stimfileInfo.name);
-  stimfile = load(stimfileName);
-  % save original
-  save(sprintf('%s_original.mat',stripext(stimfileName)),'-struct','stimfile');
-  % fix any missing ignored vols
-  if missingIgnoredVols
-    if missingIgnoredVols < 0
-      stimfile = removeTriggers(stimfile,1:-missingIgnoredVols);
-    else
-      stimfile = unignoreTriggers(stimfile,calibrationTriggers+1:stimfileInfo.ignoredInitialVols);
-    end
-    % update stimfileInfo
-    stimfileInfo.numVols = stimfile.myscreen.volnum;
-    
-    %check that myscreen had ignoredInitialVols 
-    if ~isfield(stimfile.myscreen,'ignoredInitialVols')
-        stimfileInfo.ignoredInitialVols = 0;
-        fprintf('(fixStimefileTriggers) Myscreen had no ignoredInitialVols field. Ignoring. \n')
-    else
-        stimfileInfo.ignoredInitialVols = stimfile.myscreen.ignoredInitialVols;
-    end
-  end
-  
-  % get volume events
-  e = stimfile.myscreen.events;
-  volTrace = find(strcmp('volume',stimfile.myscreen.traceNames));
-  volEvents = find(e.tracenum==volTrace);
-  volTimes = e.time(volEvents);
-  % fix the triggers by spoofing
-  if spoofTriggers
-    % fix (note there is code for actually putting back missing
-    % triggers, but removed it - should be in the git repo b0ce70f on May 18, 2015)
-    % this code, here just spoofs all the triggers by calculating when they
-    % should have arrived and starting them after the first volume
-    if stimfileInfo.fixAcq
-      % remove all volumes, but the first
-      stimfile = removeTriggers(stimfile,2:stimfileInfo.numVols);
-      % now add volumes for where events should have happened
-      framePeriod = boldScan.tr/1000;
-      dispConOrLog(sprintf('(dofmricni) Spoofing volumes every %ss in %s',num2str(framePeriod),stimfileName));
-      if isnan(framePeriod), dispConOrLog(sprintf('(dofmricni) !!! TR setting is invalid !!!'));keyboard;end
-      % get all the volumes we need to add, and add them
-      addTimes = (volTimes(1)+framePeriod):framePeriod:volTimes(1)+(nVols-s.removeInitialVols-1)*framePeriod;
-      stimfile = addVolEvents(stimfile,addTimes);
-      stimfile.myscreen.modifiedDate = datestr(now);
-    end
-  end
-  % save the stimfile back
-  save(stimfileName,'-struct','stimfile');
-end
-
-%%%%%%%%%%%%%%%%%%%%%%
-%    addVolEvents    %
-%%%%%%%%%%%%%%%%%%%%%%
-function stimfile = addVolEvents(stimfile,addVolTimes)
-
-% shortcut
-e = stimfile.myscreen.events;
-
-% cycle over all vol times to be added
-for i = 1:length(addVolTimes)
-  volTime = addVolTimes(i);
-  % get the event number where we want to insert the event
-  addNum = last(find(e.time(1:e.n)<volTime))+1;
-  lastEntry = addNum-1;
-  nextEntry = min(addNum,e.n);
-  if isempty(addNum),addNum=1;lastEntry=1;end
-  % get time of this event relative to the ones before it
-  % and after it (i.e. 0 if same as last event, 1 if same
-  % as next event.
-  thisFraction = (volTime-e.time(lastEntry))/(e.time(nextEntry)-e.time(lastEntry));
-  % add the event
-  e.n = e.n+1;
-  e.tracenum = [e.tracenum(1:addNum-1) 1 e.tracenum(addNum:end)];
-  e.data = [e.data(1:addNum-1) 1 e.data(addNum:end)];
-  % get interpolated ticknum
-  ticknum = round(e.ticknum(lastEntry)+thisFraction*(e.ticknum(nextEntry)-e.ticknum(lastEntry)));
-  e.ticknum = [e.ticknum(1:addNum-1) ticknum e.ticknum(addNum:end)];
-  e.volnum = [e.volnum(1:addNum-1) e.volnum(lastEntry) e.volnum(addNum:end)+1];
-  e.time = [e.time(1:addNum-1) volTime e.time(addNum:end)];
-  e.force = [e.force(1:addNum-1) 1 e.force(addNum:end)];
-end
-
-% fix the volume number of all the volume events (other events are fixed by code above)
-% but volume events get updated afterwords - i.e. they are logged starting at 0. 
-e.volnum(e.tracenum==1) = 0:(sum(e.tracenum==1)-1);
-
-% put update events back into structure
-stimfile.myscreen.events = e;
-
-% record times of events that have been added
-if ~isfield(stimfile.myscreen,'addVolTimes')
-  stimfile.myscreen.addVolTimes = [];
-end
-stimfile.myscreen.addVolTimes(end+1:end+length(addVolTimes)) = addVolTimes;
-
-% update number of volumes
-stimfile.myscreen.volnum = stimfile.myscreen.volnum+length(addVolTimes);
-
 %%%%%%%%%%%%%%%%%%
 %%   moveData   %%
 %%%%%%%%%%%%%%%%%%
@@ -1380,9 +1200,8 @@ subjectID = [];
 if isfield(info,'PatientName') && isfield(info.PatientName,'FamilyName')
   subjectID = info.PatientName.FamilyName;
   if ~isempty(subjectID) && (~any(length(subjectID) == [4 5]) || ~isequal(lower(subjectID(1)),'s'))
-    if s.idWarning
-      mrWarnDlg('(dofmricni) PatientName should always be set to a subjectID (not the real name)!!!');
-    else
+    if ~strncmp('ANON',subjectID,4) && s.idWarning 
+      mrWarnDlg(sprintf('(dofmricni) PatientName FamilyName should always be set to a subjectID (not the real name: %s)!!!',subjectID));
     end
     subjectID = [];
   end
@@ -1391,10 +1210,10 @@ if isempty(subjectID)
   if isfield(info,'PatientName') && isfield(info.PatientName,'GivenName')
     subjectID = info.PatientName.GivenName;
     if ~isempty(subjectID) && (~any(length(subjectID) == [4 5]) || ~isequal(lower(subjectID(1)),'s'))
-      if s.idWarning
-        mrWarnDlg('(dofmricni) PatientName should always be set to a subjectID (not the real name)!!!');
-      else
+      if ~strncmp('ANON',subjectID,4) && s.idWarning 
+        mrWarnDlg(sprintf('(dofmricni) PatientName GivenName should always be set to a subjectID (not the real name: %s)!!!',subjectID));
       end
+      subjectID = [];
     end
   end
 end
@@ -1878,6 +1697,8 @@ if ~isempty(stimfileListing)
         volTrace = find(strcmp('volume',stimfile.myscreen.traceNames));
         e = stimfile.myscreen.events;
         s.stimfileInfo(end).tr = median(diff(e.time(e.tracenum==volTrace)));
+	% see if there are potentially any missing volumes (more than 1.5 times TR different)
+	s.stimfileInfo(end).missingVolumes = find(diff(e.time(e.tracenum==volTrace))>(s.stimfileInfo(end).tr*1.5));
         % get some other info
         s.stimfileInfo(end).startTime = stimfile.myscreen.starttime;
         s.stimfileInfo(end).endTime = stimfile.myscreen.endtime;
@@ -1887,6 +1708,11 @@ if ~isempty(stimfileListing)
         else
           s.stimfileInfo(end).ignoredInitialVols = 0;
         end
+	% get time between last volume and end of stim file
+	if isfield(stimfile.myscreen,'endtimeSecs')
+	  lastTime = e.time(e.tracenum==volTrace);lastTime = lastTime(end);
+	  s.stimfileInfo(end).timeFromLastVolToEnd = stimfile.myscreen.endtimeSecs - lastTime(end);
+	end
       end
   end
 end
@@ -1989,7 +1815,16 @@ if dispAvailable
   dispHeader('Available stimfiles');
   for iStimfile = 1:length(s.stimfileInfo)
     stimfile = s.stimfileInfo(iStimfile);
-    disp(sprintf('%i: %s (%i vols, %i ignored vols %s %s)',iStimfile,stimfile.name,stimfile.numVols,stimfile.ignoredInitialVols,stimfile.startTime,stimfile.endTime));
+    dispStr = sprintf('%i: %s (%i vols, %i ignored vols %s %s)',iStimfile,stimfile.name,stimfile.numVols,stimfile.ignoredInitialVols,stimfile.startTime,stimfile.endTime);
+    % display missingVOlumes
+    if ~isempty(s.stimfileInfo(iStimfile).missingVolumes)
+      dispStr = sprintf('%s [Possible missing vols: %s]',dispStr,num2str(s.stimfileInfo(iStimfile).missingVolumes));
+    end
+    % check for end
+    if s.stimfileInfo(iStimfile).timeFromLastVolToEnd < s.stimfileInfo(iStimfile).tr
+      dispStr = sprintf('%s [Stimfile ended %i ms after last vol (TR=%i ms)]',dispStr,round(1000*s.stimfileInfo(iStimfile).timeFromLastVolToEnd),round(1000*s.stimfileInfo(iStimfile).tr));
+    end
+    disp(dispStr);
   end
 end
 
@@ -2029,6 +1864,148 @@ if status
 else
   % get listings (the above gets the output of scp which is not as useful)
   retval = getRemoteListing(username,computerName,fromFiles);
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    fixStimfileTriggers    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function s = fixStimfileTriggers(s,stimfileNum,boldScan,justDisplay)
+
+% get the stimfile info
+stimfileInfo = s.stimfileInfo(stimfileNum);
+
+% number of volumes we should remove
+removeVols = s.stimfileRemoveInitialVols;
+
+% get the mux factor
+if isfield(boldScan,'mux') && ~isempty(boldScan.mux)
+  mux = boldScan.mux;
+else
+  mux = 1;
+end
+
+% info about scan
+nVols = boldScan.h.dim(4);
+nSlices = boldScan.h.dim(3);
+
+% check to see if we are closer to the number of volumes
+% or number of volumes * slices/mux 
+if abs(stimfileInfo.numVols-nVols) < abs(stimfileInfo.numVols-nVols*nSlices/mux)
+  % we had a trigger for every slice
+  triggerEverySlice = false;
+else
+  triggerEverySlice = true;
+end
+
+% check whether the correct number of initial volumes were received
+% We expect mux * calibration volumes (which is usually 2 - passed in argument)
+if triggerEverySlice
+  calibrationTriggers = nSlices*s.removeInitialVols;
+else
+  calibrationTriggers = boldScan.mux*s.removeInitialVols;
+end
+
+% now check to see if it matches
+missingIgnoredVols = stimfileInfo.ignoredInitialVols - calibrationTriggers;
+s.stimfileInfo(stimfileNum).missingIgnoredVols = missingIgnoredVols;
+if missingIgnoredVols ~= 0
+  % print warning message
+  if triggerEverySlice
+    dispConOrLog(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to nSlices*initialVolumes %ix%i=%i but was set to %i',nSlices,s.removeInitialVols,calibrationTriggers,stimfileInfo.ignoredInitialVols),justDisplay);
+  else
+    dispConOrLog(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to mux*initialVolumes %ix%i=%i, but was set to %i',boldScan.mux,s.removeInitialVols,calibrationTriggers,stimfileInfo.ignoredInitialVols),justDisplay);
+  end
+end
+
+% calculate how many acq pulses we expect
+acqTriggers = nVols-s.removeInitialVols;
+
+% and see if we have a match. If not, we will fix them
+spoofTriggers = false;
+if s.spoofTriggers && ((acqTriggers ~= (stimfileInfo.numVols+missingIgnoredVols)) || triggerEverySlice)
+  if (stimfileInfo.ignoredInitialVols+stimfileInfo.numVols) <= 0
+    % no volumes - totally busted
+    dispConOrLog(sprintf('(dofmricni) !!! No volumes found in stimfile !!!'),justDisplay);
+    askuser('   This stimfile has no usable information about the scan');
+  else
+    % display warning
+    dispConOrLog(sprintf('%s (%i vols)',boldScan.filename,boldScan.h.dim(4)-s.removeInitialVols));
+    dispConOrLog(sprintf('(dofmricni) !!! Stimfile expected to have %i acquisiton triggers but had %i !!!',acqTriggers,stimfileInfo.numVols+missingIgnoredVols));
+    % check to see if this might be because there are missing volumes
+    if ~isempty(stimfileInfo.missingVolumes)
+      dispConOrLog(sprintf('(dofmricni) !!! There may be missing volumes (ones that are more than 1.5 TRs separated: %s). Recommended that you fix acq triggers.  !!!',num2str(stimfileInfo.missingVolumes)));
+    % check for stimfile end
+    elseif stimfileInfo.timeFromLastVolToEnd < stimfileInfo.tr
+      dispConOrLog(sprintf('(dofmricni) Looks like the stimulus program was stopped while acquisition was continuing. If so, then fixing acq triggers is not necessary.'));
+    end
+    if justDisplay 
+      if askuser('Do you want to fix the acq triggers')
+	stimfileInfo.fixAcq = true;
+	s.stimfileInfo(stimfileNum).fixAcq = 1;
+      else
+	stimfileInfo.fixAcq = false;
+	s.stimfileInfo(stimfileNum).fixAcq = 0;
+      end
+    end
+    % triggers needed to be added
+    spoofTriggers = true;
+  end
+end
+
+% this is the code that actually adjusts the stimfiles
+if ~justDisplay && (missingIgnoredVols || spoofTriggers)
+  % get the stimfile directory
+  stimfileDir = fullfile(s.localSessionDir,'Etc');
+  % and load the stimfile
+  stimfileName = fullfile(stimfileDir,stimfileInfo.name);
+  stimfile = load(stimfileName);
+  % save original
+  save(sprintf('%s_original.mat',stripext(stimfileName)),'-struct','stimfile');
+  % fix any missing ignored vols
+  if missingIgnoredVols
+    if missingIgnoredVols < 0
+      stimfile = removeTriggers(stimfile,1:-missingIgnoredVols);
+    else
+      stimfile = unignoreTriggers(stimfile,calibrationTriggers+1:stimfileInfo.ignoredInitialVols);
+    end
+    % update stimfileInfo
+    stimfileInfo.numVols = stimfile.myscreen.volnum;
+    
+    %check that myscreen had ignoredInitialVols 
+    if ~isfield(stimfile.myscreen,'ignoredInitialVols')
+        stimfileInfo.ignoredInitialVols = 0;
+        fprintf('(fixStimefileTriggers) Myscreen had no ignoredInitialVols field. Ignoring. \n')
+    else
+        stimfileInfo.ignoredInitialVols = stimfile.myscreen.ignoredInitialVols;
+    end
+  end
+  
+  % get volume events
+  e = stimfile.myscreen.events;
+  volTrace = find(strcmp('volume',stimfile.myscreen.traceNames));
+  volEvents = find(e.tracenum==volTrace);
+  volTimes = e.time(volEvents);
+  % fix the triggers by spoofing
+  if spoofTriggers
+    % fix (note there is code for actually putting back missing
+    % triggers, but removed it - should be in the git repo b0ce70f on May 18, 2015)
+    % this code, here just spoofs all the triggers by calculating when they
+    % should have arrived and starting them after the first volume
+    if stimfileInfo.fixAcq
+      % remove all volumes, but the first
+      stimfile = removeTriggers(stimfile,2:stimfileInfo.numVols);
+      % now add volumes for where events should have happened
+      framePeriod = boldScan.tr/1000;
+      dispConOrLog(sprintf('(dofmricni) Spoofing volumes every %ss in %s',num2str(framePeriod),stimfileName));
+      if isnan(framePeriod), dispConOrLog(sprintf('(dofmricni) !!! TR setting is invalid !!!'));keyboard;end
+      % get all the volumes we need to add, and add them
+      addTimes = (volTimes(1)+framePeriod):framePeriod:volTimes(1)+(nVols-s.removeInitialVols-1)*framePeriod;
+      stimfile = addVolEvents(stimfile,addTimes);
+      stimfile.myscreen.modifiedDate = datestr(now);
+    end
+  end
+  % save the stimfile back
+  save(stimfileName,'-struct','stimfile');
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%

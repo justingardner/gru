@@ -1,12 +1,13 @@
 function mlrReconAll()
-%   rP = mlrReconAll(proj,exam,subj,user,pass)
+%   rP = mlrReconAll
 %
 % GOAL:
 %   mlrReconAll is designed to simplify your life by dealing with the
 %   entire freesurfer recon process in the background.
 %
 % USAGE:
-%   mlrReconAll('retinotopy','9077','s300','dbirman','PASSW');
+%   mlrReconAll 
+%   See here for usage notes: http://gru.stanford.edu/doku.php/runningfmri/tutorial_mlrreconall
 %
 % project       The current project, should be: /retinotopy/
 % examNum       Exam number, you can find this on NIMS (cni.stanford.edu/nims/)
