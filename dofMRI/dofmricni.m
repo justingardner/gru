@@ -1711,8 +1711,10 @@ if ~isempty(stimfileListing)
         end
 	% get time between last volume and end of stim file
 	if isfield(stimfile.myscreen,'endtimeSecs')
-	  lastTime = e.time(e.tracenum==volTrace);lastTime = lastTime(end);
-	  s.stimfileInfo(end).timeFromLastVolToEnd = stimfile.myscreen.endtimeSecs - lastTime(end);
+	  if stimfile.myscreen.volnum > 0
+	    lastTime = e.time(e.tracenum==volTrace);lastTime = lastTime(end);
+	    s.stimfileInfo(end).timeFromLastVolToEnd = stimfile.myscreen.endtimeSecs - lastTime(end);
+	  end
 	end
       end
   end
