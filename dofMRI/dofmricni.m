@@ -902,8 +902,9 @@ dirList = {'Etc','Pre','Raw','Raw/TSeries','Anatomy'};
 
 % make them
 for i = 1:length(dirList)
-  if ~isdir(dirList{i})
-    command = sprintf('mkdir(''%s'');',fullfile(s.localSessionDir,dirList{i}));
+  thisDir = fullfile(s.localSessionDir,dirList{i});
+  if ~isdir(thisDir)
+    command = sprintf('mkdir(''%s'');',thisDir);
     myeval(command,justDisplay);
   end
 end
