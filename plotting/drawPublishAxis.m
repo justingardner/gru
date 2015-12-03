@@ -186,7 +186,11 @@ if isempty(xTickLabel)
       xTickLabelCellArray{iTick} = mlrnum2str(xTick(iTick),'sigfigs',xTickLabelSigfigs);
     else
       % if we found it on the axis then use that label
-      xTickLabelCellArray{iTick} = xTickLabelFromAxis(matchFromAxis,:);
+      if ~iscell(xTickLabelFromAxis)
+        xTickLabelCellArray{iTick} = xTickLabelFromAxis(matchFromAxis,:);
+      else
+        xTickLabelCellArray = xTickLabelFromAxis;
+      end
     end
   end
   xTickLabel = xTickLabelCellArray;
