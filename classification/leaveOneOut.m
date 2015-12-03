@@ -15,7 +15,12 @@
 %             type = one of: 'fisher', 'svm', 'mahalonobis'
 %
 %             parfor added by dan 2015/12/02
+%               
+%varargin can contain:
 %
+%             'permutation=1': to shuffle the classes  [steeve 2015/12/02]
+
+
 function retval = leaveOneOut(instances,varargin)
 
 % check arguments
@@ -25,8 +30,8 @@ if any(nargin == [0])
 end
 
 % get arguments
-type = [];kernelfun = [];kernelargs = [];C=[];fieldName=[];hailString=[];
-getArgs(varargin,{'type=fisher','kernelfun=[]','kernelargs=[]','C=[]','fieldName=classify','hailString=[]'});
+type = [];kernelfun = [];kernelargs = [];C=[];fieldName=[];hailString=[];permutation=[];
+getArgs(varargin,{'type=fisher','kernelfun=[]','kernelargs=[]','C=[]','fieldName=classify','hailString=[]','permutation=0'});
 
 % see if we are passed in a cell array of rois. If so, then call leaveOneOut
 % sequentially on each roi and put the output into the field specified by classField
@@ -36,8 +41,30 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
             disp(sprintf('(leaveOneOut) No instances found in %s for %s',fieldName,instances{iROI}.name));
         else
             
-            keyboard
-            % put the output into the roi with the field specified by classField
+            %case permutation
+            if permutation == 1                                
+                fprintf('%s \n','(leaveOneOut)','Suffling instance classes')
+                %get classes
+                nClasses = length(instances{1}.classify.instances);
+                %# of instances per classe
+                for ci = 1 : nClasses
+                    ni(ci) = size(instances{iROI}.(fieldName).instances{ci},1);
+                end
+                niend = cumsum(ni);
+                nist = [1 ni(1:end-1)+1];                
+                %stack classes instances
+                stackedi = cell2mat([instances{iROI}.(fieldName).instances]');
+                %shuffle instances position
+                shf = randperm(size(stackedi,1));
+                stackedi = stackedi(shf,:);
+                %feed instances back to a class
+                for ci = 1 : nClasses
+                    tm{ci} = stackedi(nist(ci):niend(ci),:);
+                end
+                instances{iROI}.(fieldName).instances = tm;                
+            end
+            
+            %put the output into the roi with the field specified by classField
             instances{iROI}.(fieldName).leaveOneOut = leaveOneOut(instances{iROI}.(fieldName).instances,'type',type,'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C,sprintf('hailString=%s%s: ',hailString,instances{iROI}.name));
         end
     end
