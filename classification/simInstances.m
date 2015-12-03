@@ -20,6 +20,6 @@ for roi = 1 : nRois
     %name roi
     c{roi}.name = rois{roi};
     for class = 1 : nClasses        
-        c{roi}.classify.instances{class} = rand(nins(roi),nvoxs(roi));
+        c{roi}.classify.instances{class} = rand(nins(class),nvoxs(roi));
     end
 end
