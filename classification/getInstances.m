@@ -40,6 +40,36 @@
 %               fieldName: Name of field in which instances are stored (default=classify)
 %               verbose: set to 1 for standard messages, set to 2 to display messages about
 %                        which trials are being dropped and other more detailed info
+%
+%
+%Example of typical rois fields output by the function:
+%
+%              branchNum: []
+%                  color: 'white'
+%                 coords: [4x5000 double]
+%              createdBy: 'steeve <steeve@stanford.edu>'
+%     createdFromSession: 's002520150403'
+%          createdOnBase: 's0025_flatR_WM_occipital_Rad90'
+%                   date: '28-Sep-2015 12:54:35'
+%          displayOnBase: 's0025_flatR_WM_occipital_Rad90'
+%                   name: 'V1'
+%                  notes: ''
+%              sformCode: 1
+%              subjectID: 's0025'
+%               viewType: 'Volume'
+%                vol2mag: [4x4 double]
+%                vol2tal: []
+%              voxelSize: [1 1 1]
+%                  xform: [4x4 double]
+%                scanNum: 1
+%               groupNum: 3
+%             scanCoords: [3x320 double]
+%                      n: 320
+%                tSeries: [320x9510 double]
+%              sortindex: [1x5000 double]
+%          sortindexType: 'default'
+%               classify: [1x1 struct]
+
 function rois = getInstances(v,rois,stimvol,varargin)
 
 % check arguments

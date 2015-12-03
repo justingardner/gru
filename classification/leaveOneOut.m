@@ -35,6 +35,8 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
         if ~isfield(instances{iROI}.(fieldName),'instances')
             disp(sprintf('(leaveOneOut) No instances found in %s for %s',fieldName,instances{iROI}.name));
         else
+            
+            keyboard
             % put the output into the roi with the field specified by classField
             instances{iROI}.(fieldName).leaveOneOut = leaveOneOut(instances{iROI}.(fieldName).instances,'type',type,'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C,sprintf('hailString=%s%s: ',hailString,instances{iROI}.name));
         end
@@ -89,7 +91,7 @@ for iClass = 1:numClasses
     classifierOut = zeros(1,numReps(iClass));
     inst = instances{iClass};
     numRep = numReps(iClass);
-    parfor iRep = 1:numReps(iClass)
+    parfor iRep = 1 : numReps(iClass)
         % get the test instance
         testInstance = inst(iRep,:);
         % cerate the training instances, by removing just the testInstance
