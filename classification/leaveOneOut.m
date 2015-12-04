@@ -42,8 +42,7 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
     for iROI = 1:length(instances)
         if ~isfield(instances{iROI}.(fieldName),'instances')
             disp(sprintf('(leaveOneOut) No instances found in %s for %s',fieldName,instances{iROI}.name));
-        else
-                        
+        else                        
             %case we want to balance 
             %unbalanced dataset
             if balancByBootSt == 1  
