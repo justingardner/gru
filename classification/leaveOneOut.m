@@ -20,8 +20,8 @@
 %Additional tags:
 %
 %             'permutation=1': to shuffle the classes  [steeve 151202]
-%             'balancByBootSt': to balance dataset by boostrapping [steeve 151203]
-
+%          'balancByBootSt=1': to balance dataset by boostrapping [steeve 151203]
+%          'balancByRemovI=1': to balance datset by removing instances [steeve 151203]
 
 function retval = leaveOneOut(instances,varargin)
 
@@ -33,8 +33,8 @@ end
 
 % get arguments
 type = [];kernelfun = [];kernelargs = [];C=[];fieldName=[];hailString=[];permutation=[];
-balancByBootSt=[];
-getArgs(varargin,{'type=fisher','kernelfun=[]','kernelargs=[]','C=[]','fieldName=classify','hailString=[]','permutation=0','balancByBootSt=0'});
+balancByBootSt=[];balancByRemovI=[];
+getArgs(varargin,{'type=fisher','kernelfun=[]','kernelargs=[]','C=[]','fieldName=classify','hailString=[]','permutation=0','balancByBootSt=0','balancByRemovI=0'});
 
 % see if we are passed in a cell array of rois. If so, then call leaveOneOut
 % sequentially on each roi and put the output into the field specified by classField
@@ -63,7 +63,22 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
                     ipos = randi(ni(class2Boot(ci)),nInew,1);
                     instances{iROI}.(fieldName).instances{class2Boot(ci)} = tmp(ipos,:);
                 end
-            end            
+            end
+                        
+            %case we want to balance 
+            %unbalanced dataset
+            if balancByRemovI == 1  
+                fprintf('%s \n','(leaveOneOut)','Removing instances to balance dataset')
+                %get classes
+                nClasses = length(instances{1}.classify.instances);
+                for ci = 1 : nClasses
+                    ni(ci) = size(instances{iROI}.(fieldName).instances{ci},1);
+                end
+                nInew = min(ni);                
+                for ci = 1 : nClasses
+                    instances{iROI}.(fieldName).instances{ci} = instances{iROI}.(fieldName).instances{ci}(1:nInew,:);
+                end
+            end      
             
             %case we want to permutate
             %the classes
