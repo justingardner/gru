@@ -11,11 +11,23 @@
 %           c = leaveOneOut(c,'permutation=1');
 %
 %
-%ex:2
+% ex:2
 %           %simulate 2D-Gaussian-dist-instances for 2 classes
 %           c = simInstances({'simV1','simMT'},2,[],[10 15],'type=a2Dclusters')         
 %           %classify
 %           c = leaveOneOut(c,'permutation=1');           
+%           %plot
+%           nClass = length(c{1}.classify.instances);
+%           for i = 1 : nClass
+%              hold on
+%              plot(c{1}.classify.instances{i}(:,1),c{1}.classify.instances{i}(:,2),'.')
+%           end
+%
+% ex:3
+%           %simulate 2D-Gaussian-dist-instances for 2 classes
+%           c = simInstances({'simV1','simMT'},2,[],[10 15],'type=a2Dclusters')         
+%           %classify
+%           c = leaveOneOut(c,'balancByBootSt=1');           
 %           %plot
 %           nClass = length(c{1}.classify.instances);
 %           for i = 1 : nClass
