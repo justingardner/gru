@@ -15,7 +15,7 @@
 %             type = one of: 'fisher', 'svm', 'mahalonobis'
 %
 %             parfor added by dan 2015/12/02
-%               
+%
 %
 %Additional tags:
 %
@@ -43,10 +43,10 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
     for iROI = 1:length(instances)
         if ~isfield(instances{iROI}.(fieldName),'instances')
             disp(sprintf('(leaveOneOut) No instances found in %s for %s',fieldName,instances{iROI}.name));
-        else                        
-            %case we want to balance 
+        else
+            %case we want to balance
             %unbalanced dataset
-            if balancByBootSt == 1  
+            if balancByBootSt == 1
                 fprintf('%s \n','(leaveOneOut)','Bootstrapping to balance dataset')
                 %get classes
                 nClasses = length(instances{1}.classify.instances);
@@ -54,9 +54,9 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
                     ni(ci) = size(instances{iROI}.(fieldName).instances{ci},1);
                 end
                 [nInew,maxci] = max(ni);
-                %get classes to bootstrap                
+                %get classes to bootstrap
                 class2Boot = setdiff(1:nClasses,maxci);
-                %bootstrap each class to get 
+                %bootstrap each class to get
                 %maxci instances per class
                 for ci = 1 : length(class2Boot)
                     tmp = instances{iROI}.(fieldName).instances{class2Boot(ci)};
@@ -64,25 +64,25 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
                     instances{iROI}.(fieldName).instances{class2Boot(ci)} = tmp(ipos,:);
                 end
             end
-                        
-            %case we want to balance 
+            
+            %case we want to balance
             %unbalanced dataset
-            if balancByRemovI == 1  
+            if balancByRemovI == 1
                 fprintf('%s \n','(leaveOneOut)','Removing instances to balance dataset')
                 %get classes
                 nClasses = length(instances{1}.classify.instances);
                 for ci = 1 : nClasses
                     ni(ci) = size(instances{iROI}.(fieldName).instances{ci},1);
                 end
-                nInew = min(ni);                
+                nInew = min(ni);
                 for ci = 1 : nClasses
                     instances{iROI}.(fieldName).instances{ci} = instances{iROI}.(fieldName).instances{ci}(1:nInew,:);
                 end
-            end      
+            end
             
             %case we want to permutate
             %the classes
-            if permutationUnBal == 1                                
+            if permutationUnBal == 1
                 fprintf('%s \n','(leaveOneOut)','Suffling instance classes')
                 %get classes
                 nClasses = length(instances{1}.classify.instances);
@@ -91,7 +91,7 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
                     ni(ci) = size(instances{iROI}.(fieldName).instances{ci},1);
                 end
                 niend = cumsum(ni);
-                nist = [1 ni(1:end-1)+1];                
+                nist = [1 niend(1:end-1)+1];
                 %stack classes instances
                 stackedi = cell2mat([instances{iROI}.(fieldName).instances]');
                 %shuffle instances position
@@ -101,7 +101,7 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
                 for ci = 1 : nClasses
                     tm{ci} = stackedi(nist(ci):niend(ci),:);
                 end
-                instances{iROI}.(fieldName).instances = tm;                
+                instances{iROI}.(fieldName).instances = tm;
             end
             
             %case we want to permutate and balance dataset
@@ -118,7 +118,7 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
                 %calculate new # of instances per class
                 ni = repmat(floor(size(stackedi,1)/nClasses),nClasses,1);
                 niend = cumsum(ni);
-                nist = [1 ni(1:end-1)+1];
+                nist = [1 niend(1:end-1)+1];
                 %feed instances back to a class
                 for ci = 1 : nClasses
                     if ci == nClasses
@@ -129,7 +129,7 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
                 end
                 instances{iROI}.(fieldName).instances = tm;
             end
-
+            
             %put the output into the roi with the field specified by classField
             instances{iROI}.(fieldName).leaveOneOut = leaveOneOut(instances{iROI}.(fieldName).instances,'type',type,'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C,sprintf('hailString=%s%s: ',hailString,instances{iROI}.name));
         end
@@ -137,6 +137,93 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
     retval = instances;
     return
 end
+
+%-------------------------- preprocess dataset -------------------
+%case we want to balance
+%unbalanced dataset
+if balancByBootSt == 1
+    fprintf('%s \n','(leaveOneOut)','Bootstrapping to balance dataset')
+    %get classes
+    nClasses = length(instances);
+    for ci = 1 : nClasses
+        ni(ci) = size(instances{ci},1);
+    end
+    [nInew,maxci] = max(ni);
+    %get classes to bootstrap
+    class2Boot = setdiff(1:nClasses,maxci);
+    %bootstrap each class to get
+    %maxci instances per class
+    for ci = 1 : length(class2Boot)
+        tmp = instances{class2Boot(ci)};
+        ipos = randi(ni(class2Boot(ci)),nInew,1);
+        instances{class2Boot(ci)} = tmp(ipos,:);
+    end
+end
+%case we want to balance
+%unbalanced dataset
+if balancByRemovI == 1
+    fprintf('%s \n','(leaveOneOut)','Removing instances to balance dataset')
+    %get classes
+    nClasses = length(instances);
+    for ci = 1 : nClasses
+        ni(ci) = size(instances{ci},1);
+    end
+    nInew = min(ni);
+    for ci = 1 : nClasses
+        instances{ci} = instances{ci}(1:nInew,:);
+    end
+end
+
+%case we want to permutate
+%the classes
+if permutationUnBal == 1
+    fprintf('%s \n','(leaveOneOut)','Suffling instance classes')
+    %get classes
+    nClasses = length(instances{1}.classify.instances);
+    %# of instances per class
+    for ci = 1 : nClasses
+        ni(ci) = size(instances{ci},1);
+    end
+    niend = cumsum(ni);
+    nist = [1 niend(1:end-1)+1];
+    %stack classes instances
+    stackedi = cell2mat(instances');
+    %shuffle instances position
+    shf = randperm(size(stackedi,1));
+    stackedi = stackedi(shf,:);
+    %feed instances back to a class
+    for ci = 1 : nClasses
+        tm{ci} = stackedi(nist(ci):niend(ci),:);
+    end
+    instances = tm;
+end
+
+%case we want to permutate and balance dataset
+%the classes
+if permutationBal == 1
+    fprintf('%s \n','(leaveOneOut)','Suffling and balancing instance classes')
+    %get classes
+    nClasses = length(instances);
+    %stack classes instances
+    stackedi = cell2mat(instances');
+    %shuffle instances position
+    shf = randperm(size(stackedi,1));
+    stackedi = stackedi(shf,:);
+    %calculate new # of instances per class
+    ni = repmat(floor(size(stackedi,1)/nClasses),nClasses,1);
+    niend = cumsum(ni);
+    nist = [1;niend(1:end-1)+1];
+    %feed instances back to a class
+    for ci = 1 : nClasses
+        if ci == nClasses
+            tm{ci} = stackedi(nist(ci):end,:);
+        else
+            tm{ci} = stackedi(nist(ci):niend(ci),:);
+        end
+    end
+    instances = tm;
+end
+%-------------------------------------------------------------------
 
 % number of classes we are going to classify into
 numClasses = length(instances);
@@ -195,7 +282,7 @@ for iClass = 1:numClasses
         % and try to classify the instance
         [whichClass(iRep), classifierOut(iRep)] = classifyInstance(thisClassifier,testInstance);
         % update disppercent
-%         disppercent((iClass-1)/numClasses,iRep/numRep);
+        %         disppercent((iClass-1)/numClasses,iRep/numRep);
     end
     disppercent((iClass-1)/numClasses);
     % copy parallelized outputs back into retval
