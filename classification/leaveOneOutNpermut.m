@@ -49,7 +49,7 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
             retval{roi}.correct = mean(retval{roi}.corrects);
             retval{roi}.correctSTE = std(retval{roi}.corrects);
             
-            fprintf('%s %.2f %s \n','(leaveOneOutNpermut) fisher classifier produced',retval{roi}.correctSTE,' on average')
+            fprintf('%s %.2f %s \n','(leaveOneOutNpermut) fisher classifier produced',retval{roi}.correct,' on average')
             fprintf('%s %.3f \n','(leaveOneOutNpermut) std over permutation :',retval{roi}.correctSTE)
         end
     end
@@ -65,10 +65,10 @@ end
 retval.corrects = correctThisPerm;
 
 %correct stats
-retval.correctSTE = mean(retval.corrects);
+retval.correct = mean(retval.corrects);
 retval.correctSTE = std(retval.corrects);
 
-fprintf('%s %i %s \n','(leaveOneOutNpermut) fisher classifier produced',retval.correctSTE ,' on average')
+fprintf('%s %i %s \n','(leaveOneOutNpermut) fisher classifier produced',retval.correct,' on average')
 fprintf('%s %i \n','(leaveOneOutNpermut) std over permutation :',retval.correctSTE)
 
 
