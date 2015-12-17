@@ -14,7 +14,8 @@
 % ex:2
 %           %simulate two 2D-Gaussian-clusters of instances
 %           c=simInstances({'simV1','simMT'},2,[],[50 50],'type=a2Dclusters')                   
-%           c=leaveOneOut(c,'permutationBal=1');%classify
+%           c = c{1}.classify.instances;
+%           c=leaveOneOut(c,'permutationBal=1');
 %           %plot
 %           classs={'r','b'};
 %           for i=1:length(c{1}.classify.instances)

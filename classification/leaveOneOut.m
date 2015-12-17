@@ -174,12 +174,12 @@ if balancByRemovI == 1
     end
 end
 
-%case we want to permutate
+%case we want to permute
 %the classes
 if permutationUnBal == 1
     fprintf('%s \n','(leaveOneOut)','Suffling instance classes')
     %get classes
-    nClasses = length(instances{1}.classify.instances);
+    nClasses = length(instances);
     %# of instances per class
     for ci = 1 : nClasses
         ni(ci) = size(instances{ci},1);
@@ -198,15 +198,14 @@ if permutationUnBal == 1
     instances = tm;
 end
 
-%case we want to permutate and balance dataset
-%the classes
+%case we want to permute and balance classes
 if permutationBal == 1
-    fprintf('%s \n','(leaveOneOut)','Suffling and balancing instance classes')
+    fprintf('%s \n','(leaveOneOut)','Shuffling and balancing instance classes')
     %get classes
     nClasses = length(instances);
     %stack classes instances
     stackedi = cell2mat(instances');
-    %shuffle instances position
+    %shuffle instance position
     shf = randperm(size(stackedi,1));
     stackedi = stackedi(shf,:);
     %calculate new # of instances per class
@@ -284,6 +283,7 @@ for iClass = 1:numClasses
         % update disppercent
         %         disppercent((iClass-1)/numClasses,iRep/numRep);
     end
+    
     disppercent((iClass-1)/numClasses);
     % copy parallelized outputs back into retval
     retval.whichClass{iClass} = whichClass;
@@ -298,8 +298,6 @@ end
 
 % now make into percent correct
 retval.correct = sum(correctByClass)/sum(numReps);
-
 disppercent(inf,sprintf('(leaveOneOut) %s%s classifier produced %0.2f%% correct and',hailString,retval.type,retval.correct*100));
-
 retval.correctSTE = sqrt(retval.correct*(1-retval.correct)/sum(numReps));
 
