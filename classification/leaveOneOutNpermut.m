@@ -49,11 +49,12 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
             retval{roi}.correct = mean(retval{roi}.corrects);
             retval{roi}.correctSTE = std(retval{roi}.corrects);
             %95% confidence interval
-            retval{roi}.CI95 = retval{roi}.correct + 1.96*retval{roi}.correctSTE/sqrt(nPerm);
-
+            errormargin = 1.96*retval{roi}.correctSTE/sqrt(nPerm);
+            retval{roi}.CI95updown = retval{roi}.correct + [-errormargin errormargin];            
+            
             fprintf('%s %.3f %s \n','(leaveOneOutNpermut) fisher classifier produced',retval{roi}.correct,' on average')
             fprintf('%s %.3f \n','(leaveOneOutNpermut) std over permutation :',retval{roi}.correctSTE)
-            fprintf('%s %.3f \n','(leaveOneOutNpermut) 95% CI:',retval{roi}.CI95)
+            fprintf('%s %.3f %.3f %s \n','(leaveOneOutNpermut) 95% CI: [',retval{roi}.CI95updown,']')
         end
     end
     return
@@ -72,12 +73,13 @@ retval.correct = mean(retval.corrects);
 retval.correctSTE = std(retval.corrects);
 
 %95% confidence interval
-retval.CI95 = retval.correct + 1.96*retval.correctSTE/sqrt(nPerm);
+errormargin = 1.96*retval.correctSTE/sqrt(nPerm);
+retval.CI95updown = retval.correct + [-errormargin errormargin];
 
 %output
 fprintf('%s %.3f %s \n','(leaveOneOutNpermut) fisher classifier produced',retval.correct,' on average')
 fprintf('%s %.3f  \n','(leaveOneOutNpermut) std over permutation :',retval.correctSTE)
-fprintf('%s %.3f \n','(leaveOneOutNpermut) 95% CI:',retval.CI95)
+fprintf('%s %.3f %.3f %s \n','(leaveOneOutNpermut) 95% CI: [',retval.CI95updown,']')
 
 
 
