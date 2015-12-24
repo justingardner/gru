@@ -40,6 +40,41 @@
 %               fieldName: Name of field in which instances are stored (default=classify)
 %               verbose: set to 1 for standard messages, set to 2 to display messages about
 %                        which trials are being dropped and other more detailed info
+%
+%
+%Example of typical rois fields output by the function:
+%
+%              branchNum: []
+%                  color: 'white'
+%                 coords: [4x5000 double]
+%              createdBy: 'steeve <steeve@stanford.edu>'
+%     createdFromSession: 's002520150403'
+%          createdOnBase: 's0025_flatR_WM_occipital_Rad90'
+%                   date: '28-Sep-2015 12:54:35'
+%          displayOnBase: 's0025_flatR_WM_occipital_Rad90'
+%                   name: 'V1'
+%                  notes: ''
+%              sformCode: 1
+%              subjectID: 's0025'
+%               viewType: 'Volume'
+%                vol2mag: [4x4 double]
+%                vol2tal: []
+%              voxelSize: [1 1 1]
+%                  xform: [4x4 double]
+%                scanNum: 1
+%               groupNum: 3
+%             scanCoords: [3x320 double]
+%                      n: 320
+%                tSeries: [320x9510 double]
+%              sortindex: [1x5000 double]
+%          sortindexType: 'default'
+%               classify: [1x1 struct]
+%
+%             If your data is from a concatenated dataset, the view passed
+%             in will have the wrong concatInfo. In this case, simply
+%             specify the concatInfo directly: 'concatInfo',concatInfo as
+%             an argument.
+
 function rois = getInstances(v,rois,stimvol,varargin)
 
 % check arguments
@@ -76,7 +111,8 @@ end
 function rois = getInstancesDeconv(v,rois,stimvol,args)
 
 % get some default arguments
-getArgs(args,{'n=100','fieldName=classify','verbose=1','hdrlen=20','canonicalType=allfit2','r2cutoff=[]','pval=[]','displayFit=0','makeAverage=0','displayNums=[]','saveFitStructures=1'});
+concatInfo = []; % important so that getCanonical doesn't crash
+getArgs(args,{'n=100','fieldName=classify','verbose=1','hdrlen=20','canonicalType=allfit2','r2cutoff=[]','pval=[]','displayFit=0','makeAverage=0','displayNums=[]','saveFitStructures=1','concatInfo=[]'});
 
 % make a stimvol array with one field for each stimulus type
 if ~makeAverage
@@ -91,7 +127,7 @@ for iROI = 1:length(rois)
   % if canonical is to be calculated across whole roi
   if ~isfield(rois{iROI},'canonicalResponse') || isempty(rois{iROI}.canonicalResponse)
     if any(strcmp(canonicalType,{'all','allfit2','allfit1'}))
-      [rois{iROI}.canonicalResponse r2 rois{iROI}.canonicalFit] = getCanonical(v,rois{iROI},stimvol,canonicalType,'hdrlen',hdrlen,'r2cutoff',r2cutoff,'normType=max','pval',pval);
+      [rois{iROI}.canonicalResponse r2 rois{iROI}.canonicalFit] = getCanonical(v,rois{iROI},stimvol,canonicalType,'hdrlen',hdrlen,'r2cutoff',r2cutoff,'normType=max','pval',pval,'concatInfo',concatInfo);
     else
       rois{iROI}.canonicalResponse = [];
     end
@@ -116,7 +152,11 @@ for iROI = 1:length(rois)
   disppercent(-inf,sprintf('(getInstances) Computing amplitudes for ROI %s',rois{iROI}.name));
 
   % fit glm with the canonical we just computed
-  d = fitTimecourse(rois{iROI}.tSeries,stimvolAll,rois{iROI}.(fieldName).params.framePeriod,'concatInfo',rois{iROI}.(fieldName).params.concatInfo,'fitType=glm','displayFit',displayFit,'verbose=0',sprintf('hdrlen=%s',mynum2str(hdrlen)),'canonicalResponse',rois{iROI}.canonicalResponse,'displayNums',displayNums,'returnAllFields',saveFitStructures);
+  if isempty(concatInfo)
+    d = fitTimecourse(rois{iROI}.tSeries,stimvolAll,rois{iROI}.(fieldName).params.framePeriod,'concatInfo',rois{iROI}.(fieldName).params.concatInfo,'fitType=glm','displayFit',displayFit,'verbose=0',sprintf('hdrlen=%s',mynum2str(hdrlen)),'canonicalResponse',rois{iROI}.canonicalResponse,'displayNums',displayNums,'returnAllFields',saveFitStructures);
+  else
+    d = fitTimecourse(rois{iROI}.tSeries,stimvolAll,rois{iROI}.(fieldName).params.framePeriod,'concatInfo',concatInfo,'fitType=glm','displayFit',displayFit,'verbose=0',sprintf('hdrlen=%s',mynum2str(hdrlen)),'canonicalResponse',rois{iROI}.canonicalResponse,'displayNums',displayNums,'returnAllFields',saveFitStructures);
+  end
 
   % now sort the magnitudes back
   sortindex = rois{iROI}.sortindex(1:min(n,rois{iROI}.n));
