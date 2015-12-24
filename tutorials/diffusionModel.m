@@ -179,13 +179,8 @@ end
 correctStr = sprintf('Correct: %0.2f%%, median RT: %0.2f',100*correct/n,median(correctReactionTime));
 incorrectStr = sprintf('Incorrect: %0.2f%%, median RT: %0.2f',100*incorrect/n,median(incorrectReactionTime));
 if ~isfield(h,'text')
-<<<<<<< .mine
-  h.text(1) = text(boundLength,upperBound+histMaxHeight,correctStr,'HorizontalAlignment','right','VerticalAlignment','top','FontName',fontName,'FontAngle','oblique','FontSize',12);
-  h.text(2) = text(boundLength,lowerBound-histMaxHeight,incorrectStr,'HorizontalAlignment','right','VerticalAlignment','bottom','FontName',fontName,'FontAngle','oblique','FontSize',12);
-=======
   h.text(1) = text(boundLength,upperBound+histMaxHeight,correctStr,'HorizontalAlignment','right','VerticalAlignment','top','FontName','Helvetica','FontAngle','oblique','FontSize',12,'Color','k');
   h.text(2) = text(boundLength,lowerBound-histMaxHeight,incorrectStr,'HorizontalAlignment','right','VerticalAlignment','bottom','FontName','Helvetica','FontAngle','oblique','FontSize',12,'Color','r');
->>>>>>> .r465
 else
   % just set text string if already drawn
   set(h.text(1),'String',correctStr);
