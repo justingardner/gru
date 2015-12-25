@@ -280,7 +280,12 @@ for iClass = 1:numClasses
     inst = instances{iClass};    
     %test instances indices within class    
     testIxSt = 1:numRepbyFold:numRep;
-    testIxEnd = testIxSt+1;            
+    testIxEnd = testIxSt-1;  
+    testIxEnd(1)=[];
+    if length(testIxEnd(end))<=length(testIxSt)
+        testIxEnd(end+1) = numRep;
+    end    
+        
     parfor iRep = 1 : numFolds
         % get the test fold
         testInstance = inst(testIxSt(iRep):testIxEnd(iRep),:);
