@@ -4,12 +4,12 @@
 %      usage: diffusionModel()
 %         by: justin gardner
 %       date: 05/07/15
-%    purpose: 
+%    purpose: Draws diffusion model. 
 %
 function diffusionModel(varargin)
 
 % get arguments for model
-getArgs(varargin,{'upperBound=1','lowerBound=-1','startingPoint=0','startingPointSTD=0','driftRate=0.002','driftSTD=0.1','n=10000','slowMethod=0','stopDrawingTrialsAfter=200','updateHistogramsEvery=100','fontName=Helvetica'});
+getArgs(varargin,{'upperBound=1','lowerBound=-1','startingPoint=0','startingPointSTD=0','driftRate=0.0025','driftSTD=0.1','n=10000','slowMethod=0','stopDrawingTrialsAfter=200','updateHistogramsEvery=100','fontName=Helvetica','drawOne=0','prettyAxis=1','allowXaxisToScale=0','saveFigs=0','dispTitle=1','printRes=100'});
 
 
 % some initialization parameters
@@ -17,7 +17,19 @@ correct = 0;incorrect = 0;
 correctReactionTime = []; incorrectReactionTime = [];
 correctTrials = [];
 incorrectTrials = [];
-boundLength = 10;
+boundLength = 750;
+
+% if only asked to draw one, set other parameters accordingly
+if drawOne
+  stopDrawingTrialsAfter = 2;
+  n = 1;
+  plotSymbol = '-';
+else
+  plotSymbol = ':';
+end
+
+% set printRes string
+printRes = sprintf('-r%i',printRes);
 
 % initalize the graph
 mlrSmartfig('diffusionModel','reuse');clf;hold on
@@ -27,9 +39,17 @@ axis([0 boundLength lowerBound-(upperBound-lowerBound)*0.5 upperBound+(upperBoun
 h = [];
 xlabel('RT (samples)','fontName',fontName,'fontAngle','oblique','fontSize',14);
 ylabel('Decision variable','fontName',fontName,'fontAngle','oblique','fontSize',14);
-title(sprintf('Diffusion model: startingPoint=%s startingPointSTD=%s driftRate=%s driftSTD=%s n=%i',mlrnum2str(startingPoint,'sigfigs=-1'),mlrnum2str(startingPointSTD,'sigfigs=-1'),mlrnum2str(driftRate,'sigfigs=-1'),mlrnum2str(driftSTD,'sigfigs=-1'),n),'fontName',fontName,'fontAngle','oblique','fontSize',14);
+if dispTitle
+  title(sprintf('Diffusion model: startingPoint=%s startingPointSTD=%s driftRate=%s driftSTD=%s n=%i',mlrnum2str(startingPoint,'sigfigs=-1'),mlrnum2str(startingPointSTD,'sigfigs=-1'),mlrnum2str(driftRate,'sigfigs=-1'),mlrnum2str(driftSTD,'sigfigs=-1'),n),'fontName',fontName,'fontAngle','oblique','fontSize',14);
+end
 maxlen = 1;
 d = nan(n,boundLength);
+% make the axis pretty
+if prettyAxis,drawPublishAxis('yTick',[-1 0 1],'yTickLabel',{'-B','0','B'});end
+if saveFigs
+  fignum = 1;
+  print('-dpng',printRes,sprintf('diffusionModel%04i.png',fignum));
+end
 
 % simulate n runs of the model
 disppercent(-inf,'(diffusionModel) Simulating diffusion model');
@@ -79,29 +99,40 @@ for i = 1:n
     correct=correct+1;
     correctReactionTime(end+1) = rt(i);
     correctTrials(end+1) = i;
-    plotColor = 'k:';
+    plotColor = strcat('k',plotSymbol);
   else
     incorrect=incorrect+1;
     incorrectReactionTime(end+1) = rt(i);
     incorrectTrials(end+1) = i;
-    plotColor = 'r:';
+    plotColor = strcat('r',plotSymbol);
   end
   % draw the paths of trials for the first few (stop afterwords to make the sim go faster)
   if i < stopDrawingTrialsAfter
     plot(d(i,1:len),plotColor);
     % draw the bounds out to where we are
-    if maxlen > boundLength
+    if (maxlen > boundLength) && allowXaxisToScale
       plot([boundLength maxlen],[upperBound upperBound],'k-','LineWidth',3);
       plot([boundLength maxlen],[lowerBound lowerBound],'k-','LineWidth',3);
       boundLength = maxlen;
+      if prettyAxis,drawPublishAxis,end
       axis([0 boundLength lowerBound-(upperBound-lowerBound)*0.5 upperBound+(upperBound-lowerBound)*0.5]);
+      % make the axis pretty
+      if prettyAxis,drawPublishAxis('yTick',[-1 0 1],'yTickLabel',{'-B','0','B'},'xTick',[0:50:boundLength],'xTickLabel',0:50:boundLength);end
     end
     drawnow;
+    if saveFigs
+      fignum = fignum+1;
+      print('-dpng',printRes,sprintf('diffusionModel%04i.png',fignum));
+    end
   end
   % update histograms every few trials
   if mod(i,updateHistogramsEvery) == 0
     h = drawRTHistograms(correct,correctReactionTime,incorrect,incorrectReactionTime,upperBound,lowerBound,i,boundLength,h);
     drawnow;
+    if saveFigs
+      fignum = fignum+1;
+      print('-dpng',printRes,sprintf('diffusionModel%04i.png',fignum));
+    end
   end
   disppercent(i/n);
 end
@@ -114,6 +145,12 @@ plot(mean(correctTrials),'k-','LineWidth',4);
 incorrectTrials = d(incorrectTrials,1:maxlen);
 incorrectTrials(isnan(incorrectTrials)) = lowerBound;
 plot(mean(incorrectTrials),'r-','LineWidth',4);
+if saveFigs
+  fignum = fignum+1;
+  print('-dpng',printRes,sprintf('diffusionModel%04i.png',fignum));
+  print('-depsc2',sprintf('diffusionModelFinal.eps'));
+end
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %    drawRTHistograms    %
