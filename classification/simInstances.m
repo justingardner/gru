@@ -50,8 +50,20 @@
 %               plot(c{1}.classify.instances{i}(:,1),c{1}.classify.instances{i}(:,2),...
 %               '.','color',classs{i})
 %           end
-
-
+%
+% ex5:
+%           %2D-Gaussian-clusters         
+%           c=simInstances({'simV1','simMT'},2,[],[20 20],'type=a2Dclusters')
+%           %classify
+%           c=kFold(c,'numFolds=10');
+%           %plot
+%           classs={'r','b'};
+%           nClass=length(c{1}.classify.instances);
+%           for i=1:nClass
+%               hold on
+%               plot(c{1}.classify.instances{i}(:,1),c{1}.classify.instances{i}(:,2),...
+%               '.','color',classs{i})
+%           end
 
 function c = simInstances(rois,nClasses,nvoxs,nins,varargin)
 
@@ -78,6 +90,7 @@ end
 %2 voxels
 mu = [1 -1];
 sigma = [.9 .4; .4 .3];
+%sigma = [10 4; 1 5];
 if strcmp(type,'a2Dclusters')
     %make instances for each roi and
     %class
@@ -85,7 +98,7 @@ if strcmp(type,'a2Dclusters')
         %name roi
         c{roi}.name = rois{roi};
         for class = 1 : nClasses
-            m = mu + (class - 1)*10;     
+            m = mu + (class - 1)*2;     
             c{roi}.classify.instances{class} = mvnrnd(m,sigma,nins(class))*100;
         end
     end
