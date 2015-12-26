@@ -52,9 +52,9 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
             errormargin = 1.96*retval{roi}.correctSTE/sqrt(nPerm);
             retval{roi}.CI95updown = retval{roi}.correct + [-errormargin errormargin];            
             %print
-            fprintf('%s %.3f %s \n','(kFoldNpermut) fisher classifier produced',retval{roi}.correct,' on average')
-            fprintf('%s %.3f \n','(kFoldNpermut) std over permutation :',retval{roi}.correctSTE)
-            fprintf('%s %.3f %.3f %s \n','(kFoldNpermut) 95% CI: [',retval{roi}.CI95updown,']')
+            fprintf('%s %.3f %s \n','(kFoldNpermut) fisher classifier produced',retval{roi}.correct*100,'% correct on average')
+            fprintf('%s %.3f %s \n','(kFoldNpermut) std over permutation :',retval{roi}.correctSTE*100,'%')
+            fprintf('%s %.3f %.3f %s \n','(kFoldNpermut) 95% CI: [',retval{roi}.CI95updown*100,']')
         end
     end
     return
@@ -78,10 +78,9 @@ errormargin = 1.96*retval.correctSTE/sqrt(nPerm);
 retval.CI95updown = retval.correct + [-errormargin errormargin];
 
 %output
-fprintf('%s %.3f %s \n','(kFoldNpermut) fisher classifier produced',retval.correct,' on average')
-fprintf('%s %.3f  \n','(kFoldNpermut) std over permutation :',retval.correctSTE)
-fprintf('%s %.3f %.3f %s \n','(kFoldNpermut) 95% CI: [',retval.CI95updown,']')
-
+fprintf('%s %.3f %s \n','(kFoldNpermut) fisher classifier produced',retval.correct*100,'% correct on average')
+fprintf('%s %.3f %s \n','(kFoldNpermut) std over permutation :',retval.correctSTE*100,'%')
+fprintf('%s %.3f %.3f %s \n','(kFoldNpermut) 95% CI: [',retval.CI95updown*100,']')
 
 
 

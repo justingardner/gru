@@ -239,7 +239,8 @@ numClasses = length(instances);
 for iClass = 1:numClasses
     numReps(iClass) = size(instances{iClass},1);
     numDims(iClass) = size(instances{iClass},2);
-    disp(sprintf('(kFold) Class %i has %i instances with %i dimensions (%i folds of %i instances)',iClass,numReps(iClass),numDims(iClass),numFolds,numReps(iClass)/numFolds));
+    numRepByFold(iClass) = round(numReps(iClass)/numFolds);
+    disp(sprintf('(kFold) Class %i has %i instances with %i dimensions (%i folds of %i instances)',iClass,numReps(iClass),numDims(iClass),numFolds,numRepByFold(iClass)));
 end
 
 % check for dimensions being bad
@@ -263,7 +264,8 @@ for iClass = 1:numClasses
         instances{iClass} = instances{iClass}(:,~vox);
         numReps(iClass) = size(instances{iClass},1);
         numDims(iClass) = size(instances{iClass},2);
-        disp(sprintf('(kFold) Class %i now has %i instances with %i dimensions (%i folds of %i instances)',iClass,numReps(iClass),numDims(iClass),numFolds,numReps(iClass)/numReps(iClass)));
+        numRepByFold(iClass) = round(numReps(iClass)/numFolds);
+        disp(sprintf('(kFold) Class %i now has %i instances with %i dimensions (%i folds of %i instances)',iClass,numReps(iClass),numDims(iClass),numFolds,numRepByFold(iClass)));
     end
 end
 
@@ -276,16 +278,16 @@ for iClass = 1:numClasses
     % setup variables for parallel loop, it's important to do this now
     % otherwise parfor complains.
     numRep = numReps(iClass);
-    numRepbyFold = numRep/numFolds;        
     inst = instances{iClass};    
     %test instances indices within class    
-    testIxSt = 1:numRepbyFold:numRep;
+    %last fold might contain more or less data
+    testIxSt = 1:numRepByFold(iClass):numRep;
     testIxEnd = testIxSt-1;  
-    testIxEnd(1)=[];
+    testIxEnd(1) = [];
     if length(testIxEnd(end))<=length(testIxSt)
         testIxEnd(end+1) = numRep;
     end    
-        
+    %build on training and classify instances from remaining fold    
     parfor iRep = 1 : numFolds
         % get the test fold
         testInstance = inst(testIxSt(iRep):testIxEnd(iRep),:);
@@ -295,13 +297,12 @@ for iClass = 1:numClasses
         % now build the classifier
         thisClassifier = buildClassifier(trainingInstances,sprintf('type=%s',type),'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C);
         % and try to classify these instances
-        for iTest = 1 : numRepbyFold
+        for iTest = 1 : numRepByFold
             [whichClass{iRep}(iTest), classifierOut{iRep}(iTest)] = classifyInstance(thisClassifier,testInstance(iTest,:));
         end        
         % update disppercent
         % disppercent((iClass-1)/numClasses,iRep/numRep);
-    end
-    
+    end    
     disppercent((iClass-1)/numClasses);
     % copy parallelized outputs back into retval
     retval.whichClass{iClass} = [whichClass{:}];
