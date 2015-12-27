@@ -239,7 +239,7 @@ numClasses = length(instances);
 for iClass = 1:numClasses
     numReps(iClass) = size(instances{iClass},1);
     numDims(iClass) = size(instances{iClass},2);
-    numRepByFold(iClass) = round(numReps(iClass)/numFolds);
+    numRepByFold(iClass) = floor(numReps(iClass)/numFolds);
     disp(sprintf('(kFold) Class %i has %i instances with %i dimensions (%i folds of %i instances)',iClass,numReps(iClass),numDims(iClass),numFolds,numRepByFold(iClass)));
 end
 
@@ -264,7 +264,7 @@ for iClass = 1:numClasses
         instances{iClass} = instances{iClass}(:,~vox);
         numReps(iClass) = size(instances{iClass},1);
         numDims(iClass) = size(instances{iClass},2);
-        numRepByFold(iClass) = round(numReps(iClass)/numFolds);
+        numRepByFold(iClass) = floor(numReps(iClass)/numFolds);
         disp(sprintf('(kFold) Class %i now has %i instances with %i dimensions (%i folds of %i instances)',iClass,numReps(iClass),numDims(iClass),numFolds,numRepByFold(iClass)));
     end
 end
