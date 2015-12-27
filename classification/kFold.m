@@ -297,7 +297,7 @@ for iClass = 1:numClasses
         % now build the classifier
         thisClassifier = buildClassifier(trainingInstances,sprintf('type=%s',type),'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C);
         % and try to classify these instances
-        for iTest = 1 : numRepByFold
+        for iTest = 1 : numRepByFold(iClass)
             [whichClass{iRep}(iTest), classifierOut{iRep}(iTest)] = classifyInstance(thisClassifier,testInstance(iTest,:));
         end        
         % update disppercent
