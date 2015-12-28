@@ -1,4 +1,4 @@
-% kFold.m
+% kFoldTest.m
 %
 %        $Id: kFold.m
 %      usage: kFold(instances)
@@ -239,8 +239,11 @@ numClasses = length(instances);
 for iClass = 1:numClasses
     numReps(iClass) = size(instances{iClass},1);
     numDims(iClass) = size(instances{iClass},2);
+    disp(sprintf('(kFold) Class %i has %i instances with %i dimensions',iClass,numReps(iClass),numDims(iClass)));
     numRepByFold(iClass) = floor(numReps(iClass)/numFolds);
-    disp(sprintf('(kFold) Class %i has %i instances with %i dimensions (%i folds of %i instances)',iClass,numReps(iClass),numDims(iClass),numFolds,numRepByFold(iClass)));
+    numRepsTrue(iClass) = numRepByFold(iClass) * numFolds;
+    instances{iClass} = instances{iClass}(1:numRepsTrue(iClass),:);
+    disp(sprintf('(kFold) Class %i has now %i instances with %i dimensions (%i folds of %i instances)',iClass,numRepsTrue(iClass),numDims(iClass),numFolds,numRepByFold(iClass)));
 end
 
 % check for dimensions being bad
@@ -264,44 +267,49 @@ for iClass = 1:numClasses
         instances{iClass} = instances{iClass}(:,~vox);
         numReps(iClass) = size(instances{iClass},1);
         numDims(iClass) = size(instances{iClass},2);
+        disp(sprintf('(kFold) Class %i has %i instances with %i dimensions',iClass,numReps(iClass),numDims(iClass)));
         numRepByFold(iClass) = floor(numReps(iClass)/numFolds);
-        disp(sprintf('(kFold) Class %i now has %i instances with %i dimensions (%i folds of %i instances)',iClass,numReps(iClass),numDims(iClass),numFolds,numRepByFold(iClass)));
+        numRepsTrue(iClass) = numRepByFold(iClass) * numFolds;
+        instances{iClass} = instances{iClass}(1:numRepsTrue(iClass),:);
+        disp(sprintf('(kFold) Class %i now has %i instances with %i dimensions (%i folds of %i instances)',iClass,numRepsTrue(iClass),numDims(iClass),numFolds,numRepByFold(iClass)));
     end
 end
 
 % cycle through class and repetitions, removing 1 fold of 
 % instances, and building the classifier on the remaining
 % folds and testing on that removed fold.
-retval.whichClass = cell(1,numClasses);
-disppercent(-1/numClasses,sprintf('(kFold) %sPerforming kFold cross-validation with classifier %s',hailString,retval.type));
-for iClass = 1:numClasses
+
+for iClass = 1 : numClasses
     % setup variables for parallel loop, it's important to do this now
     % otherwise parfor complains.
-    numRep = numReps(iClass);
-    inst = instances{iClass};    
-    %test instances indices within class    
+    numRep = numRepsTrue(iClass);
+    numRepsByFoldThisClass = numRepByFold(iClass);
+    inst = instances{iClass};
+    %test instances positions within class    
     %last fold might contain more or less data
-    testIxSt = 1:numRepByFold(iClass):numRep;
+    testIxSt = 1 : numRepByFold(iClass) : numRep;
     testIxEnd = testIxSt-1;  
     testIxEnd(1) = [];
     if length(testIxEnd(end))<=length(testIxSt)
         testIxEnd(end+1) = numRep;
     end    
     %build on training and classify instances from remaining fold    
-    parfor iRep = 1 : numFolds
-        % get the test fold
-        testInstance = inst(testIxSt(iRep):testIxEnd(iRep),:);
-        % cerate the training instances, by removing just the testInstance
+    parfor iFold = 1 : numFolds
+        %get this fold's instances
+        thisFold = testIxSt(iFold):testIxEnd(iFold);
+        % get the test fold instances        
+        testInstances = inst(thisFold,:);
+        % cerate the training instances, by removing just the testInstances
         trainingInstances = instances;
-        trainingInstances{iClass} = instances{iClass}(setdiff(1:numRep,testIxSt(iRep):testIxEnd(iRep)),:);
+        trainingInstances{iClass} = instances{iClass}(setdiff(1:numRep,thisFold),:);
         % now build the classifier
         thisClassifier = buildClassifier(trainingInstances,sprintf('type=%s',type),'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C);
         % and try to classify these instances
-        for iTest = 1 : numRepByFold
-            [whichClass{iRep}(iTest), classifierOut{iRep}(iTest)] = classifyInstance(thisClassifier,testInstance(iTest,:));
+        for iTest = 1 : numRepsByFoldThisClass
+            [whichClass{iFold}(iTest), classifierOut{iFold}(iTest)] = classifyInstance(thisClassifier,testInstances(iTest,:));
         end        
         % update disppercent
-        % disppercent((iClass-1)/numClasses,iRep/numRep);
+        % disppercent((iClass-1)/numClasses,iFold/numRep);
     end    
     disppercent((iClass-1)/numClasses);
     % copy parallelized outputs back into retval
@@ -311,11 +319,11 @@ for iClass = 1:numClasses
     correctByClass(iClass) = sum(retval.whichClass{iClass}==iClass);
     % and compute the confusion matrix row for this class
     for jClass = 1:numClasses
-        retval.confusionMatrix(iClass,jClass) = sum(retval.whichClass{iClass}==jClass)/numReps(iClass);
+        retval.confusionMatrix(iClass,jClass) = sum(retval.whichClass{iClass}==jClass)/numRepsTrue(iClass);
     end
 end
 
 % now make into percent correct
-retval.correct = sum(correctByClass)/sum(numReps);
+retval.correct = sum(correctByClass)/sum(numRepsTrue);
 disppercent(inf,sprintf('(kFold) %s%s classifier produced %0.2f%% correct and',hailString,retval.type,retval.correct*100));
-retval.correctSTE = sqrt(retval.correct*(1-retval.correct)/sum(numReps));
+retval.correctSTE = sqrt(retval.correct*(1-retval.correct)/sum(numRepsTrue));
