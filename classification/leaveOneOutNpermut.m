@@ -15,8 +15,10 @@
 function retval = leaveOneOutNpermut(instances,varargin)
 
 %permute N times
-fieldName=[];
-getArgs(varargin,{'nPerm','fieldName=classify'});
+type = [];kernelfun = [];kernelargs = [];C=[];fieldName=[];permutation=[];nPerm=[];
+getArgs(varargin,{'nPerm','fieldName=classify','type=fisher','kernelfun=[]',...
+    'kernelargs=[]','C=[]','permutationBal=0','permutationUnBal=0',...
+    'balancByBootSt=0','balancByRemovI=0'});
 
 %check # number of permutations
 %is defined
@@ -39,7 +41,7 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
             %percent correct by permutation
             inst = instances(roi);
             parfor i = 1 : nPerm
-                tmp = leaveOneOut(inst,'permutationUnBal=1');%classify
+                tmp = leaveOneOut(inst,'permutationUnBal=1','type',type,'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C);                
                 correctThisPerm(i) = tmp{1}.classify.leaveOneOut.correct;
             end
             %percent correct by roi and permutation
@@ -62,7 +64,7 @@ end
 
 %percent correct by permutation
 parfor i = 1 : nPerm
-    tmp = leaveOneOut(instances,'permutationUnBal=1');%classify
+    tmp = leaveOneOut(instances,'permutationUnBal=1','type',type,'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C);
     correctThisPerm(i) = tmp.correct;
 end
 %percent correct by roi and permutation

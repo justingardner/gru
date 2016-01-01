@@ -98,7 +98,7 @@ if strcmp(type,'a2Dclusters')
         %name roi
         c{roi}.name = rois{roi};
         for class = 1 : nClasses
-            m = mu + (class - 1)*2;     
+            m = mu + (class - 1)*5;     
             c{roi}.classify.instances{class} = mvnrnd(m,sigma,nins(class))*100;
         end
     end

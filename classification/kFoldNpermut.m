@@ -6,7 +6,10 @@
 %    purpose: kFold of N permutations of classes to get chance
 %             distribution of accuracies
 %
-%             instances = kFoldNpermut(instances,'nPerm=20','numFolds=10');
+%      usage:
+%e.g., 
+%
+%             instances = kFoldNpermut(instances,'nPerm=20','numFolds=10','type=svm');
 %               
 %
 %
@@ -14,9 +17,14 @@
 
 function retval = kFoldNpermut(instances,varargin)
 
-%permute N times
-fieldName=[];numFolds=[];
-getArgs(varargin,{'nPerm','fieldName=classify','numFolds=10'});
+%get arguments
+type = [];kernelfun = [];kernelargs = [];C=[];fieldName=[];
+numFolds=[];fieldName=[];numFolds=[];
+permutationUnBal=[]; permutationBal=[]; balancByBootSt=[];balancByRemovI=[];
+getArgs(varargin,{'type=fisher','kernelfun=[]','kernelargs=[]','C=[]',...
+    'fieldName=classify','permutationBal=0',...
+    'permutationUnBal=0','balancByBootSt=0','balancByRemovI=0','numFolds=10',...
+    'nPerm=1'});
 
 %check # number of permutations
 %is defined
@@ -39,8 +47,8 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
             %percent correct by permutation
             inst = instances(roi);                                    
             parfor i = 1 : nPerm
-                %classify                
-                tmp = kFold(inst,'permutationUnBal=1',['numFolds=' num2str(numFolds)]);
+                %classify  
+                tmp = kFold(inst,['numFolds=' num2str(numFolds)],'type',type,'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C,varargin{:});
                 correctThisPerm(i) = tmp{1}.classify.kFold.correct;
             end                                   
             %percent correct by roi and permutation
@@ -63,11 +71,15 @@ end
 %percent correct by permutation
 parfor i = 1 : nPerm
     %classify
-    tmp = kFold(instances,'permutationUnBal=1',['numFolds=' num2str(numFolds)]);
+    tmp = kFold(instances,['numFolds=' num2str(numFolds)],'type',type,'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C,varargin{:});    
     correctThisPerm(i) = tmp.correct;
+    confusionMatrix{i} = tmp.confusionMatrix;
 end
 %percent correct by roi and permutation
 retval.corrects = correctThisPerm;
+
+%confusion matrices
+retval.confusionMatrix = confusionMatrix;
 
 %correct stats
 retval.correct = mean(retval.corrects);
