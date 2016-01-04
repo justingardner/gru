@@ -92,7 +92,7 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
             %case we want to permutate
             %the classes
             if permutationUnBal == 1
-                fprintf('%s \n','(kFold)','Suffling instance classes')
+                fprintf('%s \n','(kFold)','Permuting instance classes')
                 %get classes
                 nClasses = length(instances{1}.classify.instances);
                 %# of instances per class
@@ -115,8 +115,10 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
             
             %case we want to permutate and balance dataset
             %the classes
+            %note: to ensure it's balanced instances need to be removed 
+            %first from the most frequent class, then permuted.
             if permutationBal == 1
-                fprintf('%s \n','(kFold)','Suffling instance classes')
+                fprintf('%s \n','(kFold)','Permuting instance classes')
                 %get classes
                 nClasses = length(instances{1}.classify.instances);
                 %stack classes instances
@@ -209,25 +211,37 @@ if permutationUnBal == 1
 end
 
 %case we want to permute and balance classes
-if permutationBal == 1
+if permutationBal == 1    
     fprintf('%s \n','(kFold)','Permuting and balancing instance classes')
     %get classes
-    nClasses = length(instances);
+    nClasses = length(instances);        
+    %balance classes
+    %calculate new # of instances per class    
+    %minimum number of instances 
+    for ci = 1 : nClasses        
+        nibyClass(ci) = size(instances{ci},1);
+    end
+    ni = min(nibyClass);
+    %feed instances back to a class
+    for ci = 1 : nClasses        
+        tm{ci} = instances{ci}(1:ni,:);        
+    end
+       
+    %Permute
     %stack classes instances
-    stackedi = cell2mat(instances');
+    stackedi = cell2mat(tm');    
     %shuffle instance position
-    shf = randperm(size(stackedi,1));
+    shf = randperm(size(stackedi,1));        
     stackedi = stackedi(shf,:);
-    %calculate new # of instances per class
-    ni = repmat(floor(size(stackedi,1)/nClasses),nClasses,1);
-    niend = cumsum(ni);
+    niend = cumsum(ones(1,nClasses)*ni);
     nist = [1;niend(1:end-1)+1];
     %feed instances back to a class
     for ci = 1 : nClasses        
-        tm{ci} = stackedi(nist(ci):niend(ci),:);        
+        tm2{ci} = stackedi(nist(ci):niend(ci),:);        
     end
-    instances = tm;
+    instances = tm2;
 end
+
 %-------------------------------------------------------------------
 
 % number of classes we are going to classify into
@@ -293,7 +307,7 @@ for iClass = 1 : numClasses
     whichClass = {};
     classifierOut = {};
     thisClassifier = {};    
-    testFold={};
+    testFold={};   
     parfor iFold = 1 : numFolds  
         %get this fold's instances
         testFold = testIxSt(iFold):testIxEnd(iFold);
