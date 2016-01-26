@@ -15,6 +15,7 @@
 %             type = one of: 'fisher', 'svm', 'mahalonobis'
 %
 %             parfor added by dan 2015/12/02
+%             NaN check added by dan
 %               
 %
 %Additional tags:
@@ -33,8 +34,8 @@ end
 
 % get arguments
 type = [];kernelfun = [];kernelargs = [];C=[];fieldName=[];hailString=[];permutation=[];
-balancByBootSt=[];balancByRemovI=[];
-getArgs(varargin,{'type=fisher','kernelfun=[]','kernelargs=[]','C=[]','fieldName=classify','hailString=[]','permutation=0','balancByBootSt=0','balancByRemovI=0'});
+balancByBootSt=[];balancByRemovI=[];fullBoot=[];uselibsvm=[];
+getArgs(varargin,{'type=fisher','kernelfun=[]','kernelargs=[]','C=[]','fieldName=classify','hailString=[]','permutation=0','balancByBootSt=0','fullBoot=0','balancByRemovI=0','uselibsvm=0'});
 
 % see if we are passed in a cell array of rois. If so, then call leaveOneOut
 % sequentially on each roi and put the output into the field specified by classField
@@ -57,10 +58,25 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
                 class2Boot = setdiff(1:nClasses,maxci);
                 %bootstrap each class to get 
                 %maxci instances per class
-                for ci = 1 : length(class2Boot)
-                    tmp = instances{iROI}.(fieldName).instances{class2Boot(ci)};
-                    ipos = randi(ni(class2Boot(ci)),nInew,1);
-                    instances{iROI}.(fieldName).instances{class2Boot(ci)} = tmp(ipos,:);
+                
+                %
+                if fullBoot
+                    % bootstrap the ENTIRE class that is short instances
+                    for ci = 1 : length(class2Boot)
+                        tmp = instances{iROI}.(fieldName).instances{class2Boot(ci)};
+                        ipos = randi(ni(class2Boot(ci)),nInew,1);
+                        instances{iROI}.(fieldName).instances{class2Boot(ci)} = tmp(ipos,:);
+                    end
+                else
+                    % add bootstrapped instances, but use all the instances
+                    % that we have already
+                    for ci = 1 : length(class2Boot)
+                        % get all the instances that we currently have
+                        tmp = instances{iROI}.(fieldName).instances{class2Boot(ci)};
+                        ipos = [(1:size(tmp,1))' ; randi(ni(class2Boot(ci)),nInew-size(tmp,1),1)];
+                        instances{iROI}.(fieldName).instances{class2Boot(ci)} = tmp(ipos,:);
+                    end
+                    
                 end
             end
                         
@@ -150,7 +166,8 @@ end
 % instance, and building the classifier on the remaining
 % instances and testing on that single instance.
 retval.whichClass = cell(1,numClasses);
-disppercent(-1/numClasses,sprintf('(leaveOneOut) %sPerforming leave-one-out cross-validation with classifier %s',hailString,retval.type));
+% parfor_progress(numClasses*numReps);
+% disppercent(-1/numClasses,sprintf('(leaveOneOut) %sPerforming leave-one-out cross-validation with classifier %s',hailString,retval.type));
 for iClass = 1:numClasses
     % setup variables for parallel loop, it's important to do this now
     % otherwise parfor complains.
@@ -158,20 +175,37 @@ for iClass = 1:numClasses
     classifierOut = zeros(1,numReps(iClass));
     inst = instances{iClass};
     numRep = numReps(iClass);
+    if uselibsvm
+        if length(instances)>2
+            disp('libsvm=1 flag does not work with non-binary groups');
+            return
+        end 
+    end
     parfor iRep = 1 : numReps(iClass)
         % get the test instance
         testInstance = inst(iRep,:);
         % cerate the training instances, by removing just the testInstance
         trainingInstances = instances;
         trainingInstances{iClass} = instances{iClass}(setdiff(1:numRep,iRep),:);
-        % now build the classifier
-        thisClassifier = buildClassifier(trainingInstances,sprintf('type=%s',type),'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C);
-        % and try to classify the instance
-        [whichClass(iRep), classifierOut(iRep)] = classifyInstance(thisClassifier,testInstance);
+        if uselibsvm
+            % we will ignore the 'type' argument and just use a libsvm svm with
+            % default arguments
+            % stack trainingInstances and make groups
+            trainData = [trainingInstances{1};trainingInstances{2}];
+            groupData = [ones(size(trainingInstances{1},1),1);2*ones(size(trainingInstances{2},1),1)];
+            csvm = svmtrain(groupData,trainData,'-q');
+            [whichClass(iRep)] = svmpredict(1,testInstance,csvm,'-q');
+        else
+            % now build the classifier
+            thisClassifier = buildClassifier(trainingInstances,sprintf('type=%s',type),'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C);
+            % and try to classify the instance
+            [whichClass(iRep), classifierOut(iRep)] = classifyInstance(thisClassifier,testInstance);
+        end
         % update disppercent
-%         disppercent((iClass-1)/numClasses,iRep/numRep);
+%         disppercent(sum(whichClass>0)/numClasses,iRep/numRep);
+%         disp(sprintf('rep %i/%i done',iRep,numReps(iClass)));
+%         parfor_progress;
     end
-    disppercent((iClass-1)/numClasses);
     % copy parallelized outputs back into retval
     retval.whichClass{iClass} = whichClass;
     retval.classifierOut{iClass} = classifierOut;
@@ -182,11 +216,13 @@ for iClass = 1:numClasses
         retval.confusionMatrix(iClass,jClass) = sum(retval.whichClass{iClass}==jClass)/numReps(iClass);
     end
 end
+% parfor_progress(0);
 
 % now make into percent correct
 retval.correct = sum(correctByClass)/sum(numReps);
 
-disppercent(inf,sprintf('(leaveOneOut) %s%s classifier produced %0.2f%% correct and',hailString,retval.type,retval.correct*100));
+disp(sprintf('(leaveOneOut) %s%s classifier produced %0.2f%% correct and',hailString,retval.type,retval.correct*100));
+% disppercent(inf,sprintf('(leaveOneOut) %s%s classifier produced %0.2f%% correct and',hailString,retval.type,retval.correct*100));
 
 retval.correctSTE = sqrt(retval.correct*(1-retval.correct)/sum(numReps));
 

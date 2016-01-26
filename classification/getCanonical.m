@@ -25,6 +25,10 @@
 %             'rejectr2=0' : If the r2 of the fit to the canonical is less than rejectr2 will
 %                           retrun as [].
 %                                 
+%             If the ROI you pass in is from a concatenated scan that
+%             wasn't concatanted alongside the view (i.e. in a full MLR
+%             session), it will have the incorrect concatInfo. Pass this in
+%             directly as an argument: 'concatInfo', concatInfo.
 %
 function [canonicalResponse r2 d] = getCanonical(v,roi,stimvol,type,varargin)
 
@@ -35,8 +39,8 @@ if nargin < 4
 end
 
 % parse arguments
-hdrlen = [];
-getArgs(varargin,{'hdrlen=20','r2cutoff=[]','normType=max','pval=[]','alwaysPos=1','rejectr2=0'});
+hdrlen = []; concatInfo=[];
+getArgs(varargin,{'hdrlen=20','r2cutoff=[]','normType=max','pval=[]','alwaysPos=1','rejectr2=0','concatInfo=[]'});
 
 % default return argument
 canonicalResponse = [];
@@ -50,7 +54,9 @@ stimvolCanonical{1} = cell2mat(stimvol);
 % get info about time series
 v = viewSet(v,'curGroup',roi.groupNum);
 v = viewSet(v,'curScan',roi.scanNum);
-concatInfo = viewGet(v,'concatInfo',roi.scanNum,roi.groupNum);
+if isempty(concatInfo)
+    concatInfo = viewGet(v,'concatInfo',roi.scanNum,roi.groupNum);
+end
 framePeriod = viewGet(v,'framePeriod',roi.scanNum,roi.groupNum);
 
 % check r2 cutoff (if set then take mean of only those voxels that exceed cutoff)
