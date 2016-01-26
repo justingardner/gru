@@ -281,7 +281,7 @@ if strcmp(svm.inversionType,'diag')
   svm.w = diag(1./diag(Sw))*(m1-m2)';
 elseif strcmp(svm.inversionType,'pinv')
   % use pseudo-inverse to compute weights. For underconstrained solutions
-  % this chooses the minimum norm solution.
+  % this chooses the minimum norm solution.  
   svm.w = pinv(Sw)*(m1-m2)';
 elseif strcmp(svm.inversionType,'mldivide')
   % uses mldivide (matlab backslash operator) which chooses a solution

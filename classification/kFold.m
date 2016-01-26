@@ -1,54 +1,62 @@
-% leaveOneOut.m
+% kFold.m
 %
-%        $Id: leaveOneOut.m,v 1.4 2008/10/02 12:00:32 justin Exp $
-%      usage: leaveOneOut(instances)
-%         by: justin gardner
-%       date: 09/11/08
-%    purpose: Do leaveOneOut cross-validated classification on the passed in instances
+%        $Id: kFold.m
+%      usage: kFold(instances)
+%         by: steeve laquitaine
+%       date: 12/24/16
+%    purpose: Do k fold cross-validated classification on the passed in instances
 %             Instances is a cell array which has a kxn matrix for each class, where
 %             k = number of repetitions and n = number of dimensions (e.g. num voxels).
 %
 %             can also be called on ROIS that have instances computed
 %             rois = getInstances(v,rois,stimvol);
-%             rois = leaveOneOut(rois);
+%             rois = kFold(rois);
 %
 %             type = one of: 'fisher', 'svm', 'mahalonobis'
 %
-%             parfor added by dan 2015/12/02
-%             NaN check added by dan
-%               
 %
 %Additional tags:
-%
+%           
+%           
 %           'permutationUnBal=1': to shuffle the classes and keep them unbalanced [steeve 151202]
 %             'permutationBal=1': to shuffle the classes and balance them [steeve 151202]
 %             'balancByBootSt=1': to balance dataset by boostrapping [steeve 151203]
 %             'balancByRemovI=1': to balance datset by removing instances [steeve 151203]
+%
+%                  'numFolds=10': number of folds for k-folds (defaults 10) [steeve 151224]
+%                  
+%
 
-function retval = leaveOneOut(instances,varargin)
+%
+%note: use simInstances.m to test
+
+function retval = kFold(instances,varargin)
 
 %check arguments
 if any(nargin == [0])
-    help leaveOneOut
+    help kFold
     return
 end
 
 %get arguments
 type = [];kernelfun = [];kernelargs = [];C=[];fieldName=[];hailString=[];permutation=[];
-balancByBootSt=[];balancByRemovI=[];fullBoot=[];uselibsvm=[];
-getArgs(varargin,{'type=fisher','kernelfun=[]','kernelargs=[]','C=[]','fieldName=classify','hailString=[]','permutation=0','balancByBootSt=0','fullBoot=0','balancByRemovI=0','uselibsvm=0'});
+balancByBootSt=[];balancByRemovI=[];numFolds=[];
+getArgs(varargin,{'type=fisher','kernelfun=[]','kernelargs=[]','C=[]',...
+    'fieldName=classify','hailString=[]','permutationBal=0',...
+    'permutationUnBal=0','balancByBootSt=0','balancByRemovI=0','numFolds=10'});
 
-% see if we are passed in a cell array of rois. If so, then call leaveOneOut
+
+% see if we are passed in a cell array of rois. If so, then call kFold
 % sequentially on each roi and put the output into the field specified by classField
 if isfield(instances{1},fieldName) && isfield(instances{1},'name')
     for iROI = 1:length(instances)
         if ~isfield(instances{iROI}.(fieldName),'instances')
-            disp(sprintf('(leaveOneOut) No instances found in %s for %s',fieldName,instances{iROI}.name));
+            disp(sprintf('(kFold) No instances found in %s for %s',fieldName,instances{iROI}.name));
         else
             %case we want to balance
             %unbalanced dataset
             if balancByBootSt == 1
-                fprintf('%s \n','(leaveOneOut)','Bootstrapping to balance dataset')
+                fprintf('%s \n','(kFold)','Bootstrapping to balance dataset')
                 %get classes
                 nClasses = length(instances{1}.classify.instances);
                 for ci = 1 : nClasses
@@ -59,32 +67,17 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
                 class2Boot = setdiff(1:nClasses,maxci);
                 %bootstrap each class to get
                 %maxci instances per class
-                
-                %
-                if fullBoot
-                    % bootstrap the ENTIRE class that is short instances
-                    for ci = 1 : length(class2Boot)
-                        tmp = instances{iROI}.(fieldName).instances{class2Boot(ci)};
-                        ipos = randi(ni(class2Boot(ci)),nInew,1);
-                        instances{iROI}.(fieldName).instances{class2Boot(ci)} = tmp(ipos,:);
-                    end
-                else
-                    % add bootstrapped instances, but use all the instances
-                    % that we have already
-                    for ci = 1 : length(class2Boot)
-                        % get all the instances that we currently have
-                        tmp = instances{iROI}.(fieldName).instances{class2Boot(ci)};
-                        ipos = [(1:size(tmp,1))' ; randi(ni(class2Boot(ci)),nInew-size(tmp,1),1)];
-                        instances{iROI}.(fieldName).instances{class2Boot(ci)} = tmp(ipos,:);
-                    end
-                    
+                for ci = 1 : length(class2Boot)
+                    tmp = instances{iROI}.(fieldName).instances{class2Boot(ci)};
+                    ipos = randi(ni(class2Boot(ci)),nInew,1);
+                    instances{iROI}.(fieldName).instances{class2Boot(ci)} = tmp(ipos,:);
                 end
             end
             
             %case we want to balance
             %unbalanced dataset
             if balancByRemovI == 1
-                fprintf('%s \n','(leaveOneOut)','Removing instances to balance dataset')
+                fprintf('%s \n','(kFold)','Removing instances to balance dataset')
                 %get classes
                 nClasses = length(instances{1}.classify.instances);
                 for ci = 1 : nClasses
@@ -99,7 +92,7 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
             %case we want to permutate
             %the classes
             if permutationUnBal == 1
-                fprintf('%s \n','(leaveOneOut)','Suffling instance classes')
+                fprintf('%s \n','(kFold)','Permuting instance classes')
                 %get classes
                 nClasses = length(instances{1}.classify.instances);
                 %# of instances per class
@@ -122,8 +115,10 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
             
             %case we want to permutate and balance dataset
             %the classes
+            %note: to ensure it's balanced instances need to be removed 
+            %first from the most frequent class, then permuted.
             if permutationBal == 1
-                fprintf('%s \n','(leaveOneOut)','Suffling instance classes')
+                fprintf('%s \n','(kFold)','Permuting instance classes')
                 %get classes
                 nClasses = length(instances{1}.classify.instances);
                 %stack classes instances
@@ -147,18 +142,19 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
             end
             
             %put the output into the roi with the field specified by classField
-            instances{iROI}.(fieldName).leaveOneOut = leaveOneOut(instances{iROI}.(fieldName).instances,'type',type,'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C,sprintf('hailString=%s%s: ',hailString,instances{iROI}.name));
+            instances{iROI}.(fieldName).kFold = kFold(instances{iROI}.(fieldName).instances,'type',type,'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C,sprintf('hailString=%s%s: ',hailString,instances{iROI}.name));
         end
     end
     retval = instances;
     return
 end
 
+
 %-------------------------- preprocess dataset -------------------
 %case we want to balance
 %unbalanced dataset
 if balancByBootSt == 1
-    fprintf('%s \n','(leaveOneOut)','Bootstrapping to balance dataset')
+    fprintf('%s \n','(kFold)','Bootstrapping to balance dataset')
     %get classes
     nClasses = length(instances);
     for ci = 1 : nClasses
@@ -178,7 +174,7 @@ end
 %case we want to balance
 %unbalanced dataset
 if balancByRemovI == 1
-    fprintf('%s \n','(leaveOneOut)','Removing instances to balance dataset')
+    fprintf('%s \n','(kFold)','Removing instances to balance dataset')
     %get classes
     nClasses = length(instances);
     for ci = 1 : nClasses
@@ -193,7 +189,7 @@ end
 %case we want to permute
 %the classes
 if permutationUnBal == 1
-    fprintf('%s \n','(leaveOneOut)','Suffling instance classes')
+    fprintf('%s \n','(kFold)','Shuffling instance classes')
     %get classes
     nClasses = length(instances);
     %# of instances per class
@@ -215,29 +211,37 @@ if permutationUnBal == 1
 end
 
 %case we want to permute and balance classes
-if permutationBal == 1
-    fprintf('%s \n','(leaveOneOut)','Shuffling and balancing instance classes')
+if permutationBal == 1    
+    fprintf('%s \n','(kFold)','Permuting and balancing instance classes')
     %get classes
-    nClasses = length(instances);
+    nClasses = length(instances);        
+    %balance classes
+    %calculate new # of instances per class    
+    %minimum number of instances 
+    for ci = 1 : nClasses        
+        nibyClass(ci) = size(instances{ci},1);
+    end
+    ni = min(nibyClass);
+    %feed instances back to a class
+    for ci = 1 : nClasses        
+        tm{ci} = instances{ci}(1:ni,:);        
+    end
+       
+    %Permute
     %stack classes instances
-    stackedi = cell2mat(instances');
+    stackedi = cell2mat(tm');    
     %shuffle instance position
-    shf = randperm(size(stackedi,1));
+    shf = randperm(size(stackedi,1));        
     stackedi = stackedi(shf,:);
-    %calculate new # of instances per class
-    ni = repmat(floor(size(stackedi,1)/nClasses),nClasses,1);
-    niend = cumsum(ni);
+    niend = cumsum(ones(1,nClasses)*ni);
     nist = [1;niend(1:end-1)+1];
     %feed instances back to a class
-    for ci = 1 : nClasses
-        if ci == nClasses
-            tm{ci} = stackedi(nist(ci):end,:);
-        else
-            tm{ci} = stackedi(nist(ci):niend(ci),:);
-        end
+    for ci = 1 : nClasses        
+        tm2{ci} = stackedi(nist(ci):niend(ci),:);        
     end
-    instances = tm;
+    instances = tm2;
 end
+
 %-------------------------------------------------------------------
 
 % number of classes we are going to classify into
@@ -246,12 +250,16 @@ numClasses = length(instances);
 for iClass = 1:numClasses
     numReps(iClass) = size(instances{iClass},1);
     numDims(iClass) = size(instances{iClass},2);
-    disp(sprintf('(leaveOneOut) Class %i has %i instances with %i dimensions',iClass,numReps(iClass),numDims(iClass)));
+    disp(sprintf('(kFold) Class %i has %i instances with %i dimensions',iClass,numReps(iClass),numDims(iClass)));
+    numRepByFold(iClass) = floor(numReps(iClass)/numFolds);
+    numRepsTrue(iClass) = numRepByFold(iClass) * numFolds;
+    instances{iClass} = instances{iClass}(1:numRepsTrue(iClass),:);
+    disp(sprintf('(kFold) Class %i has now %i instances with %i dimensions (%i folds of %i instances)',iClass,numRepsTrue(iClass),numDims(iClass),numFolds,numRepByFold(iClass)));
 end
 
 % check for dimensions being bad
 if length(unique(numDims)) ~= 1
-    disp(sprintf('(leaveOneOut) All instances must have the same number of dimensions'));
+    disp(sprintf('(kFold) All instances must have the same number of dimensions'));
     return
 end
 
@@ -262,78 +270,74 @@ retval.classifierParams.kernelargs = kernelargs;
 retval.classifierParams.C = C;
 
 % check for NaN values, and remove
+%adjust instances based on number of folds 
 for iClass = 1:numClasses
     naninst = isnan(instances{iClass});
     vox = any(naninst,1);
     if any(vox)
-        disp(sprintf('(leaveOneOut) Some voxels include NaNs: Removing these...'));
+        disp(sprintf('(kFold) Some voxels include NaNs: Removing these...'));
         instances{iClass} = instances{iClass}(:,~vox);
         numReps(iClass) = size(instances{iClass},1);
         numDims(iClass) = size(instances{iClass},2);
-        disp(sprintf('(leaveOneOut) Class %i now has %i instances with %i dimensions',iClass,numReps(iClass),numDims(iClass)));
+        disp(sprintf('(kFold) Class %i has %i instances with %i dimensions',iClass,numReps(iClass),numDims(iClass)));
+        numRepByFold(iClass) = floor(numReps(iClass)/numFolds);
+        numRepsTrue(iClass) = numRepByFold(iClass) * numFolds;
+        instances{iClass} = instances{iClass}(1:numRepsTrue(iClass),:);
+        disp(sprintf('(kFold) Class %i now has %i instances with %i dimensions (%i folds of %i instances)',iClass,numRepsTrue(iClass),numDims(iClass),numFolds,numRepByFold(iClass)));
     end
 end
 
-% cycle through class and repetitions, removing a single
-% instance, and building the classifier on the remaining
-% instances and testing on that single instance.
-retval.whichClass = cell(1,numClasses);
-% parfor_progress(numClasses*numReps);
-% disppercent(-1/numClasses,sprintf('(leaveOneOut) %sPerforming leave-one-out cross-validation with classifier %s',hailString,retval.type));
-for iClass = 1:numClasses
+% cycle through class and repetitions, removing 1 fold of 
+% instances, and building the classifier on the remaining
+% folds and testing on that removed fold
+for iClass = 1 : numClasses
     % setup variables for parallel loop, it's important to do this now
     % otherwise parfor complains.
-    whichClass = zeros(1,numReps(iClass));
-    classifierOut = zeros(1,numReps(iClass));
+    numRep = numRepsTrue(iClass);
+    numRepsByFoldThisClass = numRepByFold(iClass);
     inst = instances{iClass};
-    numRep = numReps(iClass);
-    if uselibsvm
-        if length(instances)>2
-            disp('libsvm=1 flag does not work with non-binary groups');
-            return
-        end 
-    end
-    parfor iRep = 1 : numReps(iClass)
-        % get the test instance
-        testInstance = inst(iRep,:);
-        % cerate the training instances, by removing just the testInstance
+    %test instances positions within class    
+    %last fold might contain more or less data
+    testIxSt = 1 : numRepByFold(iClass) : numRep;
+    testIxEnd = testIxSt-1;  
+    testIxEnd(1) = [];
+    if length(testIxEnd(end))<=length(testIxSt)
+        testIxEnd(end+1) = numRep;
+    end    
+    whichClass = {};
+    classifierOut = {};
+    thisClassifier = {};    
+    testFold={};   
+    parfor iFold = 1 : numFolds  
+        %get this fold's instances
+        testFold = testIxSt(iFold):testIxEnd(iFold);
+        %get the test instances
+        testInstances = inst(testFold,:);
+        % cerate the training instances, by removing just the testInstances
         trainingInstances = instances;
-        trainingInstances{iClass} = instances{iClass}(setdiff(1:numRep,iRep),:);
-        if uselibsvm
-            % we will ignore the 'type' argument and just use a libsvm svm with
-            % default arguments
-            % stack trainingInstances and make groups
-            trainData = [trainingInstances{1};trainingInstances{2}];
-            groupData = [ones(size(trainingInstances{1},1),1);2*ones(size(trainingInstances{2},1),1)];
-            csvm = svmtrain(groupData,trainData,'-q');
-            [whichClass(iRep)] = svmpredict(1,testInstance,csvm,'-q');
-        else
-            % now build the classifier
-            thisClassifier = buildClassifier(trainingInstances,sprintf('type=%s',type),'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C);
-            % and try to classify the instance
-            [whichClass(iRep), classifierOut(iRep)] = classifyInstance(thisClassifier,testInstance);
-        end
+        trainingInstances{iClass} = instances{iClass}(setdiff(1:numRep,testFold),:);
+        % now build the classifier
+        thisClassifier{iFold} = buildClassifier(trainingInstances,sprintf('type=%s',type),'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C);
+        % and try to classify these instances
+        for iTest = 1 : numRepsByFoldThisClass
+            [whichClass{iFold}(iTest), classifierOut{iFold}(iTest)] = classifyInstance(thisClassifier{iFold},testInstances(iTest,:));
+        end        
         % update disppercent
-%         disppercent(sum(whichClass>0)/numClasses,iRep/numRep);
-%         disp(sprintf('rep %i/%i done',iRep,numReps(iClass)));
-%         parfor_progress;
-    end
+        % disppercent((iClass-1)/numClasses,iFold/numRep);
+    end    
+%     disppercent((iClass-1)/numClasses);
     % copy parallelized outputs back into retval
-    retval.whichClass{iClass} = whichClass;
-    retval.classifierOut{iClass} = classifierOut;
+    retval.whichClass{iClass} = [whichClass{:}];
+    retval.classifierOut{iClass} = [classifierOut{:}];
     % compute how many were correct for this class
     correctByClass(iClass) = sum(retval.whichClass{iClass}==iClass);
     % and compute the confusion matrix row for this class
     for jClass = 1:numClasses
-        retval.confusionMatrix(iClass,jClass) = sum(retval.whichClass{iClass}==jClass)/numReps(iClass);
+        retval.confusionMatrix(iClass,jClass) = sum(retval.whichClass{iClass}==jClass)/numRepsTrue(iClass);
     end
 end
-% parfor_progress(0);
 
 % now make into percent correct
-retval.correct = sum(correctByClass)/sum(numReps);
-
-disp(sprintf('(leaveOneOut) %s%s classifier produced %0.2f%% correct and',hailString,retval.type,retval.correct*100));
-% disppercent(inf,sprintf('(leaveOneOut) %s%s classifier produced %0.2f%% correct and',hailString,retval.type,retval.correct*100));
-retval.correctSTE = sqrt(retval.correct*(1-retval.correct)/sum(numReps));
-
+retval.correct = sum(correctByClass)/sum(numRepsTrue);
+%disppercent(inf,sprintf('(kFold) %s%s classifier produced %0.2f%% correct and',hailString,retval.type,retval.correct*100));
+retval.correctSTE = sqrt(retval.correct*(1-retval.correct)/sum(numRepsTrue));
