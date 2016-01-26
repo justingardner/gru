@@ -136,7 +136,7 @@ result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
 command = sprintf('chmod 777 %s','/data/freesurfer/subjects');
 result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
 %% Recon-All
-reconCommand = sprintf('recon-all -subject %s %s -all',s.subjectID,reconStr);
+reconCommand = sprintf('recon-all -subject %s %s -all -sd /data/freesurfer/subjects',s.subjectID,reconStr);
 
 % You have to do this into a new terminal, it won't run through MATLAB
 % directly.
