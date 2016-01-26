@@ -30,6 +30,7 @@
 %             
 function [instances pSettings] = preprocessInstances(instances,varargin)
 
+
 % second argument can be a pSettings with settings already set
 if (length(varargin)>=1) && isstruct(varargin{1})
   pSettings = varargin{1};
@@ -91,6 +92,7 @@ if pSettings.demean || pSettings.zscore
     % remove std across instances (i.e. each voxels response will have std=1 across all instances)
     stdd = std(d);
     d = bsxfun(@rdivide,d,stdd);
+    disp('(ppInstances) zscore');
   end
 
   % now sort back into instances
