@@ -35,8 +35,8 @@ end
 
 %get arguments
 type = [];kernelfun = [];kernelargs = [];C=[];fieldName=[];hailString=[];permutation=[];
-balancByBootSt=[];balancByRemovI=[];fullBoot=[];uselibsvm=[];
-getArgs(varargin,{'type=fisher','kernelfun=[]','kernelargs=[]','C=[]','fieldName=classify','hailString=[]','permutation=0','balancByBootSt=0','fullBoot=0','balancByRemovI=0','uselibsvm=0'});
+balancByBootSt=[];balancByRemovI=[];fullBoot=[];uselibsvm=[]; permutationUnBal=[]; permutationBal=[];
+getArgs(varargin,{'type=fisher','kernelfun=[]','kernelargs=[]','C=[]','fieldName=classify','hailString=[]','permutation=0','balancByBootSt=0','fullBoot=0','balancByRemovI=0','permutationUnBal=0','permutationBal=0','uselibsvm=0'});
 
 % see if we are passed in a cell array of rois. If so, then call leaveOneOut
 % sequentially on each roi and put the output into the field specified by classField
