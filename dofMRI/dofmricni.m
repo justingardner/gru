@@ -256,8 +256,6 @@ for i = 1:length(fileList)
 end
 disppercent(inf);
 
-keyboard
-
 % get scan start time
 for i = 1:length(fileList)
   fileList(i).startDate = [];
