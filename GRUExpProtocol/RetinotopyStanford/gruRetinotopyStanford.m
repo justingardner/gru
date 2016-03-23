@@ -1,7 +1,7 @@
 
 % gruRetinotopyStanford.m
 % 
-%                 date: 09/09/2015
+%                 date: 04/23/2016
 %               author: steeve
 %              Purpose: fMRI mux8 sequences for retinotopy
 %                Usage: 
@@ -19,7 +19,7 @@
 %Bars
 %----
 %
-%"phase per location": 493 vols
+%"phase per location": 493 vols (scanner will end slightly first)
 % duration: 4:08 min
 %
 %MT localizer
