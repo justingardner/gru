@@ -30,7 +30,7 @@
 
 %% BARS
 %Stimulus
-%- always starts with a 12s blank (half 'stimulus:;Period=24' period)
+%- always starts with a 12s blank (half 'stimulusPeriod=24' period)
 %- interleave 3 other half period blanks ('blanks=3')
 %- always interleave 8 24s period bar cycles
 
