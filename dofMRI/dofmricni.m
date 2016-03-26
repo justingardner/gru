@@ -1598,6 +1598,63 @@ else
   fromDir = sprintf('/nimsfs/raw/%s/%s',s.PI,s.cniDir);
 end
 
+% get remote file list, so that we can do a quick check for dicoms and other things
+% that could be missing
+remoteFileList = doRemoteCommand(s.sunetID,s.cniComputerName,sprintf('find %s -print',fromDir));
+% cycle through list
+remoteList = [];
+while ~isempty(remoteFileList)
+  [thisDir remoteFileList] = strtok(remoteFileList);
+  % remove the stem (i.e. the /nimsfs/raw/jlg/session/ part
+  stemLoc = findstr(s.cniDir,thisDir)+length(s.cniDir)+1;
+  if ~isempty(stemLoc)
+    thisDir = thisDir(stemLoc:end);
+  end
+  % if we have found a directory name
+  if ~isempty(thisDir)
+    % make a copy of the whole directory structure, so that
+    % we can continue to look for files underneath this one
+    remoteFileListUnderDir = remoteFileList;
+    % then keep that name and look for files underneath
+    remoteList(end+1).name = thisDir;
+    remoteList(end).fileList = {};
+    [nextDir remoteFileListUnderDirTemp] = strtok(remoteFileList);
+    % check to see if we are under same directory
+    while strncmp(thisDir,nextDir(stemLoc:end),length(thisDir))
+      % ok, catalog what is here
+      remoteList(end).fileList{end+1} = nextDir(stemLoc+length(thisDir)+1:end);
+      % get the next file
+      remoteFileList = remoteFileListUnderDir;
+      [nextDir remoteFileListUnderDir] = strtok(remoteFileList);
+    end
+  end
+  % if we are in a BOLD directory, look to see if we have a dicom
+end
+
+% ok now we have the remoteList - do a quick check to see if directories with BOLD in their
+% name are missing the dicoms files
+missingDicoms = false;
+for iDir = 1:length(remoteList)
+  if ~isempty(findstr('BOLD',remoteList(iDir).name))
+    hasDicom = false;
+    for iFile = 1:length(remoteList(iDir).fileList)
+      if ~isempty(findstr('dicoms',remoteList(iDir).fileList{iFile}))
+	hasDicom = true;
+      end
+    end
+    if ~hasDicom
+      if ~missingDicoms,clc;dispHeader('Missing DICOMS');,end
+      missingDicoms = true;
+      disp(sprintf('(dofmricni:getCNIData) Missing dicoms for %s',remoteList(iDir).name));
+    end
+  end
+end
+if missingDicoms
+  if ~askuser('(dofmricni:getCNIData) Missing dicom files in the above directories. Did you run dicomfix? (see http://gru.stanford.edu/doku.php/gruprivate/dicomfix ) Do you still wish to continue (If you answer yes, then be aware that dofmricni may not be able to set the header alignment information properly)')
+    return
+  end
+end
+
 disp(sprintf('(dofmricni) Get files'));
 % rsync - setting permission to user and group rwx for directories
 % and rw for files. FOr others, set to rx and r. Exclude files that we do

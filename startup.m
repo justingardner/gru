@@ -1,6 +1,12 @@
 dbstop('if','error');
 
+<<<<<<< HEAD
 pathNames = {'~/proj/mrTools','~/proj/mgl','~/proj/gru','~/proj/grustim','~/proj/matlab/plugins','~/proj/steeve','~/proj/vistasoft','~/proj/mba','~/proj/rentziTest'};
+=======
+pathNames = {'~/proj/mrTools','~/proj/mgl','~/proj/gru','~/proj/grustim',...
+    '~/proj/matlab/plugins','~/proj/steeve','~/proj/vistasoft','~/proj/mba',...
+    '~/DropBox/myDropBox/Codes'};
+>>>>>>> 1522bc934dc655e0e1a78d5e39d593154038ab34
 
 addpath('~/proj/gru/mac_helpers');
 for i = 1:length(pathNames)
