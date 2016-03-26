@@ -35,10 +35,10 @@
 %- always interleave 8 24s period bar cycles
 
 %mux 8 arc 1: 8 cycle * 48 vols/cycle + 3(+1 initial) blanks * 24vols = 480 vols + 8(mux)*2(nummux) = 493 vols (4:06min)
-mglRetinotopy('displayName=fMRIproj32','bars=1','fixedRandom=1','stimulusPeriod=24','stepsPerCycle',48,'blanks=3','doEyeCalib=0');
+mglRetinotopy('displayName=fMRIprojFlex','bars=1','fixedRandom=1','stimulusPeriod=24','stepsPerCycle',48,'blanks=3','doEyeCalib=0');
 
 %% MT localizer`
-Mtloc('0%',.5)
+mtloc('0%',.5)
 
 
 
