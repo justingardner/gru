@@ -784,7 +784,7 @@ switch(lower(type))
     thisThreshold(i) = getUpDownThreshold(s(i),args);
     catch
       disp('(doStaircase) Warning: DAN CODE... avoids failure here');
-      thisThreshold(i) = NaN;
+      thisThreshold(i).threshold = NaN;
     end
   end
   averageThresholds = true;  
