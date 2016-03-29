@@ -1201,7 +1201,7 @@ subjectID = [];
 if isfield(info,'PatientName') && isfield(info.PatientName,'FamilyName')
   subjectID = info.PatientName.FamilyName;
   if ~isempty(subjectID) && (~any(length(subjectID) == [4 5]) || ~isequal(lower(subjectID(1)),'s'))
-    if ~strncmp('ANON',subjectID,4) && s.idWarning 
+    if ~strncmp('ANON',subjectID,4) & s.idWarning 
       mrWarnDlg(sprintf('(dofmricni) PatientName FamilyName should always be set to a subjectID (not the real name: %s)!!!',subjectID));
     end
     subjectID = [];

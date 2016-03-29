@@ -41,7 +41,7 @@ if isfield(instances{1},fieldName) && isfield(instances{1},'name')
             %percent correct by permutation
             inst = instances(roi);
             parfor i = 1 : nPerm
-                tmp = leaveOneOut(inst,'permutationUnBal=1','type',type,'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C);                
+                tmp = leaveOneOut(inst,'type',type,'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C,varargin{:});                
                 correctThisPerm(i) = tmp{1}.classify.leaveOneOut.correct;
             end
             %percent correct by roi and permutation
@@ -64,7 +64,7 @@ end
 
 %percent correct by permutation
 parfor i = 1 : nPerm
-    tmp = leaveOneOut(instances,'permutationUnBal=1','type',type,'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C);
+    tmp = leaveOneOut(instances,'permutationUnBal=1','type',type,'kernelfun',kernelfun,'kernelargs',kernelargs,'C',C,varargin{:});
     correctThisPerm(i) = tmp.correct;
 end
 %percent correct by roi and permutation

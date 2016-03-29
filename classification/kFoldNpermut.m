@@ -9,9 +9,14 @@
 %      usage:
 %e.g., 
 %
-%             instances = kFoldNpermut(instances,'nPerm=20','numFolds=10','type=svm');
+%             instances = kFoldNpermut(instances,'nPerm=20','numFolds=10','type=fisher');
+%             instances = kFoldNpermut(instances,'stratified','nPerm=20','numFolds=10','type=fisher');
 %               
 %
+%inputs:
+%
+%             'stratified': Make sure the test set contains all
+%                           classes in proportion to their size
 %
 %Additional tags: see leaveOneOut
 

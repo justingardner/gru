@@ -6,7 +6,7 @@
 %
 %  usage:
 %
-% ex: 1
+% ex:1
 %           c=simInstances({'simV1','simMT'},2,[20 30],[10 20])
 %           c=leaveOneOut(c,'permutation=1');
 %
