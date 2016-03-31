@@ -197,26 +197,31 @@ end
 
 %% topup
 tufiles = {};
-disppercent(-inf,'Calculating topup...');
-for i = 1:length(mergefiles)
+% disppercent(-inf,'Calculating topup...');
+disp('Calculating topup... PARALLEL');
+lm = length(mergefiles);
+parfor i = 1:length(mergefiles)
     tufiles{i} = hlpr_topup(mergefiles{i},i,tfolder,folder);    
-    disppercent(i/length(mergefiles));
+%     disppercent(i/l m);
 
 end
-disppercent(inf);
+% disppercent(inf);
 
 if length(tufiles) ~= length(roi0files)
     disp('(fsl_pe0pe1) Returned file list too short...');
 end
 
 %% applytopup
-disppercent(-inf,'Applying topup...');
+% disppercent(-inf,'Applying topup...');
+disp('Applying topup... PARALLEL');
 finalfiles = {};
-for i = 1:length(tufiles)
-    finalfiles{i} = hlpr_applytopup(tufiles{i},unwarp.EPIfiles{i},tfolder,folder);
-    disppercent(i/length(tufiles));
+EPIf = unwarp.EPIfiles;
+lt = length(tufiles);
+parfor i = 1:length(tufiles)
+    finalfiles{i} = hlpr_applytopup(tufiles{i},EPIf{i},tfolder,folder);
+%     disppercent(i/lt);
 end
-disppercent(inf);
+% disppercent(inf);
 
 if length(finalfiles) ~= length(roi0files)
     disp('(fsl_pe0pe1) Returned file list too short...');
@@ -312,6 +317,7 @@ tu = fullfile(tfolder,tu);
 acqFile = fullfile(folder,'acq_params.txt');
 command = sprintf('applytopup --imain=%s --inindex=1 --method=jac --datain=%s --topup=%s --out=%s',fullfile(folder,orig(1:end-4)),acqFile,tu,outfile);
 system(command);
+disp(sprintf('(apply) apply for: %s complete',outfile));
 
 function outfile = hlpr_topup(merge,pos,tfolder,folder)
 
@@ -325,6 +331,7 @@ disp(sprintf('(topup) topup for: %s',outfile));
 merge = fullfile(tfolder,merge);
 acqFile = fullfile(folder,'acq_params.txt');
 command = sprintf('topup --imain=%s --datain=%s --config=b02b0.cnf --out=%s',merge,acqFile,outfull);
+disp(sprintf('(topup) topup for: %s complete',outfile));
 system(command);
 
 function outfile = hlpr_fslmerge(scan0,scan1,pos,folder)
