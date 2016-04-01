@@ -6,14 +6,13 @@ function mlrReconAll()
 %   entire freesurfer recon process in the background.
 %
 % USAGE:
-%   mlrReconAll 
-%   See here for usage notes: http://gru.stanford.edu/doku.php/runningfmri/tutorial_mlrreconall
+%   mlrReconAll See here for usage notes:
+%   http://gru.stanford.edu/doku.php/runningfmri/tutorial_mlrreconall
 %
-% project       The current project, should be: /retinotopy/
-% examNum       Exam number, you can find this on NIMS (cni.stanford.edu/nims/)
-% subjectName   who is this person, e.g. s300 or dan
-% username      Your Stanford suid, e.g. dbirman
-% password      Your Stanford suid password
+% project       The current project, should be: /retinotopy/ examNum
+% Exam number, you can find this on NIMS (cni.stanford.edu/nims/)
+% subjectName   who is this person, e.g. s300 or dan username      Your
+% Stanford suid, e.g. dbirman password      Your Stanford suid password
 
 %%
 disp('If this code hangs, ctrl+c out and try again.');
@@ -22,7 +21,8 @@ disp('If this code hangs, ctrl+c out and try again.');
 cniComputerName = 'cnic7.stanford.edu';
 localDataDir = '~/data';
 
-% set up system variable (which gets passed around with important system info)
+% set up system variable (which gets passed around with important system
+% info)
 s.sunetID = mglGetParam('sunetID');
 s.cniComputerName = cniComputerName;
 s.localDataDir = mlrReplaceTilde(localDataDir);
@@ -38,10 +38,11 @@ s = getCNIDir(s);
 if isempty(s.cniDir),return,end
 
 %% Check if we are at Stanford in GRU lab (171.64.40.***)
-% disp('Checking ip address...');
-% ipPlus =  urlread('http://checkip.dyndns.org/');
-% if isempty(strfind(ipPlus,'171.64.40'))
-%     error('mlrReconAll and mlrGetSurf are only intended for use at Stanford, with the NIMS database!');
+% disp('Checking ip address...'); ipPlus =
+% urlread('http://checkip.dyndns.org/'); if
+% isempty(strfind(ipPlus,'171.64.40'))
+%     error('mlrReconAll and mlrGetSurf are only intended for use at
+%     Stanford, with the NIMS database!');
 % end
 
 %% Fill out s
@@ -112,6 +113,15 @@ for i = 1:length(filePos)
     % copy files
     curFilePath = fullfile(s.tempPath,strcat(s.subjectID,'_',num2str(i),'_','c.nii.gz'));
     command = sprintf('cp %s %s',fullfile(tempWithFile,'*.nii.gz'),curFilePath);
+    
+    % in case it doesn't work with no quotation
+    %we add double quotation in the command: seems to work
+    commandCheckExist = ['ls ' strcat([s.tempPath '/' s.subjectID,'_',num2str(i),'_','c.nii'])];    
+    [~,status] = doRemoteCommand(s.sunetID,s.cniComputerName,commandCheckExist);        
+    if status~=0
+        command = ['"' command '"'];
+    end    
+   
     result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
     % gunzip
     pause(.1)
@@ -258,10 +268,11 @@ if ~isdir(toDir)
 end
 s.localDir = fullfile(toDir,getLastDir(s.cniDir));
 
+
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %    doRemoteCommand    %
 %%%%%%%%%%%%%%%%%%%%%%%%%
-function retval = doRemoteCommand(username,computerName,commandName)
+function [retval,status] = doRemoteCommand(username,computerName,commandName)
 
 retval = [];
 command = sprintf('ssh %s@%s %s',username,computerName,commandName);
@@ -286,9 +297,10 @@ disp(sprintf('(dofmricni) Remote command on %s successful',computerName));
 %
 function username = getusername()
 
+
 [retval username] = system('whoami');
-% sometimes there is more than one line (errors from csh startup)
-% so need to strip those off
+% sometimes there is more than one line (errors from csh startup) so need
+% to strip those off
 username = strread(username,'%s','delimiter','\n');
 username = username{end};
 if (retval == 0)
@@ -297,12 +309,10 @@ if (retval == 0)
   username2 = strread(username2,'%s','delimiter','\n');
   username2 = username2{end};
   if (retval == 0)
-    % find the matching last characers
-    % this is necessary, because matlab's system command
-    % picks up stray key strokes being written into
-    % the terminal but puts those at the beginning of
-    % what is returned by stysem. so we run the
-    % command twice and find the matching end part of
+    % find the matching last characers this is necessary, because matlab's
+    % system command picks up stray key strokes being written into the
+    % terminal but puts those at the beginning of what is returned by
+    % stysem. so we run the command twice and find the matching end part of
     % the string to get the username
     minlen = min(length(username),length(username2));
     for k = 0:minlen
