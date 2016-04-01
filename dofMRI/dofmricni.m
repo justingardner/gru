@@ -51,9 +51,6 @@
 %
 function retval = dofmricni(varargin)
 
-% todo: Also would be nice to default motionComp parameters to
-% what we are using these days
-
 % clear screen
 clc;
 
