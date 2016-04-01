@@ -2170,5 +2170,6 @@ function [tf s] = setMotionCompDefaults(s)
 tf = true;
 motionCompDefaultParams = mrGetPref('motionCompDefaultParams');
 motionCompDefaultParams.sliceTimeCorrection = false;
+motionCompDefaultParams.baseFrame = 'mean';
 mrSetPref('motionCompDefaultParams',motionCompDefaultParams);
 
