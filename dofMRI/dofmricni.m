@@ -1659,9 +1659,42 @@ disp(sprintf('(dofmricni) Get files'));
 % rsync - setting permission to user and group rwx for directories
 % and rw for files. FOr others, set to rx and r. Exclude files that we do
 % not need
-command = sprintf('rsync -prtv --chmod=Dug=rwx,Do=rx,Fug=rw,Fo=r --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s/ %s',s.sunetID,s.cniComputerName,fromDir,s.localDir);
+command = sprintf('rsync -prtv --chmod=Dug=rwx,Do=rx,Fug=rw,Fo=r --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s/ %s',s.sunetID,s.cniComputerName,fromDir,s.localDir);ls
+% command = sprintf('rsync -prtv --chmod=Dug=rwx,Do=rx,Fug=rw,Fo=r --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s/ %s',s.sunetID,s.cniComputerName,[fromDir '/12076_2_1_T1w_12mm_ax'],s.localDir);ls
 disp(command);
 system(command,'-echo');
+
+%check that anatomical are not corrupted
+%If zip gunzip and if gunzip fails reload from cnic7 and gunzip again.
+for iDir = 1:length(remoteList)
+    %got to T1w directories
+    if ~isempty(strfind(remoteList(iDir).name,'T1w'))        
+        cd([s.localDir '/' remoteList(iDir).name])
+        %gunzip anat if exists
+        anat = dir('*.nii.gz');
+        if ~isempty(anat)
+            command = ['gunzip ' anat.name];
+            [status,retval] = system(command,'-echo');
+            %re-download anat alone fro cnic7 if it got corrupted
+            %during the transfer
+            if status~=0
+                delete(anat.name(1:end-3))
+                command = sprintf('rsync -prtv --chmod=Dug=rwx,Do=rx,Fug=rw,Fo=r --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s/ %s',s.sunetID,s.cniComputerName,[fromDir '/' remoteList(iDir).name],[s.localDir '/' remoteList(iDir).name]);
+                disp(command);
+                [status,retval] = system(command,'-echo');
+                if status==0
+                    fprintf('%s \n','(dofmricni) The anat file was re-downloaded successfully')
+                    fprintf('%s \n','(dofmricni) now gunzipping it...')
+                    command = ['gunzip ' anat.name];
+                    [status,retval] = system(command,'-echo');
+                    if status==0
+                        fprintf('%s \n','(dofmricni) Successful gunzipping !')
+                    end
+                end
+            end
+        end
+    end
+end
 
 % got here, so everything is good
 tf = true;
