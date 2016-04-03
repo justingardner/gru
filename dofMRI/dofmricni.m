@@ -51,9 +51,6 @@
 %
 function retval = dofmricni(varargin)
 
-% todo: Also would be nice to default motionComp parameters to
-% what we are using these days
-
 % clear screen
 clc;
 
@@ -75,6 +72,10 @@ s.teHigher = 40;
 % check to make sure we have the computer setup correctly to run
 % gunzip, FSL and other unix commands
 [tf s] = checkCommands(s);
+if ~tf,return,end
+
+% set motionComp defaults
+[tf s] = setMotionCompDefaults(s);
 if ~tf,return,end
 
 % check to see if we are to use downloaded data or not
@@ -2190,4 +2191,15 @@ if (retval == 0)
 else
   username = 'unknown';
 end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    setMotionCompDefaults    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function [tf s] = setMotionCompDefaults(s)
+
+tf = true;
+motionCompDefaultParams = mrGetPref('motionCompDefaultParams');
+motionCompDefaultParams.sliceTimeCorrection = false;
+motionCompDefaultParams.baseFrame = 'mean';
+mrSetPref('motionCompDefaultParams',motionCompDefaultParams);
 
