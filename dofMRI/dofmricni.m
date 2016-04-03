@@ -1661,7 +1661,6 @@ disp(sprintf('(dofmricni) Get files'));
 % and rw for files. FOr others, set to rx and r. Exclude files that we do
 % not need
 command = sprintf('rsync -prtv --chmod=Dug=rwx,Do=rx,Fug=rw,Fo=r --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s/ %s',s.sunetID,s.cniComputerName,fromDir,s.localDir);ls
-% command = sprintf('rsync -prtv --chmod=Dug=rwx,Do=rx,Fug=rw,Fo=r --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s/ %s',s.sunetID,s.cniComputerName,[fromDir '/12076_2_1_T1w_12mm_ax'],s.localDir);ls
 disp(command);
 system(command,'-echo');
 
