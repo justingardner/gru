@@ -112,7 +112,11 @@ for i = 1:length(filePos)
     
     % copy files
     curFilePath = fullfile(s.tempPath,strcat(s.subjectID,'_',num2str(i),'_','c.nii.gz'));
-    command = sprintf('cp %s %s',fullfile(tempWithFile,'*.nii.gz'),curFilePath);
+    fileStem = getLastDir(tempWithFile);
+    endLoc = findstr(fileStem,'_T1w');
+    fileStem = fileStem(1:endLoc-1);
+    curFileName = getLastDir(s.tempPath);
+    command = sprintf('cp %s %s',fullfile(tempWithFile,sprintf('%s.nii.gz',fileStem)),curFilePath);
     
     % in case it doesn't work with no quotation
     %we add double quotation in the command: seems to work
