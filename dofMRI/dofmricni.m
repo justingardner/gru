@@ -1031,7 +1031,9 @@ dispConOrLog(sprintf('=============================================='),justDispl
 if ~justDisplay
   closeLogfile
   if ~isequal(s.localDir,curpwd)
-    cd(curpwd);
+    if isdir(curpwd)
+      cd(curpwd);
+    end
   end
 end
 
