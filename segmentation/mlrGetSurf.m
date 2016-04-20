@@ -15,6 +15,11 @@ s.localDataDir= '~/data/mlrAnatDB';
 s.cniComputerName = 'cnic7.stanford.edu';
 s.sunetID = mglGetParam('sunetID');
 
+if isempty(s.sunetID)
+    warning('Using username rather than sunetID');
+    s.sunetID = getusername;
+end
+
 disp(sprintf('\n\n\n\n'));
 command = sprintf('ssh %s@%s ls /data/freesurfer/subjects/',s.sunetID,s.cniComputerName);
 disp(command);
