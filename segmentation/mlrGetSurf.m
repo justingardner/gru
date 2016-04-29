@@ -96,7 +96,10 @@ end
 disp('FreeSurfer appears to have completed, copying surfaces.');
 
 %% SCP Files to /temp/
-s.tempPath = fullfile('~/data/temp/mlrGetSurf/');
+%automatically get home dir
+import java.lang.*;
+cusr = char(System.getProperty('user.home'));
+s.tempPath = [cusr '/data/temp/mlrGetSurf/'];
 s.fullLocal = fullfile(s.tempPath,s.subjectID);
 if ~isdir('~/data/temp')
     mkdir('~/data/temp');
@@ -124,13 +127,12 @@ if ~s_t1
 end
 
 %% Run mlrImportFreeSurfer
-if s_surf
     cDir = pwd;
     cd(s.fullLocal);    
     mrSetPref('niftiFileExtension','.nii');
     mlrImportFreeSurfer('baseName',s.subjectID);
     cd(cDir);
-end
+
 
 %% Run Justin's import code
 
