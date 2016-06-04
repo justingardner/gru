@@ -51,9 +51,6 @@
 %
 function retval = dofmricni(varargin)
 
-% todo: Also would be nice to default motionComp parameters to
-% what we are using these days
-
 % clear screen
 clc;
 
@@ -75,6 +72,10 @@ s.teHigher = 40;
 % check to make sure we have the computer setup correctly to run
 % gunzip, FSL and other unix commands
 [tf s] = checkCommands(s);
+if ~tf,return,end
+
+% set motionComp defaults
+[tf s] = setMotionCompDefaults(s);
 if ~tf,return,end
 
 % check to see if we are to use downloaded data or not
@@ -902,8 +903,9 @@ dirList = {'Etc','Pre','Raw','Raw/TSeries','Anatomy'};
 
 % make them
 for i = 1:length(dirList)
-  if ~isdir(dirList{i})
-    command = sprintf('mkdir(''%s'');',fullfile(s.localSessionDir,dirList{i}));
+  thisDir = fullfile(s.localSessionDir,dirList{i});
+  if ~isdir(thisDir)
+    command = sprintf('mkdir(''%s'');',thisDir);
     myeval(command,justDisplay);
   end
 end
@@ -1029,7 +1031,9 @@ dispConOrLog(sprintf('=============================================='),justDispl
 if ~justDisplay
   closeLogfile
   if ~isequal(s.localDir,curpwd)
-    cd(curpwd);
+    if isdir(curpwd)
+      cd(curpwd);
+    end
   end
 end
 
@@ -1200,7 +1204,7 @@ subjectID = [];
 if isfield(info,'PatientName') && isfield(info.PatientName,'FamilyName')
   subjectID = info.PatientName.FamilyName;
   if ~isempty(subjectID) && (~any(length(subjectID) == [4 5]) || ~isequal(lower(subjectID(1)),'s'))
-    if ~strncmp('ANON',subjectID,4) && s.idWarning 
+    if ~strncmp('ANON',subjectID,4) & s.idWarning 
       mrWarnDlg(sprintf('(dofmricni) PatientName FamilyName should always be set to a subjectID (not the real name: %s)!!!',subjectID));
     end
     subjectID = [];
@@ -1597,13 +1601,102 @@ else
   fromDir = sprintf('/nimsfs/raw/%s/%s',s.PI,s.cniDir);
 end
 
+% get remote file list, so that we can do a quick check for dicoms and other things
+% that could be missing
+remoteFileList = doRemoteCommand(s.sunetID,s.cniComputerName,sprintf('find %s -print',fromDir));
+% cycle through list
+remoteList = [];
+while ~isempty(remoteFileList)
+  [thisDir remoteFileList] = strtok(remoteFileList);
+  % remove the stem (i.e. the /nimsfs/raw/jlg/session/ part
+  stemLoc = findstr(s.cniDir,thisDir)+length(s.cniDir)+1;
+  if ~isempty(stemLoc)
+    thisDir = thisDir(stemLoc:end);
+  end
+  % if we have found a directory name
+  if ~isempty(thisDir)
+    % make a copy of the whole directory structure, so that
+    % we can continue to look for files underneath this one
+    remoteFileListUnderDir = remoteFileList;
+    % then keep that name and look for files underneath
+    remoteList(end+1).name = thisDir;
+    remoteList(end).fileList = {};
+    [nextDir remoteFileListUnderDirTemp] = strtok(remoteFileList);
+    % check to see if we are under same directory
+    while strncmp(thisDir,nextDir(stemLoc:end),length(thisDir))
+      % ok, catalog what is here
+      remoteList(end).fileList{end+1} = nextDir(stemLoc+length(thisDir)+1:end);
+      % get the next file
+      remoteFileList = remoteFileListUnderDir;
+      [nextDir remoteFileListUnderDir] = strtok(remoteFileList);
+    end
+  end
+  % if we are in a BOLD directory, look to see if we have a dicom
+end
+
+% ok now we have the remoteList - do a quick check to see if directories with BOLD in their
+% name are missing the dicoms files
+missingDicoms = false;
+for iDir = 1:length(remoteList)
+  if ~isempty(findstr('BOLD',remoteList(iDir).name))
+    hasDicom = false;
+    for iFile = 1:length(remoteList(iDir).fileList)
+      if ~isempty(findstr('dicoms',remoteList(iDir).fileList{iFile}))
+	hasDicom = true;
+      end
+    end
+    if ~hasDicom
+      if ~missingDicoms,clc;dispHeader('Missing DICOMS');,end
+      missingDicoms = true;
+      disp(sprintf('(dofmricni:getCNIData) Missing dicoms for %s',remoteList(iDir).name));
+    end
+  end
+end
+if missingDicoms
+  if ~askuser('(dofmricni:getCNIData) Missing dicom files in the above directories. Did you run dicomfix? (see http://gru.stanford.edu/doku.php/gruprivate/dicomfix ) Do you still wish to continue (If you answer yes, then be aware that dofmricni may not be able to set the header alignment information properly)')
+    return
+  end
+end
+
 disp(sprintf('(dofmricni) Get files'));
 % rsync - setting permission to user and group rwx for directories
 % and rw for files. FOr others, set to rx and r. Exclude files that we do
 % not need
-command = sprintf('rsync -prtv --chmod=Dug=rwx,Do=rx,Fug=rw,Fo=r --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s/ %s',s.sunetID,s.cniComputerName,fromDir,s.localDir);
+command = sprintf('rsync -prtv --chmod=Dug=rwx,Do=rx,Fug=rw,Fo=r --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s/ %s',s.sunetID,s.cniComputerName,fromDir,s.localDir);ls
 disp(command);
 system(command,'-echo');
+
+%check that anatomical are not corrupted
+%If zip gunzip and if gunzip fails reload from cnic7 and gunzip again.
+for iDir = 1:length(remoteList)
+    %got to T1w directories
+    if ~isempty(strfind(remoteList(iDir).name,'T1w'))        
+        cd([s.localDir '/' remoteList(iDir).name])
+        %gunzip anat if exists
+        anat = dir('*.nii.gz');
+        if ~isempty(anat)
+            command = ['gunzip ' anat.name];
+            [status,retval] = system(command,'-echo');
+            %re-download anat alone fro cnic7 if it got corrupted
+            %during the transfer
+            if status~=0
+                delete(anat.name(1:end-3))
+                command = sprintf('rsync -prtv --chmod=Dug=rwx,Do=rx,Fug=rw,Fo=r --progress --size-only --exclude ''*Screen_Save'' --exclude ''*_pfile*'' --exclude ''*.pyrdb'' --exclude ''*.json'' --exclude ''*.png'' %s@%s:/%s/ %s',s.sunetID,s.cniComputerName,[fromDir '/' remoteList(iDir).name],[s.localDir '/' remoteList(iDir).name]);
+                disp(command);
+                [status,retval] = system(command,'-echo');
+                if status==0
+                    fprintf('%s \n','(dofmricni) The anat file was re-downloaded successfully')
+                    fprintf('%s \n','(dofmricni) now gunzipping it...')
+                    command = ['gunzip ' anat.name];
+                    [status,retval] = system(command,'-echo');
+                    if status==0
+                        fprintf('%s \n','(dofmricni) Successful gunzipping !')
+                    end
+                end
+            end
+        end
+    end
+end
 
 % got here, so everything is good
 tf = true;
@@ -1710,8 +1803,10 @@ if ~isempty(stimfileListing)
         end
 	% get time between last volume and end of stim file
 	if isfield(stimfile.myscreen,'endtimeSecs')
-	  lastTime = e.time(e.tracenum==volTrace);lastTime = lastTime(end);
-	  s.stimfileInfo(end).timeFromLastVolToEnd = stimfile.myscreen.endtimeSecs - lastTime(end);
+	  if stimfile.myscreen.volnum > 0
+	    lastTime = e.time(e.tracenum==volTrace);lastTime = lastTime(end);
+	    s.stimfileInfo(end).timeFromLastVolToEnd = stimfile.myscreen.endtimeSecs - lastTime(end);
+	  end
 	end
       end
   end
@@ -2097,4 +2192,15 @@ if (retval == 0)
 else
   username = 'unknown';
 end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    setMotionCompDefaults    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function [tf s] = setMotionCompDefaults(s)
+
+tf = true;
+motionCompDefaultParams = mrGetPref('motionCompDefaultParams');
+motionCompDefaultParams.sliceTimeCorrection = false;
+motionCompDefaultParams.baseFrame = 'mean';
+mrSetPref('motionCompDefaultParams',motionCompDefaultParams);
 

@@ -30,6 +30,7 @@
 %             
 function [instances pSettings] = preprocessInstances(instances,varargin)
 
+
 % second argument can be a pSettings with settings already set
 if (length(varargin)>=1) && isstruct(varargin{1})
   pSettings = varargin{1};
@@ -40,6 +41,12 @@ if (length(varargin)>=1) && isstruct(varargin{1})
   end
 else
   pSettings = [];
+end
+if isfield(instances{1},'name') % this is actually a cell of ROIs
+    for i = 1:length(instances)
+        instances{i}.classify.instances = preprocessInstances(instances{i}.classify.instances,varargin{1},varargin{2});
+    end
+    return
 end
 
 % now parse args (allow passing of an args cell array with arguments - from buildClassifier)
@@ -91,6 +98,7 @@ if pSettings.demean || pSettings.zscore
     % remove std across instances (i.e. each voxels response will have std=1 across all instances)
     stdd = std(d);
     d = bsxfun(@rdivide,d,stdd);
+    disp('(ppInstances) zscore');
   end
 
   % now sort back into instances

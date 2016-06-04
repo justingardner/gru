@@ -475,7 +475,7 @@ minTau2=0;
 maxTau2=inf;
 
 % check for fit constraints in set options
-getArgs(args,{'minAmplitude=-inf','maxAmplitude=inf','minTimelag=0','maxTimelag=5','minTau=0','maxTau=inf','minAmplitudeRatio=0','maxAmplitudeRatio=1','minTimelag2=0','maxTimelag2=inf','minTau2=0','maxTau2=inf'});
+getArgs(args,{'minAmplitude=0','maxAmplitude=inf','minTimelag=0','maxTimelag=5','minTau=0','maxTau=inf','minAmplitudeRatio=0','maxAmplitudeRatio=1','minTimelag2=5','maxTimelag2=inf','minTau2=0','maxTau2=inf'});
 
 % choose amplitude type
 if ~any(strcmp(lower(amplitudeType),{'fit1','fit1each','fit1fixed','fit2','fit2each','default'}))

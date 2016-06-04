@@ -1,7 +1,7 @@
 
 % gruRetinotopyStanford.m
 % 
-%                 date: 09/09/2015
+%                 date: 04/23/2016
 %               author: steeve
 %              Purpose: fMRI mux8 sequences for retinotopy
 %                Usage: 
@@ -19,8 +19,8 @@
 %Bars
 %----
 %
-%"phase per location": 500 vols
-% duration: 4:09 min
+%"phase per location": 493 vols (scanner will end slightly first)
+% duration: 4:08 min
 %
 %MT localizer
 %------------
@@ -29,12 +29,16 @@
 % duration: 4:33 min
 
 %% BARS
-%for mux 8 arc 1 we should set: 48 vols/cycle, 8*48 vols + 3 blanks * 24 s = 456 vols + 8(mux)*2(nummux) = 472 vols (3:55 min)
-%but 500 actually works best (need to findout why)
-mglRetinotopy('displayName=fMRIproj32','bars=1','fixedRandom=1','stimulusPeriod=24','stepsPerCycle',48,'blanks=3','doEyeCalib=0');
+%Stimulus
+%- always starts with a 12s blank (half 'stimulusPeriod=24' period)
+%- interleave 3 other half period blanks ('blanks=3')
+%- always interleave 8 24s period bar cycles
 
-%% MT localizer
-Mtloc('0%',.5)
+%mux 8 arc 1: 8 cycle * 48 vols/cycle + 3(+1 initial) blanks * 24vols = 480 vols + 8(mux)*2(nummux) = 493 vols (4:06min)
+mglRetinotopy('displayName=fMRIprojFlex','bars=1','fixedRandom=1','stimulusPeriod=24','stepsPerCycle',48,'blanks=3','doEyeCalib=0');
+
+%% MT localizer`
+mtloc('0%',.5)
 
 
 

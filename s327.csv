@@ -1,0 +1,11 @@
+date,username,time,task,computer,stimfile
+03/25/2016,gru,25-Mar-2016 19:59:24,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s327/160325_stim01.mat
+03/25/2016,gru,25-Mar-2016 20:06:10,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s327/160325_stim02.mat
+03/25/2016,gru,25-Mar-2016 20:11:38,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s327/160325_stim03.mat
+03/25/2016,gru,25-Mar-2016 20:16:44,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s327/160325_stim04.mat
+03/25/2016,gru,25-Mar-2016 20:21:34,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s327/160325_stim05.mat
+03/25/2016,gru,25-Mar-2016 20:26:20,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s327/160325_stim06.mat
+03/25/2016,gru,25-Mar-2016 20:31:07,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s327/160325_stim07.mat
+03/25/2016,gru,25-Mar-2016 20:36:09,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s327/160325_stim08.mat
+03/25/2016,gru,25-Mar-2016 20:42:25,mtloc.m,oban.stanford.edu,~/data/mtloc/s327/160325_stim09.mat
+03/25/2016,gru,25-Mar-2016 20:47:40,mtloc.m,oban.stanford.edu,~/data/mtloc/s327/160325_stim10.mat
