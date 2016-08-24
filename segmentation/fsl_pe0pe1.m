@@ -208,11 +208,22 @@ tufiles = cell(size(mergefiles));
 if parallel
     % disppercent(-inf,'Calculating topup...');
     cores = mlrNumWorkers;
-    disp(sprintf('Calculating topup... PARALLEL on %i cores',cores));
-    parfor i = 1:length(mergefiles)
-        tufiles{i} = hlpr_topup(mergefiles{i},i,tfolder,folder);    
-    %     disppercent(i/l m);
+    if cores > 0
+        disp(sprintf('Calculating topup... PARALLEL on %i cores',cores));
+        parfor i = 1:length(mergefiles)
+            tufiles{i} = hlpr_topup(mergefiles{i},i,tfolder,folder);    
+        %     disppercent(i/l m);
 
+        end
+    else
+        disppercent(-inf,'Calculating topup...');
+        disp('Calculating topup... NON-PARALLEL');
+        lm = length(mergefiles);
+        for i = 1:length(mergefiles)
+            tufiles{i} = hlpr_topup(mergefiles{i},i,tfolder,folder);    
+            disppercent(i/lm);
+        end
+        disppercent(inf);
     end
     % disppercent(inf);
 else
@@ -235,11 +246,24 @@ finalfiles = cell(size(tufiles));
 if parallel
     % disppercent(-inf,'Applying topup...');
     cores = mlrNumWorkers;
-    disp(sprintf('Applying topup... PARALLEL on %i cores',cores));
-    EPIf = unwarp.EPIfiles;
-    parfor i = 1:length(tufiles)
-        finalfiles{i} = hlpr_applytopup(tufiles{i},EPIf{i},tfolder,folder);
-    %     disppercent(i/lt);
+    if cores > 0
+        disp(sprintf('Applying topup... PARALLEL on %i cores',cores));
+        EPIf = unwarp.EPIfiles;
+        parfor i = 1:length(tufiles)
+            finalfiles{i} = hlpr_applytopup(tufiles{i},EPIf{i},tfolder,folder);
+        %     disppercent(i/lt);
+        end
+    else
+        disppercent(-inf,'Applying topup...');
+        disp('Applying topup... NON-PARALLEL');
+        finalfiles = {};
+        EPIf = unwarp.EPIfiles;
+        lt = length(tufiles);
+        for i = 1:length(tufiles)
+            finalfiles{i} = hlpr_applytopup(tufiles{i},EPIf{i},tfolder,folder);
+            disppercent(i/lt);
+        end
+        disppercent(inf);
     end
     % disppercent(inf);
 else
@@ -284,6 +308,13 @@ end
 for i = 1:length(finalfiles)
     fi = finalfiles{i};
     system(sprintf('rm %s.nii.gz',fi));
+end
+
+%% shutdown pool
+
+if parallel
+    p = gcp;
+    delete(p);
 end
 
 %% Backup + rename
