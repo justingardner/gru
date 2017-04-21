@@ -37,7 +37,7 @@
 %             xLabelOffset (-3/64): Offset from x axis to display label
 %             xAxisMargin (1/64): Extra little offset to increase limits of axis by to make
 %                 sure everything displays correctly
-%             figSize (0): Sets units of figure apropriately for exporting use print -dpdf. 0.5, 1, 2 will
+%             figSize (0,0.5,1,2): Sets units of figure apropriately for exporting use print -dpdf. 0.5, 1, 2 will
 %                 give half, one or two column scaling. Or as a vector of 2 gives the x and y dimensions in cm
 %                 of final figure
 %
@@ -59,7 +59,7 @@ getArgs(varargin,{'whichAxis=both','tickDir=out','lineWidth=1','titleStr=[]','la
 		  'yAxisOffset=-1/32','yScale=[]','yAxisMajorTickLen=-1/32','yAxisMinorTickLen=-1/48',...
 		  'yTick=[]','yTickLabel=[]','yAxisMin=[]','yAxisMax=[]','yAxisMinMaxSetByTicks=1',...
 		  'yMinorTick=[]','yLabel=[]','yLabelOffset=-6/64','yTickLabelSigfigs=-1','forceDisplay=0',...
-		  'forceClear=0','fontName=Helvetica','figSize=0'...
+		  'forceClear=0','fontName=Helvetica','figSize=2'...
 		 });
      
 % set fig size
@@ -657,8 +657,8 @@ set(h,'Units','Centimeters');
 pos = get(h,'Position');
 
 % set colors
-set(gcf,'Color',[1 1 1]);
-set(gca,'Color',[1 1 1]);
+%set(gcf,'Color',[1 1 1]);
+%set(gca,'Color',[1 1 1]);
 
 % set paper position mode and units
 set(h,'PaperPositionMode','Auto','PaperUnits','Centimeters');
@@ -670,23 +670,20 @@ if length(figSize)==2
   figSize = figSize(1);
 end
 
-% set fig size according to widths
-% Use nature figure sizes: 247, 183, or 89 mm
-% For 4-figure 247 use 5.8 width and 10 height
-% For 3-figure 247 use 8 width and 10 height
+% set fig size according to JN style
 switch figSize
  case 0
   % do nothing
   figSize = pos(3);
- case 0.5
-  % half column
-  figSize = 8.9;
  case 1
+  % single column
+  figSize = 8.5;
+ case 1.5
   % full column
-  figSize = 18.3;
+  figSize = 11.6;
  case 2 
   % double column
-  figSize = 24.7;
+  figSize = 17.6;
 end
 
 % set figure position
