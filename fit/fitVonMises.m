@@ -10,6 +10,23 @@
 %             x = [-90:22.5:89];
 %             y = [0.088 0.091 0.124 0.195 0.279 0.190 0.112 0.084];
 %             fitVonMises(x,y,'dispfit=1');
+%
+%             to set init parameters, note that mu is in degrees (not radians);
+%             fitVonMises(x,y,'dispfit=1','mu=30','kappa=5','amp=1','offset=0');
+%
+%             if y is empty, will compute the VonMises with the specified init params. e.g.
+%             x = 0:360;
+%             y = fitVonMises(x,[],'mu=0','kappa=5','amp=1','offset=0');
+%
+%             You can convert kappa parameters to half-width-at-half-height in degrees
+%             by setting x to empty:
+%
+%             halfWidth = fitVonMises([],[],'kappa=3');
+% 
+%             or the inverse (where half-width-at-half-height is in deg)
+%
+%             kappa = fitVonMises([],[],'halfWidthAtHalfHeight=30');
+%
 function retval = fitVonMises(x,y,varargin)
 
 % check arguments
@@ -22,20 +39,43 @@ end
 retval = [];
 
 % check arguments
-getArgs(varargin,{'dispfit=1'});
+getArgs(varargin,{'dispfit=1','mu=0','kappa=5','amp=1','offset=0','halfWidthAtHalfHeight=[]'});
+
+% convert halfWidthAtHalfHeight to kappa
+if ~isempty(halfWidthAtHalfHeight)
+  % get cos of the desired angle
+  cosTheta = cos(d2r(halfWidthAtHalfHeight));
+  % then solve the equation to find what kappa makes it that that theta
+  % value gives a value of 0.5 (init at kappa of 1) - don't think there
+  % is easy closed form expression so use fzero to search for kappa
+  retval = fzero(@(kappa) ((exp(kappa*cosTheta) - exp(-kappa))/(exp(kappa)-exp(-kappa)) - 0.5),1)
+  return
+end
 
 % convert to radians
-x = d2r(x(:));
+x = d2r(x(:));mu = d2r(mu);
 y = y(:);
+
+% initial parameters
+initParams = setVonMisesParams(mu,kappa,amp,offset);
+
+% check for empty x
+if isempty(x)
+  retval = r2d(acos(log(((exp(kappa)-exp(-kappa))/2)+exp(-kappa))/kappa));
+  return
+end
+  
+% check for empty y, then just compute vonMises
+if isempty(y)
+  retval = myVonMises(initParams,x);
+  return
+end
 
 % check lengths
 if length(x) ~= length(y)
   disp(sprintf('(fitVonMises) Length of x (%i) must match y (%i)',length(x),length(y)));
   return
 end
-
-% initial parameters
-initParams = setVonMisesParams(0,5,1,0);
 
 % set options for fminsearch
 options = optimset('MaxFunEvals',inf);
@@ -56,7 +96,7 @@ covar = reducedChiSquared * inv(jacobian'*jacobian);
 
 % save params in return structure
 retval.optimParams = optimParams;
-[retval.params.mu retval.params.mu retval.params.mu retval.params.mu] = getVonMisesParams(optimParams);
+[retval.params.mu retval.params.kappa retval.params.amp retval.params.offset] = getVonMisesParams(optimParams);
 retval.covar = covar;
 retval.residual = residual;
 retval.squaredError = sum(residual.^2);
