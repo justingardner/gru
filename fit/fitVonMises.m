@@ -43,12 +43,14 @@ getArgs(varargin,{'dispfit=1','mu=0','kappa=5','amp=1','offset=0','halfWidthAtHa
 
 % convert halfWidthAtHalfHeight to kappa
 if ~isempty(halfWidthAtHalfHeight)
-  % get cos of the desired angle
-  cosTheta = cos(d2r(halfWidthAtHalfHeight));
-  % then solve the equation to find what kappa makes it that that theta
-  % value gives a value of 0.5 (init at kappa of 1) - don't think there
-  % is easy closed form expression so use fzero to search for kappa
-  retval = fzero(@(kappa) ((exp(kappa*cosTheta) - exp(-kappa))/(exp(kappa)-exp(-kappa)) - 0.5),1)
+  for iWidth = 1:length(halfWidthAtHalfHeight)
+    % get cos of the desired angle
+    cosTheta = cos(d2r(halfWidthAtHalfHeight(iWidth)));
+    % then solve the equation to find what kappa makes it that that theta
+    % value gives a value of 0.5 (init at kappa of 1) - don't think there
+    % is easy closed form expression so use fzero to search for kappa
+    retval(iWidth) = fzero(@(kappa) ((exp(kappa*cosTheta) - exp(-kappa))/(exp(kappa)-exp(-kappa)) - 0.5),1);
+  end
   return
 end
 
@@ -61,7 +63,8 @@ initParams = setVonMisesParams(mu,kappa,amp,offset);
 
 % check for empty x
 if isempty(x)
-  retval = r2d(acos(log(((exp(kappa)-exp(-kappa))/2)+exp(-kappa))/kappa));
+  % convert to half-width-at-half-height
+  retval = r2d(acos(log(((exp(kappa)-exp(-kappa))/2)+exp(-kappa))./kappa));
   return
 end
   
