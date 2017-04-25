@@ -7,6 +7,9 @@ figure(h);
 % For 4-figure 247 use 5.8 width and 10 height
 % For 3-figure 247 use 8 width and 10 height
 
+l = legend(gca,'boxoff');
+set(l,'Color','none');
+            
 set(h,'Units','Centimeters');
 pos = get(h,'Position');
 
