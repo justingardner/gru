@@ -37,6 +37,9 @@
 %             xLabelOffset (-3/64): Offset from x axis to display label
 %             xAxisMargin (1/64): Extra little offset to increase limits of axis by to make
 %                 sure everything displays correctly
+%             figSize (0,0.5,1,2): Sets units of figure apropriately for exporting use print -dpdf. 0.5, 1, 2 will
+%                 give half, one or two column scaling. Or as a vector of 2 gives the x and y dimensions in cm
+%                 of final figure
 %
 %             Similar arguments are available for the vertical axis (preface with y
 %                  instead of x)
@@ -56,8 +59,14 @@ getArgs(varargin,{'whichAxis=both','tickDir=out','lineWidth=1','titleStr=[]','la
 		  'yAxisOffset=-1/32','yScale=[]','yAxisMajorTickLen=-1/32','yAxisMinorTickLen=-1/48',...
 		  'yTick=[]','yTickLabel=[]','yAxisMin=[]','yAxisMax=[]','yAxisMinMaxSetByTicks=1',...
 		  'yMinorTick=[]','yLabel=[]','yLabelOffset=-6/64','yTickLabelSigfigs=-1','forceDisplay=0',...
-		  'forceClear=0','fontName=Helvetica'...
+		  'forceClear=0','fontName=Helvetica','figSize=2'...
 		 });
+     
+% set fig size
+if figSize
+  % borrowed from savepdf
+  setFigSize(figSize);
+end
 
 % get which axis to draw
 if ~validateParam('whichAxis',{'both','horizontal','vertical'});,return,end
@@ -147,6 +156,27 @@ if ishandle(dpa.titleHandle)
   end
 end
 
+% get yTick
+if isempty(yTick) 
+  yTick = get(curAxis,'YTick');
+else
+  % set the yTick appopriately
+  yaxis(min(yTick),max(yTick));
+  set(curAxis,'YTick',yTick);
+end
+yTick = yTick(:)';
+
+% get xTick
+if isempty(xTick) 
+  % if not set, get from current axis
+  xTick = get(curAxis,'XTick');
+else
+  % set the axis approriately
+  xaxis(min(xTick),max(xTick));
+  set(gca,'XTick',xTick);
+end
+xTick = xTick(:)';
+
 % get x axis limits
 xLim = get(curAxis,'XLim');
 if isempty(xMin), xMin = xLim(1);end
@@ -169,10 +199,6 @@ if ~validateParam('xAxisLoc',{'bottom','top'});,return,end
 if isempty(xScale), xScale=get(curAxis,'xScale');end
 if ~validateParam('xScale',{'linear','log'});,return,end
 
-% get xTick
-if isempty(xTick) xTick = get(curAxis,'XTick');end
-xTick = xTick(:)';
-
 % get xTickLabel
 if isempty(xTickLabel)
   % get info form axis
@@ -189,7 +215,7 @@ if isempty(xTickLabel)
       if ~iscell(xTickLabelFromAxis)
         xTickLabelCellArray{iTick} = xTickLabelFromAxis(matchFromAxis,:);
       else
-        xTickLabelCellArray = xTickLabelFromAxis;
+        xTickLabelCellArray{iTick} = xTickLabelFromAxis{matchFromAxis};
       end
     end
   end
@@ -239,10 +265,6 @@ if ~validateParam('yAxisLoc',{'left','right'});,return,end
 if isempty(yScale), yScale=get(curAxis,'yScale');end
 if ~validateParam('yScale',{'linear','log'});,return,end
 
-% get yTick
-if isempty(yTick) yTick = get(curAxis,'YTick');end
-yTick = yTick(:)';
-
 % get yTickLabel
 if isempty(yTickLabel)
   % get info form axis
@@ -255,8 +277,13 @@ if isempty(yTickLabel)
       % use the value of xTick
       yTickLabelCellArray{iTick} = mlrnum2str(yTick(iTick),'sigfigs',yTickLabelSigfigs);
     else
-      % if we found it on the axis then use that label
-      yTickLabelCellArray{iTick} = yTickLabelFromAxis(matchFromAxis,:);
+      if ~iscell(yTickLabelFromAxis)
+	% if we found it on the axis then use that label
+	yTickLabelCellArray{iTick} = yTickLabelFromAxis(matchFromAxis,:);
+      else
+	% grab from cell array
+	yTickLabelCellArray{iTick} = yTickLabelFromAxis{matchFromAxis};
+      end
     end
   end
   yTickLabel = yTickLabelCellArray;
@@ -310,8 +337,6 @@ if any(strcmp(whichAxis,{'both','horizontal'}))
     if isempty(xAxisYpos)
       xAxisYpos = logScaleSum(yScale,yMin,xAxisOffset,abs(yMax-yMin));
     end
-    
-  
     % make tickDir a +/- value
     if strcmp(tickDir,'in') tickDirVal = -1; else tickDirVal = 1; end
   else
@@ -618,3 +643,50 @@ else
     val = [val ticks(iTick)+thisInterval*(1:spaceVal)];
   end
 end
+
+%%%%%%%%%%%%%%%%%%%%%
+%    setFigSize    %
+%%%%%%%%%%%%%%%%%%%%%
+function setFigSize(figSize)
+
+% get figure handle
+h = gcf;
+
+% set units and get position
+set(h,'Units','Centimeters');
+pos = get(h,'Position');
+
+% set colors
+%set(gcf,'Color',[1 1 1]);
+%set(gca,'Color',[1 1 1]);
+
+% set paper position mode and units
+set(h,'PaperPositionMode','Auto','PaperUnits','Centimeters');
+
+% two-dimensional figSize
+if length(figSize)==2
+  pos(4) = figSize(2);
+  pos(3) = figSize(1);
+  figSize = figSize(1);
+end
+
+% set fig size according to JN style
+switch figSize
+ case 0
+  % do nothing
+  figSize = pos(3);
+ case 1
+  % single column
+  figSize = 8.5;
+ case 1.5
+  % full column
+  figSize = 11.6;
+ case 2 
+  % double column
+  figSize = 17.6;
+end
+
+% set figure position
+set(h,'Position',[pos(1), pos(2), figSize, pos(4)*figSize/pos(3)]);
+
+

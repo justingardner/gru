@@ -286,6 +286,9 @@ for i = 1:length(signal)
   % the probability of correct given the paramters for this
   % signal strength is:
   p = weibull(signal(i),fitparams);
+  % p can't be 0 as we are doing log likelihood, so set it to the
+  % smallest possible number if that is what we get
+  if p == 0,p = eps;,end
   % the likelihood that we would observe ncorrect trials out
   % of ntotal trials with a probability of p, is assumed
   % to be a bernoulli process and so is binomailly distributed
@@ -311,7 +314,6 @@ end
 % and we are doing a min search
 like = -(like+logw);
 
-  
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % returns deviance of model given data
