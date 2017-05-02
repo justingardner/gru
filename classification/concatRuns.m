@@ -52,7 +52,7 @@ end
 
 % now check length of tSeries against concatInfo to make sure everything matches
 for i = 1:n
-  thisN = size(tSeries{1},2);
+  thisN = size(tSeries{i},2);
   concatInfoThisN = length(concatInfo{i}.whichVolume);
   if thisN ~= concatInfoThisN
     disp(sprintf('(concatRuns) tSeries %i has %i volumes, but concatInfo says it should have %i volumes',i,thisN,concatInfoThisN));
