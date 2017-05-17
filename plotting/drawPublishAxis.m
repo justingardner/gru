@@ -39,7 +39,7 @@
 %                 sure everything displays correctly
 %             figSize (0,0.5,1,2): Sets units of figure apropriately for exporting use print -dpdf. 0.5, 1, 2 will
 %                 give half, one or two column scaling. Or as a vector of 2 gives the x and y dimensions in cm
-%                 of final figure
+%                 of final figure. JNeuro sizes: 8.5, 11.6, 17.6
 %
 %             Similar arguments are available for the vertical axis (preface with y
 %                  instead of x)
