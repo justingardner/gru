@@ -38,20 +38,38 @@ end
 % default retval
 retval = [];
 
-% check arguments
-getArgs(varargin,{'dispfit=1','mu=0','kappa=5','amp=1','offset=0','halfWidthAtHalfHeight=[]'});
+% check arguments (this was really slow, so providing a fixed way to call in
+% which arguments just get passed in)
+if nargin > 2
+  if isstr(varargin{1})
+    getArgs(varargin,{'dispFit=2','mu=0','kappa=5','amp=1','offset=0','halfWidthAtHalfHeight=[]','wrapAt=360'});
+  else
+    kappa = 5;amp = 1; offset = 0; halfWidthAtHalfHeight = [];wrapAt = 360;dispFit = 2;
+    mu = varargin{1};
+    if nargin > 3,kappa = varargin{2};end
+    if nargin > 4,wrapAt = varargin{3};end
+  end
+end
+
+% set how much info to display on fits
+if dispFit > 0
+  displayType = 'final';
+else
+  displayType = 'off';
+end
 
 % convert halfWidthAtHalfHeight to kappa
 if ~isempty(halfWidthAtHalfHeight)
-  for iWidth = 1:length(halfWidthAtHalfHeight)
-    % get cos of the desired angle
-    cosTheta = cos(d2r(halfWidthAtHalfHeight(iWidth)));
-    % then solve the equation to find what kappa makes it that that theta
-    % value gives a value of 0.5 (init at kappa of 1) - don't think there
-    % is easy closed form expression so use fzero to search for kappa
-    retval(iWidth) = fzero(@(kappa) ((exp(kappa*cosTheta) - exp(-kappa))/(exp(kappa)-exp(-kappa)) - 0.5),1);
+  % convert to kappa
+  retval = halfWidthAtHalfHeight2kappa(halfWidthAtHalfHeight);
+ 
+  % if x is not empty, then it means we are getting y-values so just set kappa
+  if ~isempty(x)
+    kappa = retval(1);
+  else
+    % otherwise return with the kappa values
+    return
   end
-  return
 end
 
 % convert to radians
@@ -64,31 +82,34 @@ initParams = setVonMisesParams(mu,kappa,amp,offset);
 % check for empty x
 if isempty(x)
   % convert to half-width-at-half-height
-  retval = r2d(acos(log(((exp(kappa)-exp(-kappa))/2)+exp(-kappa))./kappa));
+  retval = kappa2halfWidthAtHalfHeight(kappa);
   return
 end
   
 % check for empty y, then just compute vonMises
 if isempty(y)
-  retval = myVonMises(initParams,x);
+  % compute von mises, notice extra parameter
+  % is so that the function can wrap not at 360 deg
+  % but at smaller (e.g. 180 - useful for orientations).
+  retval = myVonMises(initParams,x,360/wrapAt);
   return
 end
 
 % check lengths
 if length(x) ~= length(y)
   disp(sprintf('(fitVonMises) Length of x (%i) must match y (%i)',length(x),length(y)));
-  return
+return
 end
 
 % set options for fminsearch
-options = optimset('MaxFunEvals',inf);
+options = optimset('MaxFunEvals',inf,'Display',displayType);
 
 % do fit using nelder-mead
-optimParams = fminsearch(@vonMisesError,initParams,options,y,x,0,dispfit);
+optimParams = fminsearch(@vonMisesError,initParams,options,y,x,0,dispFit);
 
 % fit again with levenberg-marquardt (to get jacobian)
-options = optimset('Algorithm','levenberg-marquardt','MaxFunEvals',inf);
-[fitVals,resnorm,residual,exitflag,output,lambda,jacobian] = lsqnonlin(@vonMisesError,optimParams,[],[],options,y,x,1,dispfit);
+options = optimset('Algorithm','levenberg-marquardt','MaxFunEvals',inf,'Display',displayType);
+[fitVals,resnorm,residual,exitflag,output,lambda,jacobian] = lsqnonlin(@vonMisesError,optimParams,[],[],options,y,x,1,dispFit);
 
 % reduced chi squared is a factor that decreseas the value of the
 % parameter variance estimates according to how many degrees of
@@ -100,6 +121,7 @@ covar = reducedChiSquared * inv(jacobian'*jacobian);
 % save params in return structure
 retval.optimParams = optimParams;
 [retval.params.mu retval.params.kappa retval.params.amp retval.params.offset] = getVonMisesParams(optimParams);
+retval.params.halfWidthAtHalfHeight = kappa2halfWidthAtHalfHeight(retval.params.kappa);
 retval.covar = covar;
 retval.residual = residual;
 retval.squaredError = sum(residual.^2);
@@ -112,7 +134,7 @@ retval.x = x;
 retval.y = y;
 
 % display fit
-if dispfit
+if dispFit
   f = mlrSmartfig('vonMisesFit','reuse=1');
   clf;
   plot(x,y,'k.');
@@ -125,7 +147,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    get error between von mises and data    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function retval = vonMisesError(params,y,x,returnResidual,dispfit)
+function retval = vonMisesError(params,y,x,returnResidual,dispFit)
 
 % compute vonMises 
 yFit = myVonMises(params,x);
@@ -142,7 +164,7 @@ else
 end
 
 % display the fit
-if dispfit
+if dispFit
   f = mlrSmartfig('vonMisesFit','reuse=1');
   clf;
   plot(r2d(x),y,'k.');
@@ -156,10 +178,29 @@ end
 %%%%%%%%%%%%%%%%%%%%
 %    myVonMises    %
 %%%%%%%%%%%%%%%%%%%%
-function y = myVonMises(params,x)
+function y = myVonMises(params,x,wrapScaleFactor)
 
+% the wrapScaleFactor is used to make the x-range go
+% to a different value - for example to 180 degrees
+% for orientations. To achieve that we scale 
+if nargin == 2
+  wrapScaleFactor = 1;
+end
+  
 % get the parameters
 [mu kappa amp offset] = getVonMisesParams(params);
+
+% if we are going to rescale the x-axis, but we want
+% to make sure that kappa means the same thing
+% in terms of halfWidthAtHalfHeight
+if ~isequal(wrapScaleFactor,1)
+  halfWidthAtHalfHeight = kappa2halfWidthAtHalfHeight(kappa);
+  % rescale kappa
+  kappa = halfWidthAtHalfHeight2kappa(halfWidthAtHalfHeight*wrapScaleFactor);
+  % now rescale
+  x = x*wrapScaleFactor;
+  mu = mu*wrapScaleFactor;
+end
 
 % von mises normalized so that amplitude is the difference between the lowest and highest points 
 y = offset + (amp-offset) * (exp(kappa * cos(x - mu)) - exp(-kappa))/(exp(kappa)-exp(-kappa));
@@ -181,6 +222,31 @@ function params = setVonMisesParams(mu,k,amp,offset)
 
 params = [mu k amp offset];
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    kappa2halfWidthAtHalfHeight    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function halfWidthAtHalfHeight = kappa2halfWidthAtHalfHeight(kappa)
 
+if isinf(kappa)
+  halfWidthAtHalfHeight = 0;
+else
+  halfWidthAtHalfHeight = r2d(acos(log(((exp(kappa)-exp(-kappa))/2)+exp(-kappa))./kappa));
+end
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    halfWidthAtHalfHeight2kappa    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function kappa = halfWidthAtHalfHeight2kappa(halfWidthAtHalfHeight)
 
+for iWidth = 1:length(halfWidthAtHalfHeight)
+  if halfWidthAtHalfHeight(iWidth) == 0
+    kappa(iWidth) = inf;
+  else
+    % get cos of the desired angle
+    cosTheta = cos(d2r(halfWidthAtHalfHeight(iWidth)));
+    % then solve the equation to find what kappa makes it that that theta
+    % value gives a value of 0.5 (init at kappa of 1) - don't think there
+    % is easy closed form expression so use fzero to search for kappa
+    kappa(iWidth) = fzero(@(kappa) ((exp(kappa*cosTheta) - exp(-kappa))/(exp(kappa)-exp(-kappa)) - 0.5),1);
+  end
+end
