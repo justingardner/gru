@@ -5,6 +5,9 @@
 %         by: justin gardner
 %       date: 05/29/17
 %    purpose: implements motion-energy (Adelson & Bergen, 1985) model 
+%             and compute responses on passed in stimulus
+%
+%             Read code comments for settable parameters of model
 %
 function r = motionEnergyModel(s, varargin)
 
@@ -14,66 +17,90 @@ if ~any(nargin == [1])
   return
 end
 
+% parse args
+getArgs(varargin,{'stimulusSize=5','orientationPreference',0:45:359,'sfPreference',[0.5 1 2],'tfPreference',[0.5 2 4],'maxTime',5,'deltaTime=0.1','deltaSpace=0.1','dispFigures',1});
+
 % make displays for debugging etc
-m.dispFigures = 1;
+m.dispFigures = dispFigures;
 
 % specify model (for now we just have adelson-bergen)
 m.linearSpatialTemporalFilter = 'adelson-bergen';
 
 % time steps for rf computation (in seconds)
-m.deltaTime = 0.1; 
+m.deltaTime = deltaTime; 
 
 % length of time to compute receptive field for (in seconds)
-m.maxTime = 5;
+m.maxTime = maxTime;
 
 % spatial steps for rf computation (in deg)
-m.deltaSpace = 0.1;
+m.deltaSpace = deltaSpace;
 
-% size of receptive field (note that the linear receptive field
-% within is always centered within this and that the "size" of the 
-% rf will largely be determined by the desired spatial frequency
-m.rfSize = 7;
+% size of stimulus in degrees which will determine the
+% max size of all filters - i.e. the filters will all be
+% calculated to fill out the whole stimulus
+% The linear receptive field within this area 
+% is always centered within this and that the "size" of the 
+% rf will largely be determined by the desired spatial frequency.
+% May want to update this code to have rfs that tile the visual
+% field for more complex stimuli - but this should be find for
+% spatially uniform stimuli like random dot patterns
+m.stimulusSize = stimulusSize;
 
-% orientations of filter
-m.prefOrientation = 0:45:359;
+% orientations of filter in degrees
+m.orientationPreference = orientationPreference;
 
-% the spatial frequencies over which to compute filters
-m.sf = 0.5;
+% the spatial frequencies over which to compute filters in cycles/deg
+m.sfPreference = sfPreference;
 
-% the temporal frequencies over which to compute filters
-m.tf = 0.5;
+% the temporal frequencies over which to compute filters in cycles/sec
+m.tfPreference = tfPreference;
 
-for iTF = 1:length(m.tf)
-  for iSF = 1:length(m.sf)
+for iTF = 1:length(m.tfPreference)
+  for iSF = 1:length(m.sfPreference)
     % compute necessary sigma and k for this sf/tf
-    [m.sigma(iSF) m.k(iTF)] = getSigmaK(m,m.sf(iSF),m.tf(iTF));
+    [m.sigma(iSF) m.k(iTF)] = getSigmaK(m,m.sfPreference(iSF),m.tfPreference(iTF));
 
     % compute linear receptive
     m.baseFilter = computeSpatialTemporalFilter(m,m.sigma(iSF),m.k(iTF));
 
     % rotate to get different orientations
-    m.filters(iTF,iSF,:) = getDifferentOrientations(m,m.baseFilter(1),m.prefOrientation);
+    m.filters(iTF,iSF,:) = getDifferentOrientations(m,m.baseFilter(1),m.orientationPreference);
   end
+end
+
+% normalize all filters to have the same total sum-of-squares
+m.filters = normalizeLinearFilters(m.filters);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    normalizeLInearFilters    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function filters = normalizeLinearFilters(filters)
+
+% loop over filters
+for iFilter = 1:length(filters(:))
+  % normalize by sum of squares
+  filters(iFilter).phase1 = filters(iFilter).phase1/sqrt(sum(filters(iFilter).phase1(:).^2));
+  filters(iFilter).phase2 = filters(iFilter).phase2/sqrt(sum(filters(iFilter).phase2(:).^2));
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    getDifferentOrientations    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function filters = getDifferentOrientations(m,baseFilter,prefOrientations)
+function filters = getDifferentOrientations(m,baseFilter,orientationPreferences)
 
 % get x and y meshgrids
-x = -m.rfSize/2:m.deltaSpace:m.rfSize/2;
-y = -m.rfSize/2:m.deltaSpace:m.rfSize/2;
+x = -m.stimulusSize/2:m.deltaSpace:m.stimulusSize/2;
+y = -m.stimulusSize/2:m.deltaSpace:m.stimulusSize/2;
 [xGrid yGrid] = meshgrid(x,y);
 
 % number of orientations
-nOrient = length(prefOrientations);
+nOrient = length(orientationPreferences);
 
 disppercent(-inf,'(motionEnergyModel) Rotating to get different orientation/direction selectivity');
 for iOrient = 1:nOrient
   % make rotation matrix
-  c = cos(d2r(prefOrientations(iOrient)));
-  s = sin(d2r(prefOrientations(iOrient)));
+  c = cos(d2r(orientationPreferences(iOrient)));
+  s = sin(d2r(orientationPreferences(iOrient)));
   rotationMatrix = [c -s ; s c];
   % rotate coordinates
   rotatedCoordinates = [xGrid(:) yGrid(:)] * rotationMatrix;
@@ -145,7 +172,7 @@ end
 
 % make sure sample space is sufficient for this
 m.deltaSpace = 0.0001;
-m.rfSize = 10;
+m.stimulusSize = 10;
 
 % get best fit sigma
 sigma = fminsearch(@sfMin,0.01,optimset,m,sf);
@@ -167,12 +194,12 @@ if m.dispFigures
   
   % compute spatial frequency response and peak TF (see sfMin)
   x = [0 1];
-  y = -m.rfSize/2:m.deltaSpace:m.rfSize/2;
+  y = -m.stimulusSize/2:m.deltaSpace:m.stimulusSize/2;
   [xGrid,yGrid] = meshgrid(x,y);
   [sf1 sf2] = spatialProfile(xGrid,yGrid,sigma);
   sf1FFT = abs(fft(sf1(:,1)));
   [~,maxSFBin] = max(sf1FFT);
-  SFpeak = (maxSFBin-1)/(m.rfSize+m.deltaSpace);
+  SFpeak = (maxSFBin-1)/(m.stimulusSize+m.deltaSpace);
 
   % plot temporal frequency response / fft
   mlrSmartfig('getSigmaK','reuse');clf;
@@ -190,7 +217,7 @@ if m.dispFigures
   plot(y,sf1(:,1));
   subplot(2,2,4);
   n = maxSFBin*4;
-  plot((0:n-1)/(m.rfSize+m.deltaSpace),sf1FFT(1:n));
+  plot((0:n-1)/(m.stimulusSize+m.deltaSpace),sf1FFT(1:n));
   vline(SFpeak);
   title(sprintf('FFT: max = %0.2f c/deg',SFpeak));
   drawnow
@@ -224,7 +251,7 @@ function r = sfMin(sigma,m,sf)
 % to have x have more than one value so that
 % we can use the gradient function in spatialProfile)
 x = [0 1];
-y = -m.rfSize/2:m.deltaSpace:m.rfSize/2;
+y = -m.stimulusSize/2:m.deltaSpace:m.stimulusSize/2;
 
 [xGrid,yGrid] = meshgrid(x,y);
 [sf1 sf2] = spatialProfile(xGrid,yGrid,sigma);
@@ -236,7 +263,7 @@ sf1fft = abs(fft(sf1));
 [~,maxBin] = max(sf1fft(2:end));
 
 % convert to sf
-SFpeak = maxBin/(m.rfSize+m.deltaSpace);
+SFpeak = maxBin/(m.stimulusSize+m.deltaSpace);
 
 % get difference from desired
 r = (SFpeak-sf).^2;
@@ -282,8 +309,8 @@ tf2 = temporalImpulseResponse(t,k,5);
 
 % compute the SF response
 % first, the x and y dimensions
-x = -m.rfSize/2:m.deltaSpace:m.rfSize/2;
-y = -m.rfSize/2:m.deltaSpace:m.rfSize/2;
+x = -m.stimulusSize/2:m.deltaSpace:m.stimulusSize/2;
+y = -m.stimulusSize/2:m.deltaSpace:m.stimulusSize/2;
 [xGrid yGrid] = meshgrid(x,y);
 
 % now compute the spatial receptive field
