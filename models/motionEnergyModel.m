@@ -9,16 +9,23 @@
 %
 %             Read code comments for settable parameters of model
 %
-function r = motionEnergyModel(s, varargin)
+%             [s msc] = motionEnergyModelMakeStimulus('offscreen');
+%             r = motionEnergyModel(s,'myscreen',msc);
+function r = motionEnergyModel(s,varargin)
 
 % check arguments
-if ~any(nargin == [1])
+if nargin < 1
   help motionEnergyModel
   return
 end
 
 % parse args
-getArgs(varargin,{'stimulusSize=5','orientationPreference',0:45:359,'sfPreference',[0.5 1 2],'tfPreference',[0.5 2 4],'maxTime',5,'deltaTime=0.1','deltaSpace=0.1','dispFigures',1});
+getArgs(varargin,{'stimulusSize=5','orientationPreference',0:45:359,'sfPreference',[1],'tfPreference',[1],'maxFilterTime',1,'deltaTime=0.1','deltaSpace=0.1','dispFigures',1,'myscreen',[]});
+
+% get parameters from myscreen
+if ~isempty(myscreen)
+  [deltaTime stimulusSize deltaSpace] = getParametersFromMyscreen(myscreen);
+end
 
 % make displays for debugging etc
 m.dispFigures = dispFigures;
@@ -30,7 +37,7 @@ m.linearSpatialTemporalFilter = 'adelson-bergen';
 m.deltaTime = deltaTime; 
 
 % length of time to compute receptive field for (in seconds)
-m.maxTime = maxTime;
+m.maxFilterTime = maxFilterTime;
 
 % spatial steps for rf computation (in deg)
 m.deltaSpace = deltaSpace;
@@ -41,9 +48,8 @@ m.deltaSpace = deltaSpace;
 % The linear receptive field within this area 
 % is always centered within this and that the "size" of the 
 % rf will largely be determined by the desired spatial frequency.
-% May want to update this code to have rfs that tile the visual
-% field for more complex stimuli - but this should be find for
-% spatially uniform stimuli like random dot patterns
+% May want to update this code to have rfs that fit 
+% completely within the window to save processing time
 m.stimulusSize = stimulusSize;
 
 % orientations of filter in degrees
@@ -70,6 +76,63 @@ end
 
 % normalize all filters to have the same total sum-of-squares
 m.filters = normalizeLinearFilters(m.filters);
+
+% apply the filters to the stimulsu
+r = applyFilters(s,m);
+
+% display what we got
+dispFilterResponse(m,r);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    dispFilterResponse    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function dispFilterResponse(m,r)
+
+for iTF = 1:length(m.tfPreference)
+  for iSF = 1:length(m.sfPreference)
+    for iOrient = 1:length(orientationPreference)
+      
+    end
+  end
+end
+keyboard
+
+%%%%%%%%%%%%%%%%%%%%%%
+%    applyFilters    %
+%%%%%%%%%%%%%%%%%%%%%%
+function r = applyFilters(s,m)
+
+disppercent(-inf,'(motionEnergyModel) Applying filters to stimulus');
+for iFilter = 1:length(m.filters(:))
+  phase1 = myTimeConv(s,m.filters(iFilter).phase1);
+  phase2 = myTimeConv(s,m.filters(iFilter).phase2);
+  r(iFilter,:) = sqrt(phase1.^2 + phase2.^2);
+  disppercent(iFilter/length(m.filters(:)));
+end
+disppercent(inf);
+
+%%%%%%%%%%%%%%%%%%%%
+%    myTimeConv    %
+%%%%%%%%%%%%%%%%%%%%
+function r = myTimeConv(s,f)
+
+% get length of stimulus and filter
+slen = size(s,3);
+flen = size(f,3);
+
+% preallocate r
+r = nan(size(s,1),size(s,2),max([slen+flen-1,slen,flen]));
+
+% do 1D convolution at each location in space (surely there is
+% a faster way to do this?
+for iX = 1:size(s,1)
+  for iY = 1:size(s,2)
+    r(iX,iY,:) = conv(squeeze(s(iX,iY,:)),squeeze(f(iX,iY,:)));
+  end
+end
+
+% sum over space
+r = squeeze(sum(sum(r)));
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    normalizeLInearFilters    %
@@ -122,14 +185,14 @@ if m.dispFigures
   % init figure
   mlrSmartfig('moitonEnergyModel_orientations');
   
-  % compute maxTimePoint
+  % compute maxFilterTimePoint
   for iTime = 1:size(baseFilter.phase1,3)
     timeEnergy(iTime) = sqrt(sum(sum(baseFilter.phase1(:,:,iTime).^2)));
   end
-  [~,maxTimePoint] = max(timeEnergy);
+  [~,maxFilterTimePoint] = max(timeEnergy);
   for iOrient = 1:nOrient
     subplot(nOrient,3,((iOrient-1)*3)+1);
-    dispXY(filters(iOrient).phase1,maxTimePoint);axis off
+    dispXY(filters(iOrient).phase1,maxFilterTimePoint);axis off
     subplot(nOrient,3,((iOrient-1)*3)+2);
     dispXT(filters(iOrient).phase1);axis off
     subplot(nOrient,3,((iOrient-1)*3)+3);
@@ -159,7 +222,7 @@ function [sigma k] = getSigmaK(m,sf,tf)
 
 % make sure sample time is sufficient for this
 m.deltaTime = 0.001;
-m.maxTime = 10;
+m.maxFilterTime = 10;
 
 % get best fit k
 k = fminsearch(@tfMin,100,optimset,m,tf);
@@ -186,11 +249,11 @@ end
 
 if m.dispFigures
   % compute temporal frequency response and peak TF (see tfMin)
-  t = 0:m.deltaTime:m.maxTime;
+  t = 0:m.deltaTime:m.maxFilterTime;
   temporalResponse = temporalImpulseResponse(t,k,3);
   temporalResponseFFT = abs(fft(temporalResponse));
   [~,maxTFBin] = max(temporalResponseFFT);
-  TFpeak = (maxTFBin-1)/(m.maxTime+m.deltaTime);
+  TFpeak = (maxTFBin-1)/(m.maxFilterTime+m.deltaTime);
   
   % compute spatial frequency response and peak TF (see sfMin)
   x = [0 1];
@@ -207,7 +270,7 @@ if m.dispFigures
   plot(t,temporalResponse);
   subplot(2,2,2);
   n = maxTFBin*4;
-  plot((0:n-1)/(m.maxTime+m.deltaTime),temporalResponseFFT(1:n));
+  plot((0:n-1)/(m.maxFilterTime+m.deltaTime),temporalResponseFFT(1:n));
   xlabel('Temporal frequency (cycles / sec)');
   vline(TFpeak);
   title(sprintf('FFT: max = %0.2f c/sec',TFpeak));
@@ -228,7 +291,7 @@ end
 %%%%%%%%%%%%%%%
 function r = tfMin(k,m,tf)
 
-t = 0:m.deltaTime:m.maxTime;
+t = 0:m.deltaTime:m.maxFilterTime;
 
 % get max of fft of impulse response
 t1 = temporalImpulseResponse(t,k,3);
@@ -237,7 +300,7 @@ temporalResponseFFT = abs(fft(t1));
 [~,maxBin] = max(temporalResponseFFT(2:end));
 
 % convert to tf
-TFpeak = maxBin/(m.maxTime+m.deltaTime);
+TFpeak = maxBin/(m.maxFilterTime+m.deltaTime);
 
 % get difference from desired
 r = (TFpeak-tf).^2;
@@ -300,7 +363,7 @@ sf2 = sf2/sqrt(sum(sf2(:).^2));
 function filter = computeSpatialTemporalFilterAdelsonBergen(m,sigma,k)
 
 % amount of time to compute response for
-t = 0:m.deltaTime:m.maxTime;
+t = 0:m.deltaTime:m.maxFilterTime;
 
 % compute the TF response of Adelson & Bergen (Equation 1) - the two TF functions
 % have n = 3 and n = 5 as in text.
@@ -418,6 +481,20 @@ imagesc(fliplr(squeeze(im(:,:,t))'));
 colormap(gray);
 axis square;
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    getParametersFromMyscreen    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function [deltaTime stimulusSize deltaSpace] = getParametersFromMyscreen(myscreen)
 
 
+% check that the image is square
+if ~isequal(myscreen.imageWidth,myscreen.imageHeight)
+  disp(sprintf('(motionEnergyModel) No support yet for non-square screens'));
+  keyboard
+end
+
+% get parameters
+deltaTime = myscreen.frametime;
+stimulusSize = myscreen.imageWidth;
+deltaSpace = stimulusSize/(myscreen.screenWidth-1);
 
