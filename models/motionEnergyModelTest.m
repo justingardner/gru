@@ -21,7 +21,7 @@ for i = 1:n
   for iCoherence = 1:length(coherence)
     for iDirection = 1:length(direction)
       [s msc] = motionEnergyModelMakeStimulus('screenName','offscreen','coherence',coherence(iCoherence),'direction',direction(iDirection));
-      m(iCohernece,iDirection,i) = motionEnergyModel(s,'myscreen',myscreen);
+      m(iCohernece,iDirection,i) = motionEnergyModel(s,'myscreen',msc);
     end
   end
 end
