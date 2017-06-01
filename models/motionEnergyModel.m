@@ -9,9 +9,9 @@
 %
 %             Read code comments for settable parameters of model
 %
-%             [s msc] = motionEnergyModelMakeStimulus('offscreen');
+%             [s msc] = motionEnergyModelMakeStimulus;
 %             r = motionEnergyModel(s,'myscreen',msc);
-function r = motionEnergyModel(s,varargin)
+function m = motionEnergyModel(s,varargin)
 
 % check arguments
 if nargin < 1
@@ -20,7 +20,7 @@ if nargin < 1
 end
 
 % parse args
-getArgs(varargin,{'stimulusSize=5','orientationPreference',0:45:359,'sfPreference',[1],'tfPreference',[1],'maxFilterTime',1,'deltaTime=0.1','deltaSpace=0.1','dispFigures',1,'myscreen',[]});
+getArgs(varargin,{'stimulusSize=5','orientationPreference',0:15:359,'sfPreference',0.5,'tfPreference',2.5,'maxFilterTime',1,'deltaTime=0.1','deltaSpace=0.1','dispFigures',1,'myscreen',[]});
 
 % get parameters from myscreen
 if ~isempty(myscreen)
@@ -61,8 +61,13 @@ m.sfPreference = sfPreference;
 % the temporal frequencies over which to compute filters in cycles/sec
 m.tfPreference = tfPreference;
 
-for iTF = 1:length(m.tfPreference)
-  for iSF = 1:length(m.sfPreference)
+% compute lengths
+m.nTF = length(m.tfPreference);
+m.nSF = length(m.sfPreference);
+m.nOrient = length(m.orientationPreference);
+
+for iTF = 1:m.nTF
+  for iSF = 1:m.nSF
     % compute necessary sigma and k for this sf/tf
     [m.sigma(iSF) m.k(iTF)] = getSigmaK(m,m.sfPreference(iSF),m.tfPreference(iTF));
 
@@ -78,36 +83,68 @@ end
 m.filters = normalizeLinearFilters(m.filters);
 
 % apply the filters to the stimulsu
-r = applyFilters(s,m);
+m.r = applyFilters(s,m);
 
 % display what we got
-dispFilterResponse(m,r);
+m = dispFilterResponse(m);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    dispFilterResponse    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function dispFilterResponse(m,r)
+function m = dispFilterResponse(m)
 
-for iTF = 1:length(m.tfPreference)
-  for iSF = 1:length(m.sfPreference)
-    for iOrient = 1:length(orientationPreference)
-      
+mlrSmartfig(sprintf('motionEnergyModelOutput'));
+for iTF = 1:m.nTF
+  for iSF = 1:m.nSF
+    subplot(m.nTF,m.nSF,(iTF-1)*m.nSF+iSF);
+    for iOrient = 1:m.nOrient
+      % compute mean response
+      m.meanResponse(iTF,iSF,iOrient) = mean(m.r(iTF,iSF,iOrient,:));
+      % compute to cartesian coordinates
+      m.x(iTF,iSF,iOrient) = cos(pi*m.orientationPreference(iOrient)/180)*m.meanResponse(iTF,iSF,iOrient);
+      m.y(iTF,iSF,iOrient) = sin(pi*m.orientationPreference(iOrient)/180)*m.meanResponse(iTF,iSF,iOrient);
     end
+    % get maximum
+    maxAxis = ceil(max([abs(m.x(iTF,iSF,:)) abs(m.y(iTF,iSF,:))]));
+    maxAxis = 3;
+    % plot
+    x = squeeze(m.x(iTF,iSF,:));
+    y = squeeze(m.y(iTF,iSF,:));
+    plot([x ;x(1)],[y; y(1)],'k-o');
+    xaxis(-maxAxis,maxAxis);
+    yaxis(-maxAxis,maxAxis);
+    vline(0);hline(0);
+    title(sprintf('TF: %0.2f SF: %0.2f',m.tfPreference(iTF),m.sfPreference(iSF)));
+    axis square
   end
 end
-keyboard
 
 %%%%%%%%%%%%%%%%%%%%%%
 %    applyFilters    %
 %%%%%%%%%%%%%%%%%%%%%%
 function r = applyFilters(s,m)
 
+% preallocate r
+slen = size(s,3);
+flen = size(m.filters(1,1,1).phase1,3);
+m.convlen = max([slen+flen-1,slen,flen]);
+r = nan(m.nTF,m.nSF,m.nOrient,m.convlen);
+
 disppercent(-inf,'(motionEnergyModel) Applying filters to stimulus');
-for iFilter = 1:length(m.filters(:))
-  phase1 = myTimeConv(s,m.filters(iFilter).phase1);
-  phase2 = myTimeConv(s,m.filters(iFilter).phase2);
-  r(iFilter,:) = sqrt(phase1.^2 + phase2.^2);
-  disppercent(iFilter/length(m.filters(:)));
+for iTF = 1:m.nTF
+  for iSF = 1:m.nSF
+    % get the filters (to reduce memory load in the parfor)
+    filters = m.filters(iTF,iSF,:);
+    % parfor for the convolution operation
+    parfor iOrient = 1:m.nOrient
+      phase1 = myTimeConv(s,filters(iOrient).phase1);
+      phase2 = myTimeConv(s,filters(iOrient).phase2);
+      rOrient(iOrient,:) = sqrt(phase1.^2 + phase2.^2);
+    end
+    % repackage after parfor loop
+    r(iTF,iSF,:,:) = rOrient;
+    disppercent(calcPercentDone(iTF,m.nTF,iSF,m.nSF));
+  end
 end
 disppercent(inf);
 
@@ -140,7 +177,7 @@ r = squeeze(sum(sum(r)));
 function filters = normalizeLinearFilters(filters)
 
 % loop over filters
-for iFilter = 1:length(filters(:))
+parfor iFilter = 1:length(filters(:))
   % normalize by sum of squares
   filters(iFilter).phase1 = filters(iFilter).phase1/sqrt(sum(filters(iFilter).phase1(:).^2));
   filters(iFilter).phase2 = filters(iFilter).phase2/sqrt(sum(filters(iFilter).phase2(:).^2));
@@ -399,13 +436,12 @@ disppercent(inf);
 
 % now compute the sums and differences.
 filter(1).dir = 0;
-filter(1).phase1 = rf21 + rf12;
-filter(1).phase2 =  rf11 - rf22; 
+filter(1).phase1 = rf12 - rf21;
+filter(1).phase2 = rf22 + rf11; 
 
 filter(2).dir = 180;
-filter(2).phase1 = rf12 - rf21;
-filter(2).phase2 = rf22 + rf11; 
-
+filter(2).phase1 = rf21 + rf12;
+filter(2).phase2 =  rf11 - rf22; 
 
 % make plot
 if m.dispFigures
@@ -442,13 +478,13 @@ if m.dispFigures
   dispXT(rf11)
 
   subplot(4,4,13)
-  dispXT(filter(1).phase1);
-  subplot(4,4,14)
-  dispXT(filter(1).phase2);
-  subplot(4,4,15)
   dispXT(filter(2).phase1);
-  subplot(4,4,16)
+  subplot(4,4,14)
   dispXT(filter(2).phase2);
+  subplot(4,4,15)
+  dispXT(filter(1).phase1);
+  subplot(4,4,16)
+  dispXT(filter(1).phase2);
 
 end
 
