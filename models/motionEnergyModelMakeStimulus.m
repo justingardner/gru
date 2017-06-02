@@ -85,7 +85,7 @@ if (task.thistrial.thisseg == 1)
   myscreen.stimulus{task.trialnum}.dir = task.thistrial.dir;
   myscreen.stimulus{task.trialnum}.n = task.blocknum;
   % precompute data arrray for computing stimulus
-  myscreen.stimulus{task.trialnum}.s = nan(mglGetParam('screenWidth'),mglGetParam('screenHeight'),myscreen.nFrames);
+  myscreen.stimulus{task.trialnum}.s = uint8(zeros(mglGetParam('screenWidth'),mglGetParam('screenHeight'),myscreen.nFrames));
   disp(sprintf('(motionEnergyModelMakeStimulus) Making stimulus with coherence: %0.2f direction: %0.1f',task.thistrial.coherence,task.thistrial.dir));
 else
   stimulus.dots.coherence = 0;
@@ -104,7 +104,7 @@ stimulus = updateDots(stimulus,myscreen);
 % grab the frame, and average over color channels
 if myscreen.iFrame <= myscreen.nFrames
   thisFrame = mglFrameGrab;
-  myscreen.stimulus{task.trialnum}.s(:,:,myscreen.iFrame) = mean(thisFrame,3);
+  myscreen.stimulus{task.trialnum}.s(:,:,myscreen.iFrame) = uint8(255*mean(thisFrame,3));
 
   % update frame counter
   myscreen.iFrame = myscreen.iFrame + 1;

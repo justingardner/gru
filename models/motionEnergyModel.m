@@ -20,7 +20,7 @@ if nargin < 1
 end
 
 % parse args
-getArgs(varargin,{'stimulusSize=5','orientationPreference',0:15:359,'sfPreference',0.5,'tfPreference',2.5,'maxFilterTime',1,'deltaTime=0.1','deltaSpace=0.1','dispFigures',1,'myscreen',[],'removeFilters=0'});
+getArgs(varargin,{'stimulusSize=5','orientationPreference',0:15:359,'sfPreference',0.5,'tfPreference',2.5,'maxFilterTime',1,'deltaTime=0.1','deltaSpace=0.1','dispFigures',1,'myscreen',[],'removeFilters=0','dispResponse=1','tileSpacing',2,'tileSpace',1});
 
 % get parameters from myscreen
 if ~isempty(myscreen)
@@ -82,11 +82,39 @@ end
 % normalize all filters to have the same total sum-of-squares
 m.filters = normalizeLinearFilters(m.filters);
 
-% apply the filters to the stimulsu
-m.r = applyFilters(s,m);
+% set up tiling
+m.tileSpace = tileSpace;
+m.tileSpacing = tileSpacing;
+% if empty
+if isempty(s)
+  disp(sprintf('(motionEnergyModel) Empty stimulus'));
+% if we were passed in a single stimulus
+elseif isnumeric(s)
+  stim{1}.s = s;
+  s = stim;
+end
 
-% display what we got
-m = dispFilterResponse(m);
+% clear figure
+mlrSmartfig(sprintf('motionEnergyModelOutput'),'reuse');clf;
+
+% now cycle over stimuli
+for iStim = 1:length(s)
+  % make the stimulus name (for display only)
+  stimName = 'stimulus';
+  fieldNames = {'coherence','dir','n'};
+  for iFieldName = 1:length(fieldNames)
+    if isfield(s{iStim},fieldNames{iFieldName})
+      stimName = sprintf('%s %s: %0.2f',stimName,fieldNames{iFieldName},s{iStim}.(fieldNames{iFieldName}));
+    end
+  end
+  dispHeader(sprintf('(motionEnergyModel) Applying filters to: %s',stimName));
+  
+  % apply the filters to the stimulus
+  m.r{iStim}.response = applyFilters(s{iStim}.s,m);
+
+  % display what we got
+  m.r{iStim} = dispFilterResponse(m.r{iStim},m,dispResponse);
+end
 
 % remove filters in return object if called for (to save space)
 if removeFilters
@@ -97,31 +125,31 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    dispFilterResponse    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function m = dispFilterResponse(m)
+function r = dispFilterResponse(r,m,dispResponse)
 
-mlrSmartfig(sprintf('motionEnergyModelOutput'));
+mlrSmartfig(sprintf('motionEnergyModelOutput'),'reuse');
 for iTF = 1:m.nTF
   for iSF = 1:m.nSF
     subplot(m.nTF,m.nSF,(iTF-1)*m.nSF+iSF);
     for iOrient = 1:m.nOrient
       % compute mean response
-      m.meanResponse(iTF,iSF,iOrient) = mean(m.r(iTF,iSF,iOrient,:));
+      r.meanResponse(iTF,iSF,iOrient) = mean(r.response(iTF,iSF,iOrient,:));
       % compute to cartesian coordinates
-      m.x(iTF,iSF,iOrient) = cos(pi*m.orientationPreference(iOrient)/180)*m.meanResponse(iTF,iSF,iOrient);
-      m.y(iTF,iSF,iOrient) = sin(pi*m.orientationPreference(iOrient)/180)*m.meanResponse(iTF,iSF,iOrient);
+      r.x(iTF,iSF,iOrient) = cos(pi*m.orientationPreference(iOrient)/180)*r.meanResponse(iTF,iSF,iOrient);
+      r.y(iTF,iSF,iOrient) = sin(pi*m.orientationPreference(iOrient)/180)*r.meanResponse(iTF,iSF,iOrient);
     end
     % get maximum
-    maxAxis = ceil(max([abs(m.x(iTF,iSF,:)) abs(m.y(iTF,iSF,:))]));
-    maxAxis = 3;
+    maxAxis = ceil(max([squeeze(abs(r.x(iTF,iSF,:))) ; squeeze(abs(r.y(iTF,iSF,:)))]));
     % plot
-    x = squeeze(m.x(iTF,iSF,:));
-    y = squeeze(m.y(iTF,iSF,:));
-    plot([x ;x(1)],[y; y(1)],'k-o');
+    x = squeeze(r.x(iTF,iSF,:));
+    y = squeeze(r.y(iTF,iSF,:));
+    plot([x;x(1)],[y; y(1)],'k-o');
     xaxis(-maxAxis,maxAxis);
     yaxis(-maxAxis,maxAxis);
     vline(0);hline(0);
     title(sprintf('TF: %0.2f SF: %0.2f',m.tfPreference(iTF),m.sfPreference(iSF)));
     axis square
+    drawnow
   end
 end
 
@@ -141,14 +169,41 @@ for iTF = 1:m.nTF
   for iSF = 1:m.nSF
     % get the filters (to reduce memory load in the parfor)
     filters = m.filters(iTF,iSF,:);
+    % if we have to shift to filers to tile
+    if m.tileSpace
+      % figure out how many tiles there should be - make sure we have
+      % an even number - tileSpacing controls the spacing of tiles in 
+      % units of standard deviation
+      tileSpacing = m.sigma(iTF,iSF)*m.tileSpacing*2;
+      m.nTiles(iTF,iSF) = 2*floor((m.stimulusSize/tileSpacing - 1)/2);
+    else
+      m.nTiles(iTF,iSF) = 0;
+      tileSpacing = 0;
+    end
+    xTile = -m.nTiles(iTF,iSF)/2:m.nTiles(iTF,iSF)/2;
+    yTile = -m.nTiles(iTF,iSF)/2:m.nTiles(iTF,iSF)/2;
+    % preallocate space
+    rOrient = zeros(m.nOrient,m.convlen);
     % parfor for the convolution operation
     parfor iOrient = 1:m.nOrient
-      phase1 = myTimeConv(s,filters(iOrient).phase1);
-      phase2 = myTimeConv(s,filters(iOrient).phase2);
-      rOrient(iOrient,:) = sqrt(phase1.^2 + phase2.^2);
+      for iXTile = 1:length(xTile)
+	for iYTile = 1:length(yTile)
+	  % compute how much to spatially shift filters
+	  shiftX = round(tileSpacing*xTile(iXTile)/m.deltaSpace);
+	  shiftY = round(tileSpacing*yTile(iYTile)/m.deltaSpace);
+	  % compute space shifted filter
+	  phase1 = circshift(filters(iOrient).phase1,[shiftX shiftY 0]);
+	  phase2 = circshift(filters(iOrient).phase2,[shiftX shiftY 0]);
+	  % now convolve with stimulus
+	  phase1 = myTimeConv(s,phase1);
+	  phase2 = myTimeConv(s,phase2);
+	  % and take the sum of squares
+	  rOrient(iOrient,:) = rOrient(iOrient,:)+sqrt(phase1.^2 + phase2.^2)';
+	end
+      end
     end
-    % repackage after parfor loop
-    r(iTF,iSF,:,:) = rOrient;
+    % repackage, dividing by number of filters
+    r(iTF,iSF,:,:) = rOrient/(length(xTile)*length(yTile));
     disppercent(calcPercentDone(iTF,m.nTF,iSF,m.nSF));
   end
 end
@@ -164,7 +219,11 @@ slen = size(s,3);
 flen = size(f,3);
 
 % preallocate r
-r = nan(size(s,1),size(s,2),max([slen+flen-1,slen,flen]));
+r = single(nan(size(s,1),size(s,2),max([slen+flen-1,slen,flen])));
+
+% convert to single
+s = single(s)/255;
+f = single(f);
 
 % do 1D convolution at each location in space (surely there is
 % a faster way to do this?

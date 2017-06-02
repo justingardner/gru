@@ -5,25 +5,36 @@
 %       date: 06/01/17
 %    purpose: 
 %
-function retval = motionEnergyModelTest()
+function retval = motionEnergyModelTest(varargin)
 
-% check arguments
-if ~any(nargin == [0])
-  help motionEnergyModelTest
-  return
+getArgs(varargin,{'recompute=0','dataDir=~/Google Drive/motionEnergy','coherence=[0:0.1:1]','direction',[0:45:359],'n=100'});
+
+% name of files
+filename = sprintf('co%idir%in%i',length(coherence),length(direction),n);
+stimulusFileName = fullfile(dataDir,'stimuli',filename);
+responseFileName = fullfile(dataDir,'response',filename);
+
+if ~recompute && isfile(setext(stimulusFileName,'mat'))
+  % load precomputed stimulus file
+  disp(sprintf('(motionEnergyModelTest) Loading stimulus: %s',stimulusFileName));
+  load(stimulusFileName);
+else
+  % compute stimulus file
+  [s msc] = motionEnergyModelMakeStimulus('screenName=offscreen','coherence',coherence,'direction',direction,'n',n);
+  save(stimulusFileName,'s','msc');
+  dispHeader(sprintf('(motionEnergyModelTest) Saving stimulus: %s',stimulusFileName));
 end
 
-
-%[s msc] = motionEnergyModelMakeStimulus('screenName=offscreen','coherence=[0:0.1:1]','direction=0:45:359','n=10');
-[s msc] = motionEnergyModelMakeStimulus('screenName=offscreen','coherence=1','direction=180','n=1');
-save '~/Google Drive/motionEnergy/motionEnergyStimulus' s msc
-
-
-for iStim = 1:length(s)
-  dispHeader(sprintf('(motionEnergyModelTest) Computing model responses for coherence: %0.2f and direction: %0.2f n=%i',s{iStim}.coherence,s{iStim}.dir,s{iStim}.n));
-  m(iStim) = motionEnergyModel(s{iStim}.s,'myscreen',msc,'dispFigures=0','removeFilters=1');
-  save '~/Google Drive/motionEnergy/motionEnergyResponse' m s msc
+if ~recompute && isfile(setext(responseFileName,'mat'))
+  disp(sprintf('(motionEnergyModelTest) Loading response: %s',responseFileName));
+  load(responseFileName);
+else
+  % compute response
+  m = motionEnergyModel(s,'myscreen',msc,'dispFigures=0','removeFilters=1');
+  % save
+  disp(sprintf('(motionEnergyModelTest) Saving response: %s',responseFileName));
+  save(responseFileName,'m');
 end
-
 
 keyboard
+
