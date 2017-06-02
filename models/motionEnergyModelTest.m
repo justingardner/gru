@@ -13,17 +13,17 @@ if ~any(nargin == [0])
   return
 end
 
-n = 100;
-coherence = 0:0.2:1;
-direction = [0 90 180 270];
 
-for i = 1:n
-  for iCoherence = 1:length(coherence)
-    for iDirection = 1:length(direction)
-      [s msc] = motionEnergyModelMakeStimulus('screenName','offscreen','coherence',coherence(iCoherence),'direction',direction(iDirection));
-      m(iCohernece,iDirection,i) = motionEnergyModel(s,'myscreen',msc);
-    end
-  end
+%[s msc] = motionEnergyModelMakeStimulus('screenName=offscreen','coherence=[0:0.1:1]','direction=0:45:359','n=10');
+[s msc] = motionEnergyModelMakeStimulus('screenName=offscreen','coherence=1','direction=180','n=1');
+save '~/Google Drive/motionEnergy/motionEnergyStimulus' s msc
+
+
+for iStim = 1:length(s)
+  dispHeader(sprintf('(motionEnergyModelTest) Computing model responses for coherence: %0.2f and direction: %0.2f n=%i',s{iStim}.coherence,s{iStim}.dir,s{iStim}.n));
+  m(iStim) = motionEnergyModel(s{iStim}.s,'myscreen',msc,'dispFigures=0');
+  save '~/Google Drive/motionEnergy/motionEnergyResponse' m s msc
 end
+
 
 keyboard
