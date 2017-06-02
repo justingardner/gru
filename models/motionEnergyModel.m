@@ -20,7 +20,7 @@ if nargin < 1
 end
 
 % parse args
-getArgs(varargin,{'stimulusSize=5','orientationPreference',0:15:359,'sfPreference',0.5,'tfPreference',2.5,'maxFilterTime',1,'deltaTime=0.1','deltaSpace=0.1','dispFigures',1,'myscreen',[]});
+getArgs(varargin,{'stimulusSize=5','orientationPreference',0:15:359,'sfPreference',0.5,'tfPreference',2.5,'maxFilterTime',1,'deltaTime=0.1','deltaSpace=0.1','dispFigures',1,'myscreen',[],'removeFilters=0'});
 
 % get parameters from myscreen
 if ~isempty(myscreen)
@@ -87,6 +87,12 @@ m.r = applyFilters(s,m);
 
 % display what we got
 m = dispFilterResponse(m);
+
+% remove filters in return object if called for (to save space)
+if removeFilters
+  m = rmfield(m,'baseFilter');
+  m = rmfield(m,'filters');
+end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    dispFilterResponse    %

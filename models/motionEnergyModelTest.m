@@ -21,7 +21,7 @@ save '~/Google Drive/motionEnergy/motionEnergyStimulus' s msc
 
 for iStim = 1:length(s)
   dispHeader(sprintf('(motionEnergyModelTest) Computing model responses for coherence: %0.2f and direction: %0.2f n=%i',s{iStim}.coherence,s{iStim}.dir,s{iStim}.n));
-  m(iStim) = motionEnergyModel(s{iStim}.s,'myscreen',msc,'dispFigures=0');
+  m(iStim) = motionEnergyModel(s{iStim}.s,'myscreen',msc,'dispFigures=0','removeFilters=1');
   save '~/Google Drive/motionEnergy/motionEnergyResponse' m s msc
 end
 
