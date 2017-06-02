@@ -162,7 +162,7 @@ function r = applyFilters(s,m)
 slen = size(s,3);
 flen = size(m.filters(1,1,1).phase1,3);
 m.convlen = max([slen+flen-1,slen,flen]);
-r = nan(m.nTF,m.nSF,m.nOrient,m.convlen);
+r = single(zeros(m.nTF,m.nSF,m.nOrient,m.convlen));
 
 disppercent(-inf,'(motionEnergyModel) Applying filters to stimulus');
 for iTF = 1:m.nTF
@@ -183,7 +183,7 @@ for iTF = 1:m.nTF
     xTile = -m.nTiles(iTF,iSF)/2:m.nTiles(iTF,iSF)/2;
     yTile = -m.nTiles(iTF,iSF)/2:m.nTiles(iTF,iSF)/2;
     % preallocate space
-    rOrient = zeros(m.nOrient,m.convlen);
+    rOrient = single(zeros(m.nOrient,m.convlen));
     % parfor for the convolution operation
     parfor iOrient = 1:m.nOrient
       for iXTile = 1:length(xTile)
