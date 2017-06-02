@@ -182,6 +182,7 @@ for iTF = 1:m.nTF
     end
     xTile = -m.nTiles(iTF,iSF)/2:m.nTiles(iTF,iSF)/2;
     yTile = -m.nTiles(iTF,iSF)/2:m.nTiles(iTF,iSF)/2;
+    tileSpacing = tileSpacing/m.deltaSpace;
     % preallocate space
     rOrient = single(zeros(m.nOrient,m.convlen));
     % parfor for the convolution operation
@@ -189,8 +190,8 @@ for iTF = 1:m.nTF
       for iXTile = 1:length(xTile)
 	for iYTile = 1:length(yTile)
 	  % compute how much to spatially shift filters
-	  shiftX = round(tileSpacing*xTile(iXTile)/m.deltaSpace);
-	  shiftY = round(tileSpacing*yTile(iYTile)/m.deltaSpace);
+	  shiftX = round(tileSpacing*xTile(iXTile));
+	  shiftY = round(tileSpacing*yTile(iYTile));
 	  % compute space shifted filter
 	  phase1 = circshift(filters(iOrient).phase1,[shiftX shiftY 0]);
 	  phase2 = circshift(filters(iOrient).phase2,[shiftX shiftY 0]);
