@@ -91,48 +91,73 @@ if tee
   if ieNotDefined('xTeelen'),xTeelen = mean(diff(y))/10;end
 end
 hold on
-% plot the y error bars
-if any(any(yLow ~= 0)) || any(any(yHigh ~= 0))
-  % if we are doing a polygon fill of the error window then 
-  if isequal(lower(yErrorBarType),'fill')
-    fill([x fliplr(x)],[y-yLow fliplr(y+yHigh)],Color,'FaceAlpha',fillAlpha,'LineStyle','none');
-  % draw regular error bars
-  else
-    for i = 1:length(x)
-      switch yErrorBarType
-       case {'both','b'}
-	plot([x(i) x(i)],[y(i)-yLow(i) y(i)+yHigh(i)],'-','Color',Color,'LineWidth',LineWidth);
-       case {'lower','lo','l','bottom','bot'}
-	plot([x(i) x(i)],[y(i)-yLow(i) y(i)],'-','Color',Color,'LineWidth',LineWidth);
-       case {'higher','upper','up','top','hi'}
-	plot([x(i) x(i)],[y(i) y(i)+yHigh(i)],'-','Color',Color,'LineWidth',LineWidth);
-       case {'logy'}
-	if (y(i)-yLow(i)) > 0
+
+% polar plot
+if ~ieNotDefined('polarPlot') && polarPlot
+  % x and y are angle and magnitude in degrees, so convert
+  ang = pi*x(:)/180;mag = y(:);magMin = yLow(:);magMax = yHigh(:);
+  % convert to radians
+  x = cos(ang).*mag;
+  y = sin(ang).*mag;
+  % convert to x erorr 
+  xLow = cos(ang).*(mag-magMin);
+  xHigh = cos(ang).*(mag+magMax);
+  yLow = sin(ang).*(mag-magMin);
+  yHigh = sin(ang).*(mag+magMax);
+  
+  % plot the magnitude error bars
+  for iError = 1:length(x)
+    plot([xLow(iError) xHigh(iError)],[yLow(iError) yHigh(iError)],'-','Color',Color','LineWidth',LineWidth);
+  end
+  % wrap last point
+  x(end+1) = x(1);
+  y(end+1) = y(1);
+% cartesian plot
+else  
+  % plot the y error bars
+  if any(any(yLow ~= 0)) || any(any(yHigh ~= 0))
+    % if we are doing a polygon fill of the error window then 
+    if isequal(lower(yErrorBarType),'fill')
+      x = x(:);y = y(:);yLow = yLow(:);yHigh = yHigh(:);
+      fill([x;flipud(x)],[y-yLow;flipud(y+yHigh)],Color,'FaceAlpha',fillAlpha,'LineStyle','none');
+      % draw regular error bars
+    else
+      for i = 1:length(x)
+	switch yErrorBarType
+	 case {'both','b'}
 	  plot([x(i) x(i)],[y(i)-yLow(i) y(i)+yHigh(i)],'-','Color',Color,'LineWidth',LineWidth);
-	else
-	  disp(sprintf('(myerrorbar) Dropping lower errorbar on %i which goes to %f',i,y(i)-yLow(i)));
+	 case {'lower','lo','l','bottom','bot'}
+	  plot([x(i) x(i)],[y(i)-yLow(i) y(i)],'-','Color',Color,'LineWidth',LineWidth);
+	 case {'higher','upper','up','top','hi'}
 	  plot([x(i) x(i)],[y(i) y(i)+yHigh(i)],'-','Color',Color,'LineWidth',LineWidth);
-	end	 
-       otherwise
-	plot([x(i) x(i)],[y(i)-yLow(i) y(i)+yHigh(i)],'-','Color',Color,'LineWidth',LineWidth);
-      end      
-      % draw the tees if necessary
-      if tee
-	plot([x(i)-yTeelen/2 x(i)+yTeelen/2],[y(i)-yLow(i) y(i)-yLow(i)],'-','Color',Color,'LineWidth',LineWidth);
-	plot([x(i)-yTeelen/2 x(i)+yTeelen/2],[y(i)+yHigh(i) y(i)+yHigh(i)],'-','Color',Color,'LineWidth',LineWidth);
+	 case {'logy'}
+	  if (y(i)-yLow(i)) > 0
+	    plot([x(i) x(i)],[y(i)-yLow(i) y(i)+yHigh(i)],'-','Color',Color,'LineWidth',LineWidth);
+	  else
+	    disp(sprintf('(myerrorbar) Dropping lower errorbar on %i which goes to %f',i,y(i)-yLow(i)));
+	    plot([x(i) x(i)],[y(i) y(i)+yHigh(i)],'-','Color',Color,'LineWidth',LineWidth);
+	  end	 
+	 otherwise
+	  plot([x(i) x(i)],[y(i)-yLow(i) y(i)+yHigh(i)],'-','Color',Color,'LineWidth',LineWidth);
+	end      
+	% draw the tees if necessary
+	if tee
+	  plot([x(i)-yTeelen/2 x(i)+yTeelen/2],[y(i)-yLow(i) y(i)-yLow(i)],'-','Color',Color,'LineWidth',LineWidth);
+	  plot([x(i)-yTeelen/2 x(i)+yTeelen/2],[y(i)+yHigh(i) y(i)+yHigh(i)],'-','Color',Color,'LineWidth',LineWidth);
+	end
       end
     end
   end
-end
 
-% plot the x error bars
-if any(any(xLow ~= 0)) || any(any(xHigh ~= 0))
-  for i = 1:length(x)
-    plot([x(i)-xLow(i) x(i)+xHigh(i)],[y(i) y(i)],'-','Color',Color,'LineWidth',LineWidth);
-    % draw the tees if necessary
-    if tee
-      plot([x(i)-xLow(i) x(i)-xLow(i)],[y(i)-xTeelen/2 y(i)+xTeelen/2],'-','Color',Color,'LineWidth',LineWidth);
-      plot([x(i)+xHigh(i) x(i)+xHigh(i)],[y(i)-xTeelen/2 y(i)+xTeelen/2],'-','Color',Color,'LineWidth',LineWidth);
+  % plot the x error bars
+  if any(any(xLow ~= 0)) || any(any(xHigh ~= 0))
+    for i = 1:length(x)
+      plot([x(i)-xLow(i) x(i)+xHigh(i)],[y(i) y(i)],'-','Color',Color,'LineWidth',LineWidth);
+      % draw the tees if necessary
+      if tee
+	plot([x(i)-xLow(i) x(i)-xLow(i)],[y(i)-xTeelen/2 y(i)+xTeelen/2],'-','Color',Color,'LineWidth',LineWidth);
+	plot([x(i)+xHigh(i) x(i)+xHigh(i)],[y(i)-xTeelen/2 y(i)+xTeelen/2],'-','Color',Color,'LineWidth',LineWidth);
+      end
     end
   end
 end
