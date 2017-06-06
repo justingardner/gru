@@ -7,7 +7,7 @@
 %
 function retval = motionEnergyModelTest(varargin)
 
-getArgs(varargin,{'recompute=0','dataDir=~/Google Drive/motionEnergy','coherence=[0:0.1:1]','direction',[0:45:359],'n=100'});
+getArgs(varargin,{'recompute=0','dataDir=~/Google Drive/motionEnergy','coherence=[0:0.1:1]','direction',0,'n=100'});
 
 % name of files
 filename = sprintf('co%idir%in%i',length(coherence),length(direction),n);
@@ -36,5 +36,33 @@ else
   save(responseFileName,'m');
 end
 
+% cycle over direction and coherence, collecting simulations
+meanResponse = [];stdResponse = [];
+mlrSmartfig('motionEnergyModelTest');
+for iDirection = 1:length(direction)
+  for iCoherence = 1:length(coherence)
+    % reset tresponse
+    r = [];iResponse = 1;
+    % find all s that match the current direction and coherence
+    for iStimulus = 1:length(s)
+      if isequal(s{iStimulus}.dir,direction(iDirection)) && isequal(s{iStimulus}.coherence,coherence(iCoherence));
+	r(iResponse,:,:,:) = m.r{iStimulus}.meanResponse;
+	iResponse = iResponse+1;
+      end
+    end
+    % compute mean and ste
+    for iTF = 1:m.nTF
+      for iSF = 1:m.nSF
+	% compute mean and standard error
+	meanResponse = squeeze(mean(r(:,iTF,iSF,:),1));
+	stdResponse = squeeze(std(r(:,iTF,iSF,:),1));
+	myerrorbar(m.orientationPreference,meanResponse,'yError',stdResponse,'polarPlot=1','Color',getSmoothColor(length(coherence)-iCoherence+1,length(coherence)));
+	hold on
+      end
+    end
+  end
+end
+
+  
 keyboard
 
