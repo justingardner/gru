@@ -10,7 +10,7 @@
 %             Read code comments for settable parameters of model
 %
 %             [s msc] = motionEnergyModelMakeStimulus;
-%             r = motionEnergyModel(s,'myscreen',msc);
+%             r = motionEnergyModelFast(s,'myscreen',msc);
 function m = motionEnergyModel(s,varargin)
 
 % check arguments

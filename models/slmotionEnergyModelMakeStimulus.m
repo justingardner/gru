@@ -1,8 +1,9 @@
-% testExperiment.m
+% slmotionEnergyModelMakeStimulus.m
 %
 %        $Id$
-%      usage: testExperiment
+%      usage: slmotionEnergyModelMakeStimulus
 %         by: justin gardner
+%             modified by steeve laquitaine
 %       date: 09/07/06
 %  copyright: (c) 2006 Justin Gardner (GPL see mgl/COPYING)
 %    purpose: Generates a stimulus for the motionEnergyMode, make a screen using mglEditScreenParams
@@ -10,21 +11,22 @@
 %             setting the distance to 57 cm and the dimensions to 10 x 10 (will give you approximately 10 x 10 deg)
 %             If you set the screenName to be 'offscreen', then the following calls will use those screen settings
 %
-%             [s msc] = motionEnergyModelMakeStimulus('screenName=offscreen');
+%             [s msc] = slmotionEnergyModelMakeStimulus('screenName=offscreen');
 %
 %             % display stimulus
 %             mlrVol(s{1}.s);
 %
 %             % compute motionEnergy filter response
-%             motionEnergyModel(s{1}.s,'myscreen',msc);
+%             slmotionEnergyModelMakeStimulus(s{1}.s,'myscreen',msc);
 %
 %             % run for multiple stimulus types
-%             [s msc] = motionEnergyModelMakeStimulus('screenName=offscreen','coherence=[0:0.5:1]','direction=0:180:359','n=2');
+%             [s msc] = slmotionEnergyModelMakeStimulus('screenName=offscreen','coherence=[0:0.5:1]','direction=0:180:359','n=2');
 %
-function [stimulus myscreen] = motionEnergyModelMakeStimulus(varargin)
+function [stimulus myscreen] = slmotionEnergyModelMakeStimulus(varargin)
 
 % parse args
-getArgs(varargin,{'screenName',[],'coherence=1','direction=0','speed=2.8','stimulusLength=1','n=1'});
+getArgs(varargin,{'screenName',[],'coherence=1','direction=0','speed=2.8',...
+    'density=16.7','stimulusLength=1','n=1'});
 
 % use off screen context - which will display to a memory
 % buffer so that we can just mglFrameGrab to get the images
@@ -51,6 +53,7 @@ myscreen.iFrame = 1;
 % init the stimulus
 global stimulus;
 stimulus.dots.speed = speed;
+stimulus.dots.density = density;
 myscreen = initStimulus('stimulus',myscreen);
 stimulus = initDots(stimulus,myscreen);
 
@@ -117,12 +120,13 @@ function stimulus = initDots(stimulus,myscreen)
 
 % convert the passed in parameters to real units
 if ~isfield(stimulus,'dots') || ~isfield(stimulus.dots,'rmax'), stimulus.dots.rmax = myscreen.imageWidth;,end
+% if ~isfield(stimulus,'dots') || ~isfield(stimulus.dots,'rmax'), stimulus.dots.rmax = 2.5;,end
 if ~isfield(stimulus.dots,'xcenter'), stimulus.dots.xcenter = 0;,end
 if ~isfield(stimulus.dots,'ycenter'), stimulus.dots.ycenter = 0;,end
 if ~isfield(stimulus.dots,'dotsize'), stimulus.dots.dotsize = 3;,end
-if ~isfield(stimulus.dots,'density'), stimulus.dots.density = 3;,end
+if ~isfield(stimulus.dots,'density'), stimulus.dots.density = 16.7;,end
 if ~isfield(stimulus.dots,'coherence'), stimulus.dots.coherence = 1;,end
-if ~isfield(stimulus.dots,'speed'), stimulus.dots.speed = 5;,end
+if ~isfield(stimulus.dots,'speed'), stimulus.dots.speed = 2.8;,end
 if ~isfield(stimulus.dots,'dir'), stimulus.dots.dir = 0;,end
 
 % actually a square patch of dots that get stenciled

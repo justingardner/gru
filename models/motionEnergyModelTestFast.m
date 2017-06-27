@@ -1,13 +1,13 @@
-% motionEnergyModelTest.m
+% motionEnergyModelTestFast.m
 %
 %      usage: motionEnergyModelTest()
 %         by: justin gardner
 %       date: 06/01/17
 %    purpose: 
 %
-function retval = motionEnergyModelTest(varargin)
+function retval = motionEnergyModelTestFast(varargin)
 
-getArgs(varargin,{'recompute=0','dataDir=~/Desktop/motionEnergy','coherence=[0.06 0.12 0.24]','direction',5,'n=1'});
+getArgs(varargin,{'recompute=0','dataDir=~/Desktop/motionEnergy','coherence=[]','direction',5,'n=1'});
 
 % name of files
 filename = sprintf('co%idir%in%i',length(coherence),length(direction),n);
@@ -20,7 +20,8 @@ if ~recompute && isfile(setext(stimulusFileName,'mat'))
   load(stimulusFileName);
 else
   % compute stimulus file
-  [s msc] = motionEnergyModelMakeStimulus('screenName=offscreen','coherence',coherence,'direction',direction,'n',n);
+  [s msc] = slmotionEnergyModelMakeStimulus('screenName=offscreen','coherence',coherence,'direction',direction,'n',n,...
+      'speed=2.8','density=16.7');
   save(stimulusFileName,'s','msc');
   dispHeader(sprintf('(motionEnergyModelTest) Saving stimulus: %s',stimulusFileName));
 end
@@ -30,7 +31,7 @@ if ~recompute && isfile(setext(responseFileName,'mat'))
   load(responseFileName);
 else
   % compute response
-  m = motionEnergyModel(s,'myscreen',msc,'dispFigures=0','removeFilters=1');
+  m = motionEnergyModelFast(s,'myscreen',msc,'dispFigures=0','removeFilters=1');
   % save
   disp(sprintf('(motionEnergyModelTest) Saving response: %s',responseFileName));
   save(responseFileName,'m');
