@@ -14,7 +14,7 @@
 %
 %             Read code comments for settable parameters of model
 %
-%             [s msc] = motionEnergyModelMakeStimulus;
+%             [s msc] = slmotionEnergyModelMakeStimulus;
 %             r = motionEnergyModel(s,'myscreen',msc);
 function m = motionEnergyModelFast(s,varargin)
 
@@ -74,10 +74,12 @@ m.nOrient = length(m.orientationPreference);
 for iTF = 1:m.nTF
   for iSF = 1:m.nSF
     % compute necessary sigma and k for this sf/tf
-    [m.sigma(iSF) m.k(iTF)] = getSigmaK(m,m.sfPreference(iSF),m.tfPreference(iTF));
+    %[m.sigma(iSF) m.k(iTF)] = getSigmaK(m,m.sfPreference(iSF),m.tfPreference(iTF));
+    [m.sigma(iTF,iSF) m.k(iTF,iSF)] = getSigmaK(m,m.sfPreference(iSF),m.tfPreference(iTF));
 
     % compute linear receptive
-    m.baseFilter = computeSpatialTemporalFilter(m,m.sigma(iSF),m.k(iTF));
+    %m.baseFilter = computeSpatialTemporalFilter(m,m.sigma(iSF),m.k(iTF);
+    m.baseFilter = computeSpatialTemporalFilter(m,m.sigma(iTF,iSF),m.k(iTF,iSF));
 
     % rotate to get different orientations
     m.filters(iTF,iSF,:) = getDifferentOrientations(m,m.baseFilter(1),m.orientationPreference);
