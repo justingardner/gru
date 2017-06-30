@@ -1,7 +1,7 @@
-% motionEnergyModelFast.m
+% motionEnergyModelFastNoFig.m
 %
 %        $Id:$ 
-%      usage: r = motionEnergyModelFast(s)
+%      usage: r = motionEnergyModelFastNoFig(s)
 %         by: justin gardner
 %             modified by Steeve Laquitaine : convolution can be replaced 
 %             much faster fast Fourier tranform (e.g., for 100x100 pix; 
@@ -15,8 +15,9 @@
 %             Read code comments for settable parameters of model
 %
 %             [s msc] = slmotionEnergyModelMakeStimulus;
-%             r = motionEnergyModel(s,'myscreen',msc);
-function m = motionEnergyModelFast(s,varargin)
+%             r = motionEnergyModelFastNoFig(s,'myscreen',msc);
+
+function m = motionEnergyModelFastNoFig(s,varargin)
 
 % check arguments
 if nargin < 1
@@ -102,7 +103,7 @@ elseif isnumeric(s)
 end
 
 % clear figure
-mlrSmartfig(sprintf('motionEnergyModelOutput'),'reuse');clf;
+%mlrSmartfig(sprintf('motionEnergyModelOutput'),'reuse');clf;
 
 % now cycle over stimuli
 for iStim = 1:length(s)
@@ -134,10 +135,10 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function r = dispFilterResponse(r,m,dispResponse)
 
-mlrSmartfig(sprintf('motionEnergyModelOutput'),'reuse');
+%mlrSmartfig(sprintf('motionEnergyModelOutput'),'reuse');
 for iTF = 1:m.nTF
   for iSF = 1:m.nSF
-    subplot(m.nTF,m.nSF,(iTF-1)*m.nSF+iSF);
+    %subplot(m.nTF,m.nSF,(iTF-1)*m.nSF+iSF);
     for iOrient = 1:m.nOrient
       % compute mean response
       r.meanResponse(iTF,iSF,iOrient) = mean(r.response(iTF,iSF,iOrient,:));
@@ -146,17 +147,17 @@ for iTF = 1:m.nTF
       r.y(iTF,iSF,iOrient) = sin(pi*m.orientationPreference(iOrient)/180)*r.meanResponse(iTF,iSF,iOrient);
     end
     % get maximum
-    maxAxis = ceil(max([squeeze(abs(r.x(iTF,iSF,:))) ; squeeze(abs(r.y(iTF,iSF,:)))]));
+    %maxAxis = ceil(max([squeeze(abs(r.x(iTF,iSF,:))) ; squeeze(abs(r.y(iTF,iSF,:)))]));
     % plot
-    x = squeeze(r.x(iTF,iSF,:));
-    y = squeeze(r.y(iTF,iSF,:));
-    plot([x;x(1)],[y; y(1)],'k-o');
-    xaxis(-maxAxis,maxAxis);
-    yaxis(-maxAxis,maxAxis);
-    vline(0);hline(0);
-    title(sprintf('TF: %0.2f SF: %0.2f',m.tfPreference(iTF),m.sfPreference(iSF)));
-    axis square
-    drawnow
+    %x = squeeze(r.x(iTF,iSF,:));
+    %y = squeeze(r.y(iTF,iSF,:));
+    %plot([x;x(1)],[y; y(1)],'k-o');
+    %xaxis(-maxAxis,maxAxis);
+    %yaxis(-maxAxis,maxAxis);
+    %vline(0);hline(0);
+    %title(sprintf('TF: %0.2f SF: %0.2f',m.tfPreference(iTF),m.sfPreference(iSF)));
+    %axis square
+    %drawnow
   end
 end
 
@@ -297,24 +298,24 @@ end
 disppercent(inf);
 
 % now display 
-if m.dispFigures
+%if m.dispFigures
   % init figure
-  mlrSmartfig('moitonEnergyModel_orientations');
+  %mlrSmartfig('moitonEnergyModel_orientations');
   
   % compute maxFilterTimePoint
-  for iTime = 1:size(baseFilter.phase1,3)
-    timeEnergy(iTime) = sqrt(sum(sum(baseFilter.phase1(:,:,iTime).^2)));
-  end
-  [~,maxFilterTimePoint] = max(timeEnergy);
-  for iOrient = 1:nOrient
-    subplot(nOrient,3,((iOrient-1)*3)+1);
-    dispXY(filters(iOrient).phase1,maxFilterTimePoint);axis off
-    subplot(nOrient,3,((iOrient-1)*3)+2);
-    dispXT(filters(iOrient).phase1);axis off
-    subplot(nOrient,3,((iOrient-1)*3)+3);
-    dispYT(filters(iOrient).phase1);axis off
-  end
-end
+  %for iTime = 1:size(baseFilter.phase1,3)
+  %  timeEnergy(iTime) = sqrt(sum(sum(baseFilter.phase1(:,:,iTime).^2)));
+  %end
+  %[~,maxFilterTimePoint] = max(timeEnergy);
+  %for iOrient = 1:nOrient
+    %subplot(nOrient,3,((iOrient-1)*3)+1);
+    %dispXY(filters(iOrient).phase1,maxFilterTimePoint);axis off
+    %subplot(nOrient,3,((iOrient-1)*3)+2);
+    %dispXT(filters(iOrient).phase1);axis off
+    %subplot(nOrient,3,((iOrient-1)*3)+3);
+    %dispYT(filters(iOrient).phase1);axis off
+  %end
+%end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -363,44 +364,44 @@ if sfMin(sigma,m,sf)>0.01
 end
 
 
-if m.dispFigures
+%if m.dispFigures
   % compute temporal frequency response and peak TF (see tfMin)
-  t = 0:m.deltaTime:m.maxFilterTime;
-  temporalResponse = temporalImpulseResponse(t,k,3);
-  temporalResponseFFT = abs(fft(temporalResponse));
-  [~,maxTFBin] = max(temporalResponseFFT);
-  TFpeak = (maxTFBin-1)/(m.maxFilterTime+m.deltaTime);
+  %t = 0:m.deltaTime:m.maxFilterTime;
+  %temporalResponse = temporalImpulseResponse(t,k,3);
+  %temporalResponseFFT = abs(fft(temporalResponse));
+  %[~,maxTFBin] = max(temporalResponseFFT);
+  %TFpeak = (maxTFBin-1)/(m.maxFilterTime+m.deltaTime);
   
   % compute spatial frequency response and peak TF (see sfMin)
-  x = [0 1];
-  y = -m.stimulusSize/2:m.deltaSpace:m.stimulusSize/2;
-  [xGrid,yGrid] = meshgrid(x,y);
-  [sf1 sf2] = spatialProfile(xGrid,yGrid,sigma);
-  sf1FFT = abs(fft(sf1(:,1)));
-  [~,maxSFBin] = max(sf1FFT);
-  SFpeak = (maxSFBin-1)/(m.stimulusSize+m.deltaSpace);
+  %x = [0 1];
+  %y = -m.stimulusSize/2:m.deltaSpace:m.stimulusSize/2;
+  %[xGrid,yGrid] = meshgrid(x,y);
+  %[sf1 sf2] = spatialProfile(xGrid,yGrid,sigma);
+  %sf1FFT = abs(fft(sf1(:,1)));
+  %[~,maxSFBin] = max(sf1FFT);
+  %SFpeak = (maxSFBin-1)/(m.stimulusSize+m.deltaSpace);
 
   % plot temporal frequency response / fft
-  mlrSmartfig('getSigmaK','reuse');clf;
-  subplot(2,2,1);
-  plot(t,temporalResponse);
-  subplot(2,2,2);
-  n = maxTFBin*4;
-  plot((0:n-1)/(m.maxFilterTime+m.deltaTime),temporalResponseFFT(1:n));
-  xlabel('Temporal frequency (cycles / sec)');
-  vline(TFpeak);
-  title(sprintf('FFT: max = %0.2f c/sec',TFpeak));
+  %mlrSmartfig('getSigmaK','reuse');clf;
+  %subplot(2,2,1);
+  %plot(t,temporalResponse);
+  %subplot(2,2,2);
+  %n = maxTFBin*4;
+  %plot((0:n-1)/(m.maxFilterTime+m.deltaTime),temporalResponseFFT(1:n));
+  %xlabel('Temporal frequency (cycles / sec)');
+  %vline(TFpeak);
+  %title(sprintf('FFT: max = %0.2f c/sec',TFpeak));
 
   % plot spatial frequency response / fft
-  subplot(2,2,3);
-  plot(y,sf1(:,1));
-  subplot(2,2,4);
-  n = maxSFBin*4;
-  plot((0:n-1)/(m.stimulusSize+m.deltaSpace),sf1FFT(1:n));
-  vline(SFpeak);
-  title(sprintf('FFT: max = %0.2f c/deg',SFpeak));
-  drawnow
-end
+  %subplot(2,2,3);
+  %plot(y,sf1(:,1));
+  %subplot(2,2,4);
+  %n = maxSFBin*4;
+  %plot((0:n-1)/(m.stimulusSize+m.deltaSpace),sf1FFT(1:n));
+  %vline(SFpeak);
+  %title(sprintf('FFT: max = %0.2f c/deg',SFpeak));
+  %drawnow
+%end
 
 %%%%%%%%%%%%%%%
 %    tfMin    %
@@ -523,78 +524,78 @@ filter(2).phase1 = rf21 + rf12;
 filter(2).phase2 =  rf11 - rf22; 
 
 % make plot
-if m.dispFigures
-  % init figure
-  mlrSmartfig('Adelson_Bergen_1','reuse');clf;
-  % get middle point of spatial rf
-  midPoint = round(size(sf1,1)/2);
-  % display slice of spatial RF for both filters
-  subplot(4,4,1:4);
-  plot(x,sf1(:,midPoint));
-  hold on
-  plot(x,sf2(:,midPoint));
-  hline(0);
-  ylabel('Filter Response');
-  xlabel('Space (deg)');
-  title('Spatial slice of impluse response');
-  % display temporal RF for both filters
-  subplot(4,4,5:8);
-  plot(t,tf1);
-  hold on
-  plot(t,tf2);
-  hline(0);
-  xlabel('Time (sec)');
-  ylabel('Filter Response');
-  title('Temporal response');
-  % display slices of images
-  subplot(4,4,9)
-  dispXT(rf21);
-  subplot(4,4,10)
-  dispXT(rf22)
-  subplot(4,4,11)
-  dispXT(rf12);
-  subplot(4,4,12)
-  dispXT(rf11)
-
-  subplot(4,4,13)
-  dispXT(filter(2).phase1);
-  subplot(4,4,14)
-  dispXT(filter(2).phase2);
-  subplot(4,4,15)
-  dispXT(filter(1).phase1);
-  subplot(4,4,16)
-  dispXT(filter(1).phase2);
-
-end
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%    display image with correct orientation    %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function dispXT(im)
-
-midpoint = round(size(im,2)/1);
-imagesc(fliplr(squeeze(im(:,midpoint,:))'));
-colormap(gray);
-axis square;
+% if m.dispFigures
+%   % init figure
+%   mlrSmartfig('Adelson_Bergen_1','reuse');clf;
+%   % get middle point of spatial rf
+%   midPoint = round(size(sf1,1)/2);
+%   % display slice of spatial RF for both filters
+%   subplot(4,4,1:4);
+%   plot(x,sf1(:,midPoint));
+%   hold on
+%   plot(x,sf2(:,midPoint));
+%   hline(0);
+%   ylabel('Filter Response');
+%   xlabel('Space (deg)');
+%   title('Spatial slice of impluse response');
+%   % display temporal RF for both filters
+%   subplot(4,4,5:8);
+%   plot(t,tf1);
+%   hold on
+%   plot(t,tf2);
+%   hline(0);
+%   xlabel('Time (sec)');
+%   ylabel('Filter Response');
+%   title('Temporal response');
+%   % display slices of images
+%   subplot(4,4,9)
+%   dispXT(rf21);
+%   subplot(4,4,10)
+%   dispXT(rf22)
+%   subplot(4,4,11)
+%   dispXT(rf12);
+%   subplot(4,4,12)
+%   dispXT(rf11)
+% 
+%   subplot(4,4,13)
+%   dispXT(filter(2).phase1);
+%   subplot(4,4,14)
+%   dispXT(filter(2).phase2);
+%   subplot(4,4,15)
+%   dispXT(filter(1).phase1);
+%   subplot(4,4,16)
+%   dispXT(filter(1).phase2);
+% 
+% end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    display image with correct orientation    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function dispYT(im)
-
-midpoint = round(size(im,1)/1);
-imagesc(fliplr(squeeze(im(midpoint,:,:))'));
-colormap(gray);
-axis square;
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%    display image with correct orientation    %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function dispXY(im,t)
-
-imagesc(fliplr(squeeze(im(:,:,t))'));
-colormap(gray);
-axis square;
+% function dispXT(im)
+% 
+% midpoint = round(size(im,2)/1);
+% imagesc(fliplr(squeeze(im(:,midpoint,:))'));
+% colormap(gray);
+% axis square;
+% 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %    display image with correct orientation    %
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% function dispYT(im)
+% 
+% midpoint = round(size(im,1)/1);
+% imagesc(fliplr(squeeze(im(midpoint,:,:))'));
+% colormap(gray);
+% axis square;
+% 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %    display image with correct orientation    %
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% function dispXY(im,t)
+% 
+% imagesc(fliplr(squeeze(im(:,:,t))'));
+% colormap(gray);
+% axis square;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    getParametersFromMyscreen    %
