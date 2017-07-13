@@ -50,7 +50,7 @@ function retval = drawPublishAxis(varargin)
 % Get general arguments
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % get arguments
-getArgs(varargin,{'whichAxis=both','tickDir=out','lineWidth=1','titleStr=[]','labelFontSize=12',...
+getArgs(varargin,{'whichAxis=both','tickDir=out','lineWidth=1','titleStr=[]','labelFontSize=7',...
 		  'xMin=[]','xMax=[]','xAxisLoc=[]','xAxisYpos=[]','xAxisMargin=1/64',...
 		  'xAxisOffset=-1/32','xScale=[]','xAxisMajorTickLen=-1/32','xAxisMinorTickLen=-1/48',...
 		  'xTick=[]','xTickLabel=[]','xTickLabelHide',false,'xAxisMin=[]','xAxisMax=[]','xAxisMinMaxSetByTicks=1',...
@@ -491,7 +491,7 @@ if any(strcmp(whichAxis,{'both','horizontal'}))
   if ~xTickLabelHide
     % tick labels
     for iLabel = 1:length(xTickLabel)
-      dpa.xAxis.tickLabel(iLabel) = text(xTick(iLabel),xAxisTickYpos,xTickLabel{iLabel},'VerticalAlignment',xTextAlignment,'HorizontalAlignment','center');
+      dpa.xAxis.tickLabel(iLabel) = text(xTick(iLabel),xAxisTickYpos,xTickLabel{iLabel},'VerticalAlignment',xTextAlignment,'HorizontalAlignment','center','Fontsize',labelFontSize,'FontName',fontName);
     end
   end
 
@@ -530,7 +530,7 @@ if any(strcmp(whichAxis,{'both','vertical'}))
   
   % tick labels
   for iLabel = 1:length(yTickLabel)
-    dpa.yAxis.tickLabel(iLabel) = text(yAxisTickXpos,yTick(iLabel),yTickLabel{iLabel},'VerticalAlignment','middle','HorizontalAlignment',yTextAlignment);
+    dpa.yAxis.tickLabel(iLabel) = text(yAxisTickXpos,yTick(iLabel),yTickLabel{iLabel},'VerticalAlignment','middle','HorizontalAlignment',yTextAlignment,'FontSize',labelFontSize,'FontName',fontName);
   end
   
 
