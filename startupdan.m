@@ -7,3 +7,6 @@ for i = 1:length(pathNames)
     addpath(genpath_exclude(pathNames{i},{'.git','.svn'}));
   end
 end
+
+mglSetParam('sunetID','dbirman');
+mrSetPref('maxBlockSize',4000000000);
