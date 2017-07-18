@@ -33,6 +33,10 @@ if ~any(strcmp('gru',selectedPlugins))
   selectedPlugins{end+1} = 'gru';
   addedPlugin = true;
 end
+if ~any(strcmp('pRFv2', selectedPlugins))
+  selectedPlugins{end+1} = 'pRFv2';
+  addedPlugin=true;
+end
 if addedPlugin
   mrSetPref('selectedPlugins',selectedPlugins);
 end

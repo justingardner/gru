@@ -6,7 +6,7 @@
 %       date: 11/24/10
 %    purpose: Plugin function for pRF directory.
 %
-function retval = pRFPlugin(action,v)
+function retval = pRFv2Plugin(action,v)
 
 % check arguments
 if ~any(nargin == [1 2])
@@ -24,7 +24,7 @@ switch action
     
     % this installs a new menu item called 'Select Plugins' under /Edit/ROI with the
     % separator turned on above it. It sets the callback to selectPlugins defined below.
-    mlrAdjustGUI(v,'add','menu','pRF Analysis','/Analysis/Correlation Analysis','Callback',@callpRF,'Separator','off');
+    mlrAdjustGUI(v,'add','menu','pRF Analysis (v2)','/Analysis/Correlation Analysis','Callback',@callpRF,'Separator','off');
 
     % Install default interrogators
     mlrAdjustGUI(v,'add','interrogator',{'pRFFit'});
