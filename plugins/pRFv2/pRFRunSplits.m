@@ -21,9 +21,10 @@ if exist('Splits/Analysis')~=7
   mkdir('Splits/Analysis');
 end
 
+x = s.scanCoords(1,:); y = s.scanCoords(2,:); z = s.scanCoords(3,:);
+
 tic
-parfor i = 1:s.nVoxels
-  x = s.scanCoords(1,:); y = s.scanCoords(2,:); z = s.scanCoords(3,:);
+for i = 1:s.nVoxels
 
   fit = pRFFit(m.v, s.scanNum, x(i),y(i),z(i), 'stim', s.stim, 'concatInfo', s.concatInfo, 'prefit', m.prefit, 'fitTypeParams', s.pRFFitParams, 'tSeries', s.tSeries(i,:)', 'paramsInfo', s.paramsInfo);
 

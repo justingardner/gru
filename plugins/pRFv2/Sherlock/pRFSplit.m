@@ -8,11 +8,21 @@
 %
 function splits = pRFSplit(v, scanNum, params, x,y,z, n, fit, overlays)
 
+%% Remove old splits
+% Clean up by deleting the splits folder
+disp('Clean up! Deleting splits folder..');
+system('rm -r Splits');
+
+%% Get current user and current session dir
+curPath = pwd;
+sherlockSessionPath = ['/share/PI/jlg/' curPath(findstr(curPath, 'data'):end)];
+suid = params.pRFFit.suid;
+
 % Set split directory and scripts directory
 splitDir = 'Splits';
 scriptsDir = 'Splits/Scripts';
 numSplits = params.pRFFit.numSplits;
-blockSize = ceil(n/numSplits);
+% blockSize = ceil(n/numSplits);
 whichSplit = 1;
 scanDims = viewGet(v, 'scanDims');
 pRFAnal = overlays.pRFAnal;
@@ -27,30 +37,53 @@ end
 
 system('echo "#\!/bin/bash" >! "Splits/Scripts/runAll.sh"');
 
+% Load up the entire timeseries by making a temporary ROI
+maxBlockSize = mrGetPref('maxBlockSize');
+loadROI = makeEmptyROI(v, 'scanNum', scanNum, 'groupNum', params.groupName);
+loadROI.coords(1,:) = x;
+loadROI.coords(2,:) = y;
+loadROI.coords(3,:) = z;
+loadROI = loadROITSeries(v, loadROI, scanNum, params.groupName);
+
+% Run on 10 voxels to calculate runtime -- use this later to calculate number of splits
+tic
+for vi = 1:10
+  xi = loadROI.scanCoords(1,vi);
+  yi = loadROI.scanCoords(2,vi);
+  zi = loadROI.scanCoords(3,vi);
+  fit = pRFFit(v, scanNum, xi, yi, zi, 'stim', fit.stim, 'concatInfo', fit.concatInfo, 'prefit', fit.prefit, 'fitTypeParams', params.pRFFit, 'tSeries', loadROI.tSeries(vi,:)', 'paramsInfo', fit.paramsInfo); 
+end
+runPer10 = toc;
+blockSize = (15*60/runPer10)*10;
+disp('10 voxel runtime was estimated to be %03.1f seconds: using a block size of %i voxels.',runPer10,blockSize);
+
 for blockStart = 1:blockSize:n
   blockEnd = min(blockStart+blockSize-1,n);
   blockSize = blockEnd-blockStart+1;
 
   % Make a temporary ROI using the coordinates specified.
-  loadROI = makeEmptyROI(v,'scanNum',scanNum,'groupNum',params.groupName);
-  loadROI.coords(1,1:blockSize) = x(blockStart:blockEnd);
-  loadROI.coords(2,1:blockSize) = y(blockStart:blockEnd);
-  loadROI.coords(3,1:blockSize) = z(blockStart:blockEnd);
+%   loadROI = makeEmptyROI(v,'scanNum',scanNum,'groupNum',params.groupName);
+%   loadROI.coords(1,1:blockSize) = x(blockStart:blockEnd);
+%   loadROI.coords(2,1:blockSize) = y(blockStart:blockEnd);
+%   loadROI.coords(3,1:blockSize) = z(blockStart:blockEnd);
 
   % Load time series
-  loadROI = loadROITSeries(v, loadROI, scanNum, params.groupName);
+  %loadROI = loadROITSeries(v, loadROI, scanNum, params.groupName);
+
+  % Grab the timeseries
+  tSeries = loadROI.tSeries(blockStart:blockEnd,:);
 
   % reorder x,y,z coordinates since they can get scrambled in loadROITSeries
-  x(blockStart:blockEnd) = loadROI.scanCoords(1,1:blockSize);
-  y(blockStart:blockEnd) = loadROI.scanCoords(2,1:blockSize);
-  z(blockStart:blockEnd) = loadROI.scanCoords(3,1:blockSize);
+  x(blockStart:blockEnd) = loadROI.scanCoords(1,blockStart:blockEnd);
+  y(blockStart:blockEnd) = loadROI.scanCoords(2,blockStart:blockEnd);
+  z(blockStart:blockEnd) = loadROI.scanCoords(3,blockStart:blockEnd);
   % Keep the linear coords
   pRFAnal.d{scanNum}.linearCoords = [pRFAnal.d{scanNum}.linearCoords sub2ind(scanDims,x(blockStart:blockEnd),y(blockStart:blockEnd),z(blockStart:blockEnd))];
 
   % Add all the needed fields to a split struct
   %split.v = v;
   split.nVoxels = blockSize;
-  split.scanCoords = loadROI.scanCoords;
+  split.scanCoords = [x; y; z];  
   split.tSeries = loadROI.tSeries;
   split.stim = fit.stim;
   split.concatInfo = fit.concatInfo;
@@ -60,9 +93,11 @@ for blockStart = 1:blockSize:n
   split.scanNum = scanNum;
 
   % Save split struct to the specified directory
-  filename = sprintf('%s_split%d', params.saveName, whichSplit);
+  split.splitName = sprintf('split%d',whichSplit);
+  filename = sprintf('%s_%s', params.saveName, split.splitName);
   saveFile = sprintf('%s/%s.mat', splitDir, filename);
   split.file = saveFile;
+  split.num = whichSplit;
   save(saveFile, 'split');
   disp(sprintf('Data split %d saved to %s', whichSplit, saveFile));
 
@@ -77,6 +112,6 @@ end
 
 % Save master split struct locally
 prefit = fit.prefit;
+scanCoords = loadROI.scanCoords;
 disp('Saving master struct');
-save(sprintf('Splits/%s_master.mat', params.saveName), 'fit', 'x', 'y', 'z', 'scanNum', 'overlays', 'pRFAnal', 'v', 'params', 'suid', 'prefit');
-
+save(sprintf('Splits/%s_master.mat', params.saveName), 'fit', 'x', 'y', 'z', 'scanNum', 'overlays', 'pRFAnal', 'v', 'params', 'sherlockSessionPath', 'suid', 'prefit','scanCoords');

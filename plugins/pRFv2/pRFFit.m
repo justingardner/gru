@@ -1,4 +1,4 @@
-% pRFFit
+% pRFFit (v2)
 %
 %      usage: pRFFit(v,scanNum,x,y,s,<dispFit=0>)
 %         by: justin gardner
