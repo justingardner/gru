@@ -65,9 +65,11 @@ for blockStart = 1:blockSize:n
   split.scanNum = scanNum;
 
   % Save split struct to the specified directory
-  filename = sprintf('%s_split%d', params.saveName, whichSplit);
+  split.splitName = sprintf('split%d',whichSplit);
+  filename = sprintf('%s_%s', params.saveName, split.splitName);
   saveFile = sprintf('%s/%s.mat', splitDir, filename);
   split.file = saveFile;
+  split.num = whichSplit;
   save(saveFile, 'split');
   disp(sprintf('Data split %d saved to %s', whichSplit, saveFile));
 
