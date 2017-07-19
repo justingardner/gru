@@ -201,7 +201,7 @@ for scanNum = params.scanNum
     overlays.pRFAnal = pRFAnal;
     splits = pRFSplit(v, scanNum, params, x,y,z,n, fit, overlays);
     % Run the splits through the controller
-    prf = pRFController(splits,params);
+    prf = pRFController(splits,params); % prf contains a field finished, which is a cell of all the splits and their run information (if needed)
     % Merge
     %%% ???? what goes here?
     return

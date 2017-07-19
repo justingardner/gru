@@ -30,7 +30,7 @@ prf.local.setup = @setupLocal;
 prf.local.add = @addLocalJob;
 prf.local.check = @checkLocalJob;
 
-groups = {'sherlock','local'};
+groups = fields(prf);
 
 %% Startup
 pdisp(20);
@@ -67,6 +67,7 @@ pdisp(20);
 
 %% Cycle
 tic
+ntoc = toc;
 while length(finished)<length(splits)
     % ADD
     torun = ~cellfun(@isempty,queue);
@@ -101,16 +102,19 @@ while length(finished)<length(splits)
                 csplit = prf.(groups{gi}).running{ri};
                 if ~isempty(csplit)
                     if prf.(groups{gi}).check(csplit)
-                        pdisp(sprintf('Split %i completed successfully, recycling slot %i on %s',csplit.num,slot,groups{gi}));
+                        pdisp(sprintf('Split %i completed successfully, recycling slot %i on %s',csplit.num,ri,groups{gi}));
                         csplit.timestamp.end = toc;
                         csplit.timestamp.elapsed = csplit.timestamp.end - csplit.timestamp.start;
                         finished{end+1} = csplit;
-                        prf.groups{gi}.running{ri} = [];
+                        prf.(groups{gi}).running{ri} = [];
                     end
                 end
             end
         end
-        pdisp(sprintf('Elapsed time %s',datestr(datenum(0,0,0,0,0,toc),'HH:MM:SS')));
+        if (toc-ntoc)>60
+            pdisp(sprintf('Elapsed time %s',datestr(datenum(0,0,0,0,0,toc),'HH:MM:SS')));
+            ntoc = 60*floor(toc/60);
+        end
         pause(5);
     end
 end

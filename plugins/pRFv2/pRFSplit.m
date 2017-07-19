@@ -8,9 +8,14 @@
 %
 function splits = pRFSplit(v, scanNum, params, x,y,z, n, fit, overlays)
 
+%% Parameters
+
+vnum = 5; % how many voxels to use to estimate run time
+splitTime = 15; % how many minutes to use per split
+
 %% Remove old splits
 % Clean up by deleting the splits folder
-disp('Clean up! Deleting splits folder..');
+disp('Clean up! Deleting splits folder before start..');
 system('rm -r Splits');
 
 %% Get current user and current session dir
@@ -45,17 +50,17 @@ loadROI.coords(2,:) = y;
 loadROI.coords(3,:) = z;
 loadROI = loadROITSeries(v, loadROI, scanNum, params.groupName);
 
-% Run on 10 voxels to calculate runtime -- use this later to calculate number of splits
+% Run on a few voxels to calculate runtime -- use this later to calculate number of splits
 tic
-for vi = 1:10
+for vi = 1:vnum
   xi = loadROI.scanCoords(1,vi);
   yi = loadROI.scanCoords(2,vi);
   zi = loadROI.scanCoords(3,vi);
-  fit = pRFFit(v, scanNum, xi, yi, zi, 'stim', fit.stim, 'concatInfo', fit.concatInfo, 'prefit', fit.prefit, 'fitTypeParams', params.pRFFit, 'tSeries', loadROI.tSeries(vi,:)', 'paramsInfo', fit.paramsInfo); 
+  pRFFit(v, scanNum, xi, yi, zi, 'stim', fit.stim, 'concatInfo', fit.concatInfo, 'prefit', fit.prefit, 'fitTypeParams', params.pRFFit, 'tSeries', loadROI.tSeries(vi,:)', 'paramsInfo', fit.paramsInfo); 
 end
-runPer10 = toc;
-blockSize = (15*60/runPer10)*10;
-disp('10 voxel runtime was estimated to be %03.1f seconds: using a block size of %i voxels.',runPer10,blockSize);
+runtime = toc;
+blockSize = round((splitTime*60/runtime)*vnum);
+disp(sprintf('5 voxel runtime was estimated to be %03.1f seconds: splitting into %i minute chunks using a block size of %1.0f voxels.',runtime,splitTime,blockSize));
 
 for blockStart = 1:blockSize:n
   blockEnd = min(blockStart+blockSize-1,n);

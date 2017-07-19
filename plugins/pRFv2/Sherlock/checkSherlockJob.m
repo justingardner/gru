@@ -8,7 +8,7 @@ global controller
 
 isJobDone = false;
 
-splitName = sprintf('split%i',split.num);
+splitName = sprintf('%s_split%i',controller.prfName,split.num);
 
 [~,out] = system(sprintf('ssh %s@sherlock.stanford.edu "if [ -f %s/Splits/Analysis/%s_Anal.mat ]; then echo exists; else echo doesNotExist; fi"', controller.suid, controller.sherlockSessionPath, splitName));
 

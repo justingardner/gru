@@ -19,7 +19,7 @@ system(sprintf('rsync -q %s/* %s@sherlock.stanford.edu:%s/%s', controller.script
 
 %% Return 10 bins
 sherlockParams = struct;
-sherlockParams.bins = 3;
+sherlockParams.bins = 10;
 
 %% OLD CODE
 % Call batch submission scripts on Sherlock
