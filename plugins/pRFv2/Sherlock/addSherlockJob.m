@@ -4,20 +4,14 @@
 %
 %      by: akshay jagadeesh
 %    date: 07/13/2017
-function addSherlockJob(splitName, sherlockSessionPath, suid)
+function split = addSherlockJob(split)
 
-% get rid of .mat filename
-if ~isempty(findstr(splitName, '.mat'))
-  splitName = splitName(1:end-4);
-end
-
-pRFsavename = splitName(1:findstr(splitName, 'split')-2);
-whichSplit = splitName(findstr(splitName, 'split')+5);
+global controller
 
 disp('Generating batch scripts');
-system(sprintf('sh ~/proj/mrTools/mrLoadRet/Plugin/pRF/Sherlock/generateBatchScripts.sh "%s" "%s" "%s" "%s"', pRFsavename, sherlockSessionPath, suid, whichSplit))
+system(sprintf('sh ~/proj/gru/plugins/pRFv2/Sherlock/generateBatchScripts.sh "%s" "%s" "%s" "%s"', controller.prfName, controller.sherlockSessionPath, controller.suid, num2str(split.num)));
 
 disp('Transferring batch scripts to Sherlock and running');
-system(sprintf('rsync -q Splits/Scripts/%s.sbatch %s@sherlock.stanford.edu:%s/Splits/Scripts/.', splitName, suid, sherlockSessionPath));
-system(sprintf('ssh %s@sherlock.stanford.edu "cd %s/Splits/Scripts/; sbatch %s.sbatch"', suid, sherlockSessionPath, splitName));
+system(sprintf('rsync -q Splits/Scripts/%s.sbatch %s@sherlock.stanford.edu:%s/Splits/Scripts/.', sprintf('%s_%s',controller.prfName,split.splitName), controller.suid, controller.sherlockSessionPath));
+system(sprintf('ssh %s@sherlock.stanford.edu "cd %s/Splits/Scripts/; sbatch %s.sbatch"', controller.suid, controller.sherlockSessionPath, sprintf('%s_%s',controller.prfName,split.splitName)));
 
