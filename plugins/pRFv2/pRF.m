@@ -200,6 +200,10 @@ for scanNum = params.scanNum
     overlays.rfHalfWidth = rfHalfWidth;
     overlays.pRFAnal = pRFAnal;
     splits = pRFSplit(v, scanNum, params, x,y,z,n, fit, overlays);
+    % Run the splits through the controller
+    prf = pRFController(splits,params);
+    % Merge
+    %%% ???? what goes here?
     return
   else
     blockSize = 240;
