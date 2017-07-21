@@ -16,7 +16,7 @@ splitTime = params.pRFFit.splitTime; % how many minutes to use per split
 %% Remove old splits
 % Clean up by deleting the splits folder
 disp('Clean up! Deleting splits folder before start..');
-system('rm -r Splits');
+system('rm -rf Splits');
 
 %% Get current user and current session dir
 curPath = pwd;

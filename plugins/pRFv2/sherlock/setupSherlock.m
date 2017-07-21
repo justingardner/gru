@@ -13,6 +13,11 @@ if ~strcmp(deblank(out), 'exists')
   system(sprintf('rsync -q %s/Etc/* %s@sherlock.stanford.edu:%s/Etc/', controller.curPath, controller.suid, controller.sherlockSessionPath));
   system(sprintf('rsync -q %s/%s/* %s@sherlock.stanford.edu:%s/%s/', controller.curPath, params.groupName, controller.suid, controller.sherlockSessionPath, params.groupName)); 
   system(sprintf('rsync -q %s/mrSession.mat %s@sherlock.stanford.edu:%s/.', controller.curPath, controller.suid, controller.sherlockSessionPath));
+  system(sprintf('ssh %s@sherlock.stanford.edu "chmod -R 777 %s"', controller.suid, controller.sherlockSessionPath));
+else
+  % If it does exist, delete the Splits folder
+  disp('Session directory found on Sherlock. Cleaning up previous Splits...');
+  system(sprintf('ssh %s@sherlock.stanford.edu "rm -r %s/Splits"', controller.suid, controller.sherlockSessionPath));
 end
 
 % Use rsync to transfer split structs to Sherlock
