@@ -11,7 +11,7 @@ function splits = pRFSplit(v, scanNum, params, x,y,z, n, fit, overlays)
 %% Parameters
 
 vnum = 5; % how many voxels to use to estimate run time
-splitTime = 15; % how many minutes to use per split
+splitTime = params.pRFFit.splitTime; % how many minutes to use per split
 
 %% Remove old splits
 % Clean up by deleting the splits folder
@@ -21,12 +21,11 @@ system('rm -r Splits');
 %% Get current user and current session dir
 curPath = pwd;
 sherlockSessionPath = ['/share/PI/jlg/' curPath(findstr(curPath, 'data'):end)];
-suid = params.pRFFit.suid;
+suid = getsuid;
 
 % Set split directory and scripts directory
 splitDir = 'Splits';
 scriptsDir = 'Splits/Scripts';
-numSplits = params.pRFFit.numSplits;
 % blockSize = ceil(n/numSplits);
 whichSplit = 1;
 scanDims = viewGet(v, 'scanDims');
@@ -50,6 +49,7 @@ loadROI.coords(2,:) = y;
 loadROI.coords(3,:) = z;
 loadROI = loadROITSeries(v, loadROI, scanNum, params.groupName);
 
+disp(sprintf('Running on %i voxels to calculate runtime',vnum));
 % Run on a few voxels to calculate runtime -- use this later to calculate number of splits
 tic
 for vi = 1:vnum

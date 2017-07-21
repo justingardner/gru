@@ -43,7 +43,13 @@ for gi = 1:length(groups)
     prf.(groups{gi}).params = prf.(groups{gi}).setup(params);
     prf.(groups{gi}).bins = prf.(groups{gi}).params.bins;
     prf.(groups{gi}).running = cell(1,prf.(groups{gi}).bins);
+    if prf.(groups{gi}).bins == 0
+        % actually there's no bins here, delete this
+        disp(sprintf('Group %i has no bins available',groups{gi}));
+        prf = rmfield(prf,groups{gi});
+    end
 end
+groups = fields(prf);
 pdisp(20);
 
 % get intial job # (these get added quickly at the start)
@@ -65,6 +71,10 @@ for gi = 1:length(groups)
 end
 pdisp(20);
 
+%% If no analysis directory, generate it
+if ~isdir(fullfile(controller.curPath,'Splits','Analysis'))
+    mkdir(fullfile(controller.curPath,'Splits','Analysis'));
+end
 %% Cycle
 tic
 ntoc = toc;
@@ -126,11 +136,6 @@ prf.splits = finished;
 pdisp(20);
 pdisp('  Shutting down controller...');
 pdisp(20);
-
-function [q,queue] = pop(queue)
-
-q = queue(1);
-queue = queue(2:end);
 
 function pdisp(str)
 if isnumeric(str)

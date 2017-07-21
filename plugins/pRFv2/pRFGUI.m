@@ -144,8 +144,7 @@ paramsInfo{end+1} = {'recomputeStimImage',0,'type=checkbox','Even if there is an
 paramsInfo{end+1} = {'applyFiltering',1,'type=checkbox','If set to 1 then applies the same filtering that concatenation does to the model. Does not do any filtering applied by averages. If this is not a concat then does nothing besides mean subtraction. If turned off, will still do mean substraction on model.'};
 paramsInfo{end+1} = {'stimImageDiffTolerance',5,'minmax=[0 100]','incdec=[-1 1]','When averaging the stim images should be the same, but some times we are off by a frame here and there due to inconsequential timing inconsistenices. Set this to a small value, like 5 to ignore that percentage of frames of the stimulus that differ within an average. If this threshold is exceeded, the code will ask you if you want to continue - otherwise it will just print out to the buffer the number of frames that have the problem'};
 paramsInfo{end+1} = {'splitData', true, 'type=checkbox', 'Check this to split the data into chunks'};
-paramsInfo{end+1} = {'numSplits', 10, 'minmax=[0 inf]','incdec=[-1 1]', 'Number of chunks to split the data into', 'contingent=splitData'};
-paramsInfo{end+1} = {'suid',getsuid('nostop=1'),'Stanford username to log onto server with'};
+paramsInfo{end+1} = {'splitTime', 15, 'minmax=[0 inf]','incdec=[-1 1]', 'How long each split should take to compute', 'contingent=splitData'};
 
 % Get parameter values
 if defaultParams

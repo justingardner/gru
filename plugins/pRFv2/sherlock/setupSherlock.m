@@ -1,6 +1,9 @@
 function sherlockParams = setupSherlock(params)
 global controller
 
+% clear the splits folder on sherlock
+system(sprintf('ssh %s@sherlock.stanford.edu "rm -r %s/Splits"',controller.suid,controller.sherlockSessionPath));
+
 % Check if session directory exists on Sherlock - and make it otherwise.
 [~,out] = system(sprintf('ssh %s@sherlock.stanford.edu "[ -d %s ] && echo exists || echo does not exist"', controller.suid, controller.sherlockSessionPath));
 if ~strcmp(deblank(out), 'exists')
@@ -13,9 +16,11 @@ if ~strcmp(deblank(out), 'exists')
 end
 
 % Use rsync to transfer split structs to Sherlock
-disp('Copying split structs (.mat) and batch scripts to sherlock server');
+disp('Copying split structs (.mat) to sherlock server');
 system(sprintf('rsync -q Splits/%s*.mat %s@sherlock.stanford.edu:%s/Splits/', params.saveName, controller.suid, controller.sherlockSessionPath));
-system(sprintf('rsync -q %s/* %s@sherlock.stanford.edu:%s/%s', controller.scriptsDir, controller.suid, controller.sherlockSessionPath, controller.scriptsDir));
+
+% make a Scripts folder
+system(sprintf('ssh %s@sherlock.stanford.edu "mkdir %s/%s"',controller.suid,controller.sherlockSessionPath,controller.scriptsDir));
 
 %% Return 10 bins
 sherlockParams = struct;
