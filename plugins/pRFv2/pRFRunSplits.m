@@ -16,6 +16,11 @@ s = l.split;
 % load master split file
 m = load(sprintf('Splits/%s_master.mat', saveName));
 
+%get the view
+v = newView;
+v = viewSet(v, 'curGroup', 'Concatenation');
+v = viewSet(v, 'curScan', m.scanNum);
+
 % Call pRFFit on the voxels
 if exist('Splits/Analysis')~=7
   mkdir('Splits/Analysis');
@@ -26,7 +31,7 @@ x = s.scanCoords(1,:); y = s.scanCoords(2,:); z = s.scanCoords(3,:);
 tic
 for i = 1:s.nVoxels
 
-  fit = pRFFit(m.v, s.scanNum, x(i),y(i),z(i), 'stim', s.stim, 'concatInfo', s.concatInfo, 'prefit', m.prefit, 'fitTypeParams', s.pRFFitParams, 'tSeries', s.tSeries(i,:)', 'paramsInfo', s.paramsInfo);
+  fit = pRFFit(v, s.scanNum, x(i),y(i),z(i), 'stim', s.stim, 'concatInfo', s.concatInfo, 'prefit', m.prefit, 'fitTypeParams', s.pRFFitParams, 'tSeries', s.tSeries(i,:)', 'paramsInfo', s.paramsInfo);
 
   if ~isempty(fit)
     thisR2(i) = fit.r2;
