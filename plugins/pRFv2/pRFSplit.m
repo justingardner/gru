@@ -118,5 +118,6 @@ end
 % Save master split struct locally
 prefit = fit.prefit;
 scanCoords = loadROI.scanCoords;
+numSplits = whichSplit-1;
 disp('Saving master struct');
-save(sprintf('Splits/%s_master.mat', params.saveName), 'fit', 'x', 'y', 'z', 'scanNum', 'overlays', 'pRFAnal', 'v', 'params', 'sherlockSessionPath', 'suid', 'prefit','scanCoords');
+save(sprintf('Splits/%s_master.mat', params.saveName), 'fit', 'x', 'y', 'z', 'scanNum', 'overlays', 'pRFAnal', 'params', 'sherlockSessionPath', 'suid', 'prefit','scanCoords', 'numSplits');

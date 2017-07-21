@@ -203,9 +203,12 @@ for scanNum = params.scanNum
     % Run the splits through the controller
     prf = pRFController(splits,params); % prf contains a field finished, which is a cell of all the splits and their run information (if needed)
     % Merge
-    [rawParams, r] = pRFMergeSplits(params.saveName);
-    %%% ???? what goes here?
+    [rawParams, r, overlays] = pRFMergeSplits(params.saveName);
     return
+    %%% to do: get rid of the above return and expand the else to include most of the code below.
+    r2 = overlays(1); polarAngle = overlays(2); eccentricity = overlays(3);
+    rfHalfWidth = overlays(4);
+    %%% Finally clean up everything
   else
     blockSize = 240;
   end

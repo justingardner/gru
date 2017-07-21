@@ -58,6 +58,9 @@ initjobs = 0;
 for gi = 1:length(groups)
     initjobs = initjobs + prf.(groups{gi}).bins;
 end
+if length(splits)<initjobs
+  initjobs=length(splits)
+end
 
 %% Start running the splits
 nSplits = length(splits);
