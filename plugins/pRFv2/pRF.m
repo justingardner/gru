@@ -203,6 +203,7 @@ for scanNum = params.scanNum
     % Run the splits through the controller
     prf = pRFController(splits,params); % prf contains a field finished, which is a cell of all the splits and their run information (if needed)
     % Merge
+    [rawParams, r] = pRFMergeSplits(params.saveName);
     %%% ???? what goes here?
     return
   else

@@ -88,7 +88,7 @@ for blockStart = 1:blockSize:n
   % Add all the needed fields to a split struct
   %split.v = v;
   split.nVoxels = blockSize;
-  split.scanCoords = [x; y; z];  
+  split.scanCoords = [x(blockStart:blockEnd); y(blockStart:blockEnd); z(blockStart:blockEnd)];  
   split.tSeries = loadROI.tSeries;
   split.stim = fit.stim;
   split.concatInfo = fit.concatInfo;

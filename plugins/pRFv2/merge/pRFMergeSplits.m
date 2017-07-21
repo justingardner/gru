@@ -4,7 +4,7 @@
 %      Date: 06/29/2017
 %        by: Akshay Jagadeesh
 %
-function merged = pRFMergeSplits(analysisName)
+function [rawParams, r] = pRFMergeSplits(analysisName)
 
 %Load master struct
 m = load(sprintf('Splits/%s_master.mat', analysisName));
@@ -12,19 +12,6 @@ suid = m.suid;
 sherlockSessionPath = m.sherlockSessionPath;
 
 %% First, pull the analyses into the local directory.
-
-%make the analysis dir locally if it doesn't exist already
-if exist('Splits/Analysis')~=7
-  mkdir('Splits/Analysis');
-end
-
-% use rsync to get the data from sherlock
-if ~exist(sprintf('Splits/Analysis/%s_split1_Anal.mat', analysisName))
-  disp('Pulling pRF analysis results from Sherlock server');
-  system(sprintf('rsync %s@sherlock.stanford.edu:"%s/Splits/Analysis/%s*.mat" Splits/Analysis/', suid, sherlockSessionPath, analysisName));
-else
-  disp('Files already exist locally, so not pulling from server.');
-end
 
 splits = dir('Splits/');
 analyses = dir(sprintf('Splits/Analysis/%s_split*_Anal.mat', analysisName));
@@ -39,12 +26,13 @@ x = m.x; y = m.x; z = m.z;
 scanNum = m.scanNum;
 fit = m.fit;
 params = m.params;
-v = m.v;
-scanDims = viewGet(m.v, 'scanDims');
+%v = m.v;
+v = getMLRView;
+scanDims = viewGet(v, 'scanDims');
 
 % replace 3 with fit.nParams
 rawParams = nan(fit.nParams, length(x));
-r = nan(length(x), 1);
+r = nan(length(x), fit.concatInfo.n);
 
 keyboard
 pRFAnal.d{scanNum}.linearCoords = [];
@@ -59,6 +47,7 @@ for ai = 1:length(analyses)
   %Get scan coords
   x = l1.splits.scanCoords(1,:); y = l1.splits.scanCoords(2,:); z = l1.splits.scanCoords(3,:);
 
+  keyboard
   pRFAnal.d{scanNum}.linearCoords = [pRFAnal.d{scanNum}.linearCoords sub2ind(scanDims,x,y,z)];
  
   % Set overlays
@@ -68,7 +57,7 @@ for ai = 1:length(analyses)
     polarAngle.data{scanNum}(x(vi), y(vi), z(vi)) = l1.splits.polarAngle(vi);
     eccentricity.data{scanNum}(x(vi), y(vi), z(vi)) = l1.splits.eccentricity(vi);
     rfHalfWidth.data{scanNum}(x(vi), y(vi), z(vi)) = l1.splits.rfHalfWidth(vi);
-    r(iMaster) = l1.splits.r(vi);
+    r(iMaster, :) = l1.splits.r(vi, :);
   end
 
 end
