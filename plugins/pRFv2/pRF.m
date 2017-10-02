@@ -192,7 +192,7 @@ for scanNum = params.scanNum
   % on many machines without enough memory that will crash it so keeping
   % this preliminary value in for now.
 
-  % Set blocksize according to the user specified number of chunks to split data into.
+  %% Split data into chunks, compute
   if params.pRFFit.splitData
     overlays.r2 = r2;
     overlays.polarAngle = polarAngle;

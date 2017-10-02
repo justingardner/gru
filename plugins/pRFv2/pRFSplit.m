@@ -62,6 +62,11 @@ runtime = toc;
 blockSize = round((splitTime*60/runtime)*vnum);
 disp(sprintf('5 voxel runtime was estimated to be %03.1f seconds: splitting into %i minute chunks using a block size of %1.0f voxels.',runtime,splitTime,blockSize));
 
+if params.pRFFit.crossval
+  % if crossval, divide blocksize by number of concats
+  blockSize = round(blockSize/fit.concatInfo.n);
+end
+
 for blockStart = 1:blockSize:n
   blockEnd = min(blockStart+blockSize-1,n);
   blockSize = blockEnd-blockStart+1;
