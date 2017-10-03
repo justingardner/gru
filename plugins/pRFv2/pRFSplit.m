@@ -20,6 +20,14 @@ system('rm -rf Splits');
 
 %% Get current user and current session dir
 curPath = pwd;
+
+origPath = viewGet(v,'sessiondirectory');
+
+if ~strcmp(curPath,origPath)
+    warning('Moving to session directory');
+    cd(origPath);
+end
+
 sherlockSessionPath = ['/share/PI/jlg/' curPath(findstr(curPath, 'data'):end)];
 suid = getsuid;
 
