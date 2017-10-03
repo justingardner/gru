@@ -4,7 +4,7 @@
 %      Date: 06/29/2017
 %        by: Akshay Jagadeesh
 %
-function [rawParams, r, overlays] = pRFMergeSplits(analysisName)
+function [rawParams, r, overlays, pRFAnal] = pRFMergeSplits(analysisName, callFromPRF)
 
 disp('***** Merging Split Analyses *****');
 
@@ -112,6 +112,7 @@ else
   pRFAnal.d{scanNum}.r = r;
   pRFAnal.d{scanNum}.params = rawParams;
 end
+
 iScan = find(params.scanNum == scanNum);
 thisParams.scanNum = params.scanNum(iScan);
 r2.params{scanNum} = thisParams;
@@ -119,6 +120,12 @@ polarAngle.params{scanNum} = thisParams;
 eccentricity.params{scanNum} = thisParams;
 rfHalfWidth.params{scanNum} = thisParams;
 overlays = [r2 polarAngle eccentricity rfHalfWidth];
+
+% RETURN HERE IF CALLED FROM pRF.m
+if ~ieNotDefined('callFromPRF') && callFromPRF
+  disp('Merge complete. Returning to pRF');
+  return
+end
 
 if ~ieNotDefined('fromController')
   return
