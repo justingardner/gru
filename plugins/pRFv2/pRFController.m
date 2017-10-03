@@ -23,12 +23,12 @@ controller.scriptsDir = 'Splits/Scripts';
 %% Initial setup and function calls
 prf = struct;
 
-prf.sherlock.setup = @setupSherlock;
-prf.sherlock.add = @addSherlockJob;
-prf.sherlock.check = @checkSherlockJob;
 prf.local.setup = @setupLocal;
 prf.local.add = @addLocalJob;
 prf.local.check = @checkLocalJob;
+prf.sherlock.setup = @setupSherlock;
+prf.sherlock.add = @addSherlockJob;
+prf.sherlock.check = @checkSherlockJob;
 
 groups = fields(prf);
 

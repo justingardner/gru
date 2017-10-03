@@ -140,7 +140,7 @@ if isfield(fitParams,'prefit') && ~isempty(fitParams.prefit)
   % calculate model if not already calculated
   if ~isfield(fitParams.prefit,'modelResponse')
     % get number of workers
-    nProcessors = mlrNumWorkers;
+    nProcessors = mlrNumWorkers(12);
     if fitParams.verbose==1
       disppercent(-inf,sprintf('(pRFFit) Computing %i prefit model responses using %i processors',fitParams.prefit.n,nProcessors));
     end
