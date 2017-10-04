@@ -21,8 +21,8 @@ else
 end
 
 % Use rsync to transfer split structs to Sherlock
-disp('Copying split structs (.mat) to sherlock server');
-system(sprintf('rsync -q Splits/%s*.mat %s@sherlock.stanford.edu:%s/Splits/', params.saveName, controller.suid, controller.sherlockSessionPath));
+% disp('Copying split structs (.mat) to sherlock server');
+% system(sprintf('rsync -q Splits/%s*.mat %s@sherlock.stanford.edu:%s/Splits/', params.saveName, controller.suid, controller.sherlockSessionPath));
 
 % make a Scripts folder
 system(sprintf('ssh %s@sherlock.stanford.edu "mkdir -m 777 %s/%s"',controller.suid,controller.sherlockSessionPath,controller.scriptsDir));
