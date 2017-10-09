@@ -140,7 +140,7 @@ if isfield(fitParams,'prefit') && ~isempty(fitParams.prefit)
   % calculate model if not already calculated
   if ~isfield(fitParams.prefit,'modelResponse')
     % get number of workers
-    nProcessors = mlrNumWorkers;
+    nProcessors = mlrNumWorkers(12);
     if fitParams.verbose==1
       disppercent(-inf,sprintf('(pRFFit) Computing %i prefit model responses using %i processors',fitParams.prefit.n,nProcessors));
     end
@@ -152,14 +152,27 @@ if isfield(fitParams,'prefit') && ~isempty(fitParams.prefit)
     % init modelResponse
     allModelResponse = nan(fitParams.prefit.n,fitParams.concatInfo.runTransition(end,end));
     % compute all the model response, using parfor loop
-    parfor i = 1:fitParams.prefit.n
-      % fit the model with these parameters
-      [residual modelResponse rfModel] = getModelResidual([fitParams.prefit.x(i) fitParams.prefit.y(i) fitParams.prefit.rfHalfWidth(i) params(4:end)],tSeries,fitParams,1);
-      % normalize to 0 mean unit length
-      allModelResponse(i,:) = (modelResponse-mean(modelResponse))./sqrt(sum(modelResponse.^2))';
-      if fitParams.verbose
-	disp(sprintf('(pRFFit) Computing prefit model response %i/%i: Center [%6.2f,%6.2f] rfHalfWidth=%5.2f',i,fitParams.prefit.n,fitParams.prefit.x(i),fitParams.prefit.y(i),fitParams.prefit.rfHalfWidth(i)));
-      end
+    if nProcessors>1
+        parfor i = 1:fitParams.prefit.n
+          % fit the model with these parameters
+          [residual modelResponse rfModel] = getModelResidual([fitParams.prefit.x(i) fitParams.prefit.y(i) fitParams.prefit.rfHalfWidth(i) params(4:end)],tSeries,fitParams,1);
+          % normalize to 0 mean unit length
+          allModelResponse(i,:) = (modelResponse-mean(modelResponse))./sqrt(sum(modelResponse.^2))';
+          if fitParams.verbose
+        disp(sprintf('(pRFFit) Computing prefit model response %i/%i: Center [%6.2f,%6.2f] rfHalfWidth=%5.2f',i,fitParams.prefit.n,fitParams.prefit.x(i),fitParams.prefit.y(i),fitParams.prefit.rfHalfWidth(i)));
+          end
+        end
+    else
+        for i = 1:fitParams.prefit.n
+          % fit the model with these parameters
+          [residual modelResponse rfModel] = getModelResidual([fitParams.prefit.x(i) fitParams.prefit.y(i) fitParams.prefit.rfHalfWidth(i) params(4:end)],tSeries,fitParams,1);
+          % normalize to 0 mean unit length
+          allModelResponse(i,:) = (modelResponse-mean(modelResponse))./sqrt(sum(modelResponse.^2))';
+          if fitParams.verbose
+        disp(sprintf('(pRFFit) Computing prefit model response %i/%i: Center [%6.2f,%6.2f] rfHalfWidth=%5.2f',i,fitParams.prefit.n,fitParams.prefit.x(i),fitParams.prefit.y(i),fitParams.prefit.rfHalfWidth(i)));
+          end
+          disppercent(i/fitParams.prefit.n);
+        end
     end
     disppercent(inf);
     fitParams.prefit.modelResponse = allModelResponse;
