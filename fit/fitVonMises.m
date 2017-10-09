@@ -27,6 +27,17 @@
 %
 %             kappa = fitVonMises([],[],'halfWidthAtHalfHeight=30');
 %
+%             can also do a parametric bootstrap fit by randomly sampling
+%             y values from the gaussian distribution with mean y and standard
+%             deviation specified by yste. This will be done parametricBootrap number
+%             of times and the parameters returned in bootParams:
+%
+%             x = [-90:22.5:89];
+%             y = [0.088 0.091 0.124 0.195 0.279 0.190 0.112 0.084];
+%             yste = [0.016 0.020 0.019 0.011 0.031 0.015 0.016 0.013];
+%
+%             fit = fitVonMises(x,y,'yste',yste,'parametricBootstrap=1000','dispFit=0')
+%
 function retval = fitVonMises(x,y,varargin)
 
 % check arguments
@@ -42,9 +53,9 @@ retval = [];
 % which arguments just get passed in)
 if nargin > 2
   if isstr(varargin{1})
-    getArgs(varargin,{'dispFit=2','mu=0','kappa=5','amp=1','offset=0','halfWidthAtHalfHeight=[]','wrapAt=360'});
+    getArgs(varargin,{'dispFit=2','mu=0','kappa=5','amp=1','offset=0','halfWidthAtHalfHeight=[]','wrapAt=360','parametricBootstrap=0','yste=[]'});
   else
-    kappa = 5;amp = 1; offset = 0; halfWidthAtHalfHeight = [];wrapAt = 360;dispFit = 2;
+    kappa = 5;amp = 1; offset = 0; halfWidthAtHalfHeight = [];wrapAt = 360;dispFit = 2;yste=[];parametricBootstrap = 0;
     mu = varargin{1};
     if nargin > 3,kappa = varargin{2};end
     if nargin > 4,wrapAt = varargin{3};end
@@ -142,6 +153,32 @@ if dispFit
   plot(retval.xSmooth,retval.yFitSmooth,'r-');
   title(sprintf('%s: %0.4f',num2str(retval.optimParams),sqrt(sum(residual.^2))));
   drawnow
+end
+
+% do parameteric bootstrap, y sampling data from the gaussian implied by 
+% the yste
+if parametricBootstrap
+  if isempty(yste)
+    disp(sprintf('(fitVonMises) yste must be specified for parameteric bootstrap'));
+    keyboard
+  end
+  
+  retval.bootParams = [];
+  disppercent(-inf,sprintf('(fitVonMises) Doing bootstrap'));
+  for iBoot = 1:parametricBootstrap
+    % sample data from gaussian distribution with 
+    % mean and var specified by y and yste
+    yBoot = mvnrnd(y,diag(yste.^2));
+    % fit
+    retval.bootParams(iBoot,:) = fminsearch(@vonMisesError,optimParams,options,yBoot,d2r(x),0,0);
+    retval.yBoot(iBoot,:) = yBoot;
+    % get boot params half width
+    [~,kappa] = getVonMisesParams(retval.bootParams(iBoot,:));
+    retval.yBootHalfWidth(iBoot) = kappa2halfWidthAtHalfHeight(kappa);
+    % update disppercent
+    disppercent(iBoot/parametricBootstrap);
+  end
+  disppercent(inf);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
