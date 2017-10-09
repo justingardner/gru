@@ -18,7 +18,7 @@ nVols = length(volNums);
 
 % get time series
 if ~isempty(tSeries)
-  tSeries = tSeries(volNums);
+  tSeries = tSeries(:,volNums);
 end
 
 % extract the concatInfo pieces associated with these runs
