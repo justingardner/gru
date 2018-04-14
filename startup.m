@@ -1,6 +1,6 @@
 dbstop('if','error');
 
-pathNames = {'~/proj/mrTools','~/proj/mgl','~/proj/gru','~/proj/grustim','~/proj/matlab/plugins'};
+pathNames = {'~/proj/mrTools','~/proj/mgl','~/proj/gru','~/proj/grustim','~/proj/matlab/plugins','~/proj/steeve/'};
 
 addpath('~/proj/gru/mac_helpers');
 for i = 1:length(pathNames)

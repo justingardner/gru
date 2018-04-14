@@ -1,0 +1,11 @@
+date,username,time,task,computer,stimfile
+04/05/2016,gru,05-Apr-2016 17:15:57,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s039/160405_stim01.mat
+04/05/2016,gru,05-Apr-2016 17:20:50,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s039/160405_stim02.mat
+04/05/2016,gru,05-Apr-2016 17:25:38,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s039/160405_stim03.mat
+04/05/2016,gru,05-Apr-2016 17:30:32,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s039/160405_stim04.mat
+04/05/2016,gru,05-Apr-2016 17:33:11,cogneuro_attention.m,oban.stanford.edu,~/data/cogneuro_attention/s039/160405_stim05.mat
+04/05/2016,gru,05-Apr-2016 17:34:18,cogneuro_attention.m,oban.stanford.edu,~/data/cogneuro_attention/s039/160405_stim06.mat
+04/05/2016,gru,05-Apr-2016 17:42:13,cogneuro_attention.m,oban.stanford.edu,~/data/cogneuro_attention/s039/160405_stim07.mat
+04/05/2016,gru,05-Apr-2016 17:49:49,cogneuro_attention.m,oban.stanford.edu,~/data/cogneuro_attention/s039/160405_stim08.mat
+04/05/2016,gru,05-Apr-2016 17:57:07,cogneuro_attention.m,oban.stanford.edu,~/data/cogneuro_attention/s039/160405_stim09.mat
+04/05/2016,gru,05-Apr-2016 18:09:07,cogneuro_attention.m,oban.stanford.edu,~/data/cogneuro_attention/s039/160405_stim10.mat
