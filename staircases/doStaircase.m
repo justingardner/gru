@@ -134,6 +134,7 @@ if help
   disp(sprintf('subplotRows=[]\t\t\tSet how many subplot rows to have'))
   disp(sprintf('subplotCols=[]\t\t\tSet how many subplot cols to have'))
   disp(sprintf('subplotNum=[]\t\t\tSet which subplot to dispay fig in'))
+  disp(sprintf('subplotName=[]\t\t\tSet title of subplot'))
 end
 
 % check to see if we were passed in a staircase structure in which
@@ -147,8 +148,8 @@ else
 end
 
 % check arguments here
-initArgs = args;dispFig = [];nTrials=[];subplotNum = [];subplotRows = [];subplotCols = [];
-[argNames argValues args] = getArgs(args,{'dispFig=0','nTrials=[]','subplotNum=1','subplotRows=1','subplotCols=1'});
+initArgs = args;dispFig = [];nTrials=[];subplotNum = [];subplotRows = [];subplotCols = [];subplotName = [];
+[argNames argValues args] = getArgs(args,{'dispFig=0','nTrials=[]','subplotNum=1','subplotRows=1','subplotCols=1','subplotName=[]'});
 
 % check the type and farm off to specialied init functions
 switch lower(type)
@@ -187,7 +188,11 @@ if dispFig
   smartfig('doStaircase','reuse');
   subplot(s(end).subplotRows,s(end).subplotCols,s(end).subplotNum);
   cla;
-  title(sprintf('%s staircase',s.dispType));
+  if isempty(subplotName)
+    title(sprintf('%s staircase',s.dispType));
+  else
+    title(sprintf('%s',subplotName));
+  end
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%

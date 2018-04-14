@@ -42,6 +42,12 @@ if (length(varargin)>=1) && isstruct(varargin{1})
 else
   pSettings = [];
 end
+if isfield(instances{1},'name') % this is actually a cell of ROIs
+    for i = 1:length(instances)
+        instances{i}.classify.instances = preprocessInstances(instances{i}.classify.instances,varargin{1},varargin{2});
+    end
+    return
+end
 
 % now parse args (allow passing of an args cell array with arguments - from buildClassifier)
 [~,~,args2] = getArgs(varargin,{'args=[]','suppressUnknwonArgMessage=1'});

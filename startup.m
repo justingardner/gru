@@ -2,7 +2,7 @@ dbstop('if','error');
 
 pathNames = {'~/proj/mrTools','~/proj/mgl','~/proj/gru','~/proj/grustim','~/proj/matlab/plugins','~/proj/steeve/'};
 
-addpath('~/proj/gru/mac_helpers');
+addpath('~/proj/gru/mac_helpers'); % explicitly do this so we can use genpath_exclude to remove .git/.svn
 for i = 1:length(pathNames)
   if isdir(pathNames{i})
     addpath(genpath_exclude(pathNames{i},{'.git','.svn'}));
@@ -32,6 +32,10 @@ end
 if ~any(strcmp('gru',selectedPlugins))
   selectedPlugins{end+1} = 'gru';
   addedPlugin = true;
+end
+if ~any(strcmp('pRFv2', selectedPlugins))
+  selectedPlugins{end+1} = 'pRFv2';
+  addedPlugin=true;
 end
 if addedPlugin
   mrSetPref('selectedPlugins',selectedPlugins);

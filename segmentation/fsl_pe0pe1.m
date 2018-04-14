@@ -41,6 +41,14 @@
 
 function [str, unwarp] = fsl_pe0pe1(folder,unwarp)
 
+v = ver;
+parallel = 0;
+for vi = 1:length(v)
+    if strfind(v(vi).Name,'Parallel Computing Toolbox')
+        parallel = 1;
+        break;
+    end
+end
 
 [s, r] = system('fslroi');
 if s==127
@@ -196,32 +204,80 @@ if length(mergefiles) ~= length(roi0files)
 end
 
 %% topup
-tufiles = {};
-% disppercent(-inf,'Calculating topup...');
-disp('Calculating topup... PARALLEL');
-lm = length(mergefiles);
-parfor i = 1:length(mergefiles)
-    tufiles{i} = hlpr_topup(mergefiles{i},i,tfolder,folder);    
-%     disppercent(i/l m);
+tufiles = cell(size(mergefiles));
+if parallel
+    % disppercent(-inf,'Calculating topup...');
+    cores = mlrNumWorkers;
+    if cores > 0
+        disp(sprintf('Calculating topup... PARALLEL on %i cores',cores));
+        parfor i = 1:length(mergefiles)
+            tufiles{i} = hlpr_topup(mergefiles{i},i,tfolder,folder);    
+        %     disppercent(i/l m);
 
+        end
+    else
+        disppercent(-inf,'Calculating topup...');
+        disp('Calculating topup... NON-PARALLEL');
+        lm = length(mergefiles);
+        for i = 1:length(mergefiles)
+            tufiles{i} = hlpr_topup(mergefiles{i},i,tfolder,folder);    
+            disppercent(i/lm);
+        end
+        disppercent(inf);
+    end
+    % disppercent(inf);
+else
+    disppercent(-inf,'Calculating topup...');
+    disp('Calculating topup... NON-PARALLEL');
+    lm = length(mergefiles);
+    for i = 1:length(mergefiles)
+        tufiles{i} = hlpr_topup(mergefiles{i},i,tfolder,folder);    
+        disppercent(i/lm);
+    end
+    disppercent(inf);
 end
-% disppercent(inf);
 
 if length(tufiles) ~= length(roi0files)
     disp('(fsl_pe0pe1) Returned file list too short...');
 end
 
 %% applytopup
-% disppercent(-inf,'Applying topup...');
-disp('Applying topup... PARALLEL');
-finalfiles = {};
-EPIf = unwarp.EPIfiles;
-lt = length(tufiles);
-parfor i = 1:length(tufiles)
-    finalfiles{i} = hlpr_applytopup(tufiles{i},EPIf{i},tfolder,folder);
-%     disppercent(i/lt);
+finalfiles = cell(size(tufiles));
+if parallel
+    % disppercent(-inf,'Applying topup...');
+    cores = mlrNumWorkers;
+    if cores > 0
+        disp(sprintf('Applying topup... PARALLEL on %i cores',cores));
+        EPIf = unwarp.EPIfiles;
+        parfor i = 1:length(tufiles)
+            finalfiles{i} = hlpr_applytopup(tufiles{i},EPIf{i},tfolder,folder);
+        %     disppercent(i/lt);
+        end
+    else
+        disppercent(-inf,'Applying topup...');
+        disp('Applying topup... NON-PARALLEL');
+        finalfiles = {};
+        EPIf = unwarp.EPIfiles;
+        lt = length(tufiles);
+        for i = 1:length(tufiles)
+            finalfiles{i} = hlpr_applytopup(tufiles{i},EPIf{i},tfolder,folder);
+            disppercent(i/lt);
+        end
+        disppercent(inf);
+    end
+    % disppercent(inf);
+else
+    disppercent(-inf,'Applying topup...');
+    disp('Applying topup... NON-PARALLEL');
+    finalfiles = {};
+    EPIf = unwarp.EPIfiles;
+    lt = length(tufiles);
+    for i = 1:length(tufiles)
+        finalfiles{i} = hlpr_applytopup(tufiles{i},EPIf{i},tfolder,folder);
+        disppercent(i/lt);
+    end
+    disppercent(inf);
 end
-% disppercent(inf);
 
 if length(finalfiles) ~= length(roi0files)
     disp('(fsl_pe0pe1) Returned file list too short...');
@@ -252,6 +308,13 @@ end
 for i = 1:length(finalfiles)
     fi = finalfiles{i};
     system(sprintf('rm %s.nii.gz',fi));
+end
+
+%% shutdown pool
+
+if parallel
+    p = gcp;
+    delete(p);
 end
 
 %% Backup + rename
