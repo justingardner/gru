@@ -48,6 +48,7 @@
 %                   in your temp direcotry. Or set it to a string containing the path which
 %                   you want to use to get data from.
 %                'dicomFix=1': Use this for scans that we moved into /data/dicomfix and recreated dicoms for (11/2015)
+%                'flywheel=1': Use flywheel rather than cni system to get MRI data
 %
 function retval = dofmricni(varargin)
 
@@ -55,7 +56,7 @@ function retval = dofmricni(varargin)
 clc;
 
 % Default arguments
-getArgs(varargin,{'PI=jlg','idWarning=true','stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','getStimFiles=true','stimComputerName=oban','stimComputerUserName=gru','username=[]','unwarp=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1','fixMuxXform=2','dicomFix=0','flywheel=0'});
+getArgs(varargin,{'PI=jlg','idWarning=true','stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','getStimFiles=true','stimComputerName=oban','stimComputerUserName=gru','username=[]','unwarp=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1','fixMuxXform=2','dicomFix=0','flywheel=1'});
 
 % set up system variable (which gets passed around with important system info) - this
 % means we have to copy these variables into s.
@@ -191,11 +192,11 @@ function [tf s] = examineData(s)
 
 tf = false;
 % get the list of filest that we have
-fileList = getFileList(s.localDir);
+fileList = getFileList(s,s.localDir);
 
 % get dicom info
 disppercent(-inf,'(dofmricni) Getting dicom info');
-s.subjectID = [];
+if ~isfield(s,'subjectID'),s.subjectID = [];end
 s.magnet = [];
 s.operatorName = [];
 s.receiveCoilName = [];
@@ -1112,7 +1113,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%
 %%   getFileList   %%
 %%%%%%%%%%%%%%%%%%%%%
-function fileList = getFileList(dirname)
+function fileList = getFileList(s,dirname)
 
 fileList = [];
 
@@ -1157,15 +1158,42 @@ for i = 1:length(dirList)
   end
   % get name of dicom
   try
-    % look for an uncompress dicom directory
-    dicomDir = dir(sprintf('%s/*_dicoms',fullfile(dirname,dirList(i).name)));
-    if ~isempty(dicomDir)
-      fileList(end).dicom = fullfile(dirname,dirList(i).name,dicomDir(1).name);
+    if s.flywheel
+      % get current directory name
+      thisDir = fullfile(dirname,dirList(i).name);
+      % check for decompress dicom file
+      dicomDir = dir(fullfile(thisDir,'*.dicom'));
+      % if not see if it is zip'd
+      if isempty(dicomDir)
+	dicomDir = dir(fullfile(thisDir,'*.dicom.zip'));
+	% uncompres if it exists
+	if ~isempty(dicomDir)
+	  % cd to the directory
+	  thisPath = pwd;
+	  cd(thisDir);
+	  % uncompress
+	  system(sprintf('%s -q %s',s.commands.unzip,dicomDir(1).name));
+	  % return to path
+	  cd(thisPath);
+	end
+	dicomDir = dir(fullfile(thisDir,'*.dicom'));
+      end
+      if ~isempty(dicomDir)
+	fileList(end).dicom = fullfile(thisDir,dicomDir.name);
+      else
+	fileList(end).dicom = [];
+      end
     else
-      % if not looked for a compressed zip file
-      fileList(end).dicom = dir(sprintf('%s/*_dicoms.tgz',fullfile(dirname,dirList(i).name)));
-      if ~isempty(fileList(end).dicom)
-	fileList(end).dicom = fullfile(dirname,dirList(i).name,fileList(end).dicom.name);
+      % look for an uncompress dicom directory
+      dicomDir = dir(sprintf('%s/*_dicoms',fullfile(dirname,dirList(i).name)));
+      if ~isempty(dicomDir)
+	fileList(end).dicom = fullfile(dirname,dirList(i).name,dicomDir(1).name);
+      else
+	% if not looked for a compressed zip file
+	fileList(end).dicom = dir(sprintf('%s/*_dicoms.tgz',fullfile(dirname,dirList(i).name)));
+	if ~isempty(fileList(end).dicom)
+	  fileList(end).dicom = fullfile(dirname,dirList(i).name,fileList(end).dicom.name);
+	end
       end
     end
   catch
@@ -1198,14 +1226,20 @@ if getext(filename,'tgz')
 
   % change path back
   cd(curpwd);
+  
+  % strip the extension 
+  filename = stripext(filename);
 end
 
 % now do a dir to look at all the files and select the first dicom
-d = dir(fullfile(stripext(filename),'*.dcm'));
-
+d = dir(fullfile(filename,'*.dcm'));
+  
 % if we got one, then load it
 if length(d) >= 1
-  info = dicominfo(fullfile(stripext(filename),d(1).name));
+  info = dicominfo(fullfile(filename,d(1).name));
+else
+  disp(sprintf('(dofmricni:getDicomInfo) Missing dicom info for: %s',filename));
+  return
 end
 
 % get the subjectID
@@ -1248,7 +1282,7 @@ if s.fixMuxXform && (length(d)>1)
   foundFirstSlice = 0;
   % get the first xform
   refDicomNum = 1;
-  refXform = dicom2xform(fullfile(stripext(filename),d(refDicomNum).name));
+  refXform = dicom2xform(fullfile(filename,d(refDicomNum).name));
   % start by assuming this is the top slice
   topSliceXform = refXform;
   minSliceNum = 0;
@@ -1257,7 +1291,7 @@ if s.fixMuxXform && (length(d)>1)
   iDicom = refDicomNum+1;
   while foundFirstSlice < 2
     % get the slice x form for this dicom
-    sliceXform = dicom2xform(fullfile(stripext(filename),d(iDicom).name));
+    sliceXform = dicom2xform(fullfile(filename,d(iDicom).name));
     % find out the slice number
     slice2slice = inv(refXform)*sliceXform;
     sliceNum(end+1) = round(slice2slice(3,4));
@@ -1382,8 +1416,13 @@ preferredCommandNames = {'/usr/bin/tar','/usr/bin/gunzip'};
 commandNames = {'tar','gunzip'};
 helpFlag = {'-h','-h'};
 if s.flywheel
+  % add flywheel
   preferredCommandNames{end+1} = '/usr/bin/fw';
   commandNames{end+1} = 'fw';
+  helpFlag{end+1} = '-h';
+  % add unzip
+  preferredCommandNames{end+1} = '/usr/bin/unzip';
+  commandNames{end+1} = 'unzip';
   helpFlag{end+1} = '-h';
 end
 [retval s] = checkShellCommands(s,commandNames,preferredCommandNames,helpFlag);
@@ -1487,6 +1526,11 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%
 function s = getFlywheelDir(s)
 
+% tell user what is going on
+dispHeader;
+dispHeader('Querying Flywheel using fw CLI');
+dispHeader;
+
 % user CLI to get list of experiments
 [status fwListing] = system(sprintf('%s ls %s',s.commands.fw,s.PI));
 if ~isequal(status,0)
@@ -1528,7 +1572,11 @@ mrParams = {{'chooseNum',1,'minmax',[1 length(studyNames)],'incdec=[-1 1]'},...
 params = mrParamsDialog(mrParams);
 if isempty(params),return,end
 studyName = params.studyName{params.chooseNum};
-expName = params.expName{1};
+expName = params.expName{params.chooseNum};
+
+% get subjectID
+underscores = strfind(expName,'_');
+s.subjectID = gruSubjectNum2ID(expName(underscores(2)+1:underscores(3)-1));
 
 % convert back expname to not have data and subjectID
 expName = expName(last(strfind(expName,'_'))+1:end);
@@ -1689,7 +1737,8 @@ tf = false;
 
 % download whole direcotry
 cd(fileparts(s.localDir));
-status = system(sprintf('%s download -e pfile %s',s.commands.fw,fullfile(s.PI,s.cniDir)));
+dispHeader('(dofmricni:getFlywheelData) Downloading data from flywheel - this may take several minutes');
+status = system(sprintf('%s download -f -e pfile %s',s.commands.fw,fullfile(s.PI,s.cniDir)));
 
 % check to see if the tar file downloaded properly
 tarfileName = setext(getLastDir(s.cniDir),'tar');
@@ -1704,6 +1753,28 @@ if ~isequal(status,0)
   disp(sprintf('(dofmricni:getFlywheelData) Could not untar: %s',tarfileName));
   return
 end
+
+% remove the tar file
+system(sprintf('rm -f %s',tarfileName));
+
+% move out of the directory structure
+dataDir = fullfile(s.PI,fileparts(s.cniDir),s.subjectID,getLastDir(s.cniDir));
+if ~isdir(dataDir)
+  disp(sprintf('(dofmricni:getFlywheelData) Directory %s not found in tar',dataDir));
+  return
+end
+
+% remove existing directory if necessary
+if isdir(getLastDir(s.cniDir))
+  disp(sprintf('(dofmricni:getFlywheelData) Directory %s exists, removing',getLastDir(s.cniDir)));
+  system(sprintf('rm -rf %s',getLastDir(s.cniDir)));
+end
+  
+% move the directory
+system(sprintf('mv %s .',dataDir));
+
+% remove the empty file structure
+system(sprintf('rm -rf %s',s.PI));
 
 tf = true;
 
