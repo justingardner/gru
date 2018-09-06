@@ -55,7 +55,7 @@ function retval = dofmricni(varargin)
 clc;
 
 % Default arguments
-getArgs(varargin,{'PI=jlg','idWarning=true','stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','getStimFiles=true','stimComputerName=oban','stimComputerUserName=gru','username=[]','unwarp=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1','fixMuxXform=2','dicomFix=0','flywheel=0'});
+getArgs(varargin,{'PI=jlg','idWarning=true','stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','getStimFiles=true','stimComputerName=oban','stimComputerUserName=gru','username=[]','unwarp=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1','fixMuxXform=2','dicomFix=0','flywheel=1'});
 
 % set up system variable (which gets passed around with important system info) - this
 % means we have to copy these variables into s.
@@ -89,10 +89,15 @@ if isequal(s.useLocalData,0)
   else
     s = getCNIDir(s);
   end
-  if isempty(s.cniDir),return,end
+  if ~isfield(s,'cniDir') || isempty(s.cniDir),return,end
 
   % now move data into temporary directory on local machine so that we can analyze it
-  [tf s] = getCNIData(s);
+  if s.flywheel
+    [tf s] = getFlywheelData(s);
+  else
+    [tf s] = getCNIData(s);
+  end
+    
   if ~tf,return,end
 else
   % get downloaded data
@@ -1376,6 +1381,11 @@ end
 preferredCommandNames = {'/usr/bin/tar','/usr/bin/gunzip'};
 commandNames = {'tar','gunzip'};
 helpFlag = {'-h','-h'};
+if s.flywheel
+  preferredCommandNames{end+1} = '/usr/bin/fw';
+  commandNames{end+1} = 'fw';
+  helpFlag{end+1} = '-h';
+end
 [retval s] = checkShellCommands(s,commandNames,preferredCommandNames,helpFlag);
 if ~retval,return,end
 
@@ -1393,6 +1403,15 @@ if s.unwarp
     else
       return
     end
+  end
+end
+
+% check if we are logged in to flywheel
+if s.flywheel
+  [status fwstatus] = system(sprintf('%s status',s.commands.fw));
+  if ~isempty(strfind(fwstatus,'You are not currently logged in'))
+    disp(sprintf('(dofmricni:checkCommands) You are not logged into flywheel. You should do: fw login APIkey - where APIKey is from your profile page on cni.flywheel.io'));
+    retval = false;
   end
 end
 
@@ -1469,9 +1488,10 @@ end
 function s = getFlywheelDir(s)
 
 % user CLI to get list of experiments
-[status fwListing] = system(sprintf('fw ls %s',s.PI));
+[status fwListing] = system(sprintf('%s ls %s',s.commands.fw,s.PI));
 if ~isequal(status,0)
   disp(sprintf('(dofmricni:getFlywheelDir) fw ls command returned status: %i',status));
+  disp(sprintf('(dofmricni;getFlywheelDir) You may need to login to fw'));
   return
 end
 
@@ -1490,12 +1510,13 @@ for iStudy = 1:length(studyNames)
   % remove annoying escape codes
   studyNames{iStudy} = removeEscapeCodes(studyNames{iStudy});
   % get list
-  [status fwListing] = system(sprintf('fw ls %s/%s',s.PI,studyNames{iStudy}));
+  [status fwListing] = system(sprintf('%s ls %s/%s',s.commands.fw,s.PI,studyNames{iStudy}));
   % parse the results
   expNamesParse = textscan(fwListing,'%s %s %s %s %s %s');
   if length(expNamesParse) == 6
     for iExp = 1:length(expNamesParse{6})
       expNames{iStudy}{iExp} = removeEscapeCodes(expNamesParse{6}{iExp});
+      expFullNames{iStudy}{iExp} = sprintf('%s_%s_%s_%s',removeEscapeCodes(expNamesParse{2}{iExp}),removeEscapeCodes(expNamesParse{3}{iExp}),removeEscapeCodes(expNamesParse{5}{iExp}),removeEscapeCodes(expNamesParse{6}{iExp}));
     end
   end
 end
@@ -1503,11 +1524,14 @@ end
 % Now set up variables to have the default list be from all studies
 mrParams = {{'chooseNum',1,'minmax',[1 length(studyNames)],'incdec=[-1 1]'},...
 	    {'studyName',studyNames,'type=string','Name of studies','group=chooseNum','editable=0'},...
-	    {'expName',expNames,'Name of scan','group=chooseNum'}};
+	    {'expName',expFullNames,'Name of scan','group=chooseNum'}};
 params = mrParamsDialog(mrParams);
 if isempty(params),return,end
 studyName = params.studyName{params.chooseNum};
-expName = params.expName{params.chooseNum};
+expName = params.expName{1};
+
+% convert back expname to not have data and subjectID
+expName = expName(last(strfind(expName,'_'))+1:end);
 
 % set cniDir
 s.cniDir = fullfile(studyName,expName);
@@ -1536,7 +1560,9 @@ if s(1) == 27
   s = s(8:end);
 end
 
-s = s(1:first(find(s==27)-1));
+if ~isempty(find(s==27))
+  s = s(1:first(find(s==27)-1));
+end
 
 %%%%%%%%%%%%%%%%%%%
 %%   getCNIDir   %%
@@ -1653,6 +1679,33 @@ if ~isdir(toDir)
   end
 end
 s.localDir = fullfile(toDir,getLastDir(s.cniDir));
+
+%%%%%%%%%%%%%%%%%%%%%%%%%
+%    getFlywheelData    %
+%%%%%%%%%%%%%%%%%%%%%%%%%
+function [tf s] = getFlywheelData(s)
+
+tf = false;
+
+% download whole direcotry
+cd(fileparts(s.localDir));
+status = system(sprintf('%s download -e pfile %s',s.commands.fw,fullfile(s.PI,s.cniDir)));
+
+% check to see if the tar file downloaded properly
+tarfileName = setext(getLastDir(s.cniDir),'tar');
+if ~isfile(tarfileName)
+  disp(sprintf('(dofmricni:getFlywheelData) Tarfile %s did not get downloaded properly from fw',tarfileName));
+  return
+end
+
+% untar the file
+status = system(sprintf('%s xfv %s',s.commands.tar,tarfileName));
+if ~isequal(status,0)
+  disp(sprintf('(dofmricni:getFlywheelData) Could not untar: %s',tarfileName));
+  return
+end
+
+tf = true;
 
 %%%%%%%%%%%%%%%%%%%%
 %%   getCNIData   %%
