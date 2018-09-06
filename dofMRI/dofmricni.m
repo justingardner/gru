@@ -55,11 +55,11 @@ function retval = dofmricni(varargin)
 clc;
 
 % Default arguments
-getArgs(varargin,{'PI=jlg','idWarning=true','stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','getStimFiles=true','stimComputerName=oban','stimComputerUserName=gru','username=[]','unwarp=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1','fixMuxXform=2','dicomFix=0'});
+getArgs(varargin,{'PI=jlg','idWarning=true','stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','getStimFiles=true','stimComputerName=oban','stimComputerUserName=gru','username=[]','unwarp=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1','fixMuxXform=2','dicomFix=0','flywheel=0'});
 
 % set up system variable (which gets passed around with important system info) - this
 % means we have to copy these variables into s.
-sParams = {'PI','idWarning','cniComputerName','username','stimComputerUserName','getStimFiles','stimComputerName','stimfileDir','numMotionComp','minVolumes','removeInitialVols','stimfileRemoveInitialVols','calibrationNameStrings','cleanUp','useLocalData','spoofTriggers','unwarp','fixMuxXform','dicomFix'};
+sParams = {'PI','idWarning','cniComputerName','username','stimComputerUserName','getStimFiles','stimComputerName','stimfileDir','numMotionComp','minVolumes','removeInitialVols','stimfileRemoveInitialVols','calibrationNameStrings','cleanUp','useLocalData','spoofTriggers','unwarp','fixMuxXform','dicomFix','flywheel'};
 for iParam = 1:length(sParams)
   s.(sParams{iParam}) = eval(sParams{iParam});
 end
@@ -84,7 +84,11 @@ if ~tf,return,end
 % to he CNI computer
 if isequal(s.useLocalData,0)
   % choose which directory to download from cni
-  s = getCNIDir(s);
+  if s.flywheel
+    s = getFlywheelDir(s);
+  else
+    s = getCNIDir(s);
+  end
   if isempty(s.cniDir),return,end
 
   % now move data into temporary directory on local machine so that we can analyze it
@@ -1458,6 +1462,81 @@ for i = 1:length(stimfileList);
     stimfileList{i}.dispstr = stimfileStr;
   end
 end
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%    getFlywheelDir    %
+%%%%%%%%%%%%%%%%%%%%%%%%
+function s = getFlywheelDir(s)
+
+% user CLI to get list of experiments
+[status fwListing] = system(sprintf('fw ls %s',s.PI));
+if ~isequal(status,0)
+  disp(sprintf('(dofmricni:getFlywheelDir) fw ls command returned status: %i',status));
+  return
+end
+
+% parse the results
+studyNames = textscan(fwListing,'%s %s');
+if length(studyNames) == 2,studyNames = studyNames{2};else,studyNames = {};end
+
+% check that we found something
+if isempty(studyNames)
+  disp(sprintf('(dofmricni) Could not find any studies'));
+  return
+end
+
+% now go through and get each of the scans for each studies
+for iStudy = 1:length(studyNames)
+  % remove annoying escape codes
+  studyNames{iStudy} = removeEscapeCodes(studyNames{iStudy});
+  % get list
+  [status fwListing] = system(sprintf('fw ls %s/%s',s.PI,studyNames{iStudy}));
+  % parse the results
+  expNamesParse = textscan(fwListing,'%s %s %s %s %s %s');
+  if length(expNamesParse) == 6
+    for iExp = 1:length(expNamesParse{6})
+      expNames{iStudy}{iExp} = removeEscapeCodes(expNamesParse{6}{iExp});
+    end
+  end
+end
+
+% Now set up variables to have the default list be from all studies
+mrParams = {{'chooseNum',1,'minmax',[1 length(studyNames)],'incdec=[-1 1]'},...
+	    {'studyName',studyNames,'type=string','Name of studies','group=chooseNum','editable=0'},...
+	    {'expName',expNames,'Name of scan','group=chooseNum'}};
+params = mrParamsDialog(mrParams);
+if isempty(params),return,end
+studyName = params.studyName{params.chooseNum};
+expName = params.expName{params.chooseNum};
+
+% set cniDir
+s.cniDir = fullfile(studyName,expName);
+disp(sprintf('(dofmricni:getFlywhellDir) Directory chosen is: %s',s.cniDir))
+
+% set the directory to which we resync data
+toDir = mlrReplaceTilde(fullfile(s.localDataDir,'temp/dofmricni'));
+if ~isdir(toDir)
+  try
+    mkdir(toDir);
+  catch
+    mrWarnDlg(sprintf('(dofmricni) Cannot make directory %s. Either you do not have permissions, or perhaps you have a line to a drive that is not currently mounted?',toDir));
+    return
+  end
+end
+s.localDir = fullfile(toDir,getLastDir(s.cniDir));
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    removeEscapeCodes    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function s = removeEscapeCodes(s)
+
+% strip off weird pre-code escape characters
+if s(1) == 27
+  % remove pre escape code
+  s = s(8:end);
+end
+
+s = s(1:first(find(s==27)-1));
 
 %%%%%%%%%%%%%%%%%%%
 %%   getCNIDir   %%
