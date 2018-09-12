@@ -185,6 +185,59 @@ end
 
 tf = true;
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    fixDirectoryNamesWithSpaces    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function fileList = fixDirectoryNamesWithSpaces(s,fileList)
+
+% fix list for bad chars 
+fixList = {' ','_'};
+% also directories should not have . in them
+fixListDir = {'.','p'};
+
+for iFile = 1:length(fileList)
+  % check for spaces
+  if any(isspace(fileList(iFile).filename))
+    % convert name to remove spaces
+    originalPath = fileparts(fileList(iFile).fullfile);
+    originalName = fileList(iFile).filename;
+    spaceLessName = fixBadChars(originalName,fixList,fixListDir);
+    % change in the fileList structure
+    fileList(iFile).filename = spaceLessName;
+    fileList(iFile).fullfile = fullfile(originalPath,spaceLessName);
+    % if we haven't already, fixed the directory name in the file system
+    if ~isdir(fileList(iFile).fullfile)
+      % change it
+      disp(sprintf('(dofmricni:fixDirectoryNameWithSpaces) Changing name "%s" => %s',originalName,spaceLessName));
+      system(sprintf('mv "%s" %s',fullfile(originalPath,originalName),fileList(iFile).fullfile));
+    end
+    % fileNames to check
+    checkNames = {'nifti','dicom'};
+    for iCheck = 1:length(checkNames)
+      checkName = checkNames{iCheck};
+      % check the field (nifit or dicom)
+      if isfield(fileList(iFile),checkName) && ~isempty(fileList(iFile).(checkName))
+	% check if the filename has any spaces in it
+	fileName = getLastDir(fileList(iFile).(checkName));
+	% see if it has spaces
+	if any(isspace(fileName))
+	  % then convert it
+	  spaceLessFileName = fixBadChars(fileName,fixList);
+	  spaceLessFullFileName = fullfile(fileList(iFile).filename,spaceLessFileName);
+	  % move it in the directory system if we have not already
+	  if ~isfile(spaceLessFullFileName)
+	    disp(sprintf('(dofmricni:fixDirectoryNameWithSpaces) Changing name "%s" => %s',fileName,spaceLessFileName));
+	    system(sprintf('mv "%s" %s',fullfile(fileList(iFile).filename,fileName),spaceLessFullFileName));
+	  end
+	  fileName = spaceLessFileName;
+	end
+      end
+      % change the file name
+      fileList(iFile).(checkName) = fullfile(fileList(iFile).fullfile,fileName);
+    end
+  end      
+end
+
 %%%%%%%%%%%%%%%%%%%%%
 %%   examineData   %%
 %%%%%%%%%%%%%%%%%%%%%
@@ -193,6 +246,9 @@ function [tf s] = examineData(s)
 tf = false;
 % get the list of filest that we have
 fileList = getFileList(s,s.localDir);
+
+% fix any directory names with spaces in them, cause, that's annoying
+fileList = fixDirectoryNamesWithSpaces(s,fileList);
 
 % get dicom info
 disppercent(-inf,'(dofmricni) Getting dicom info');
