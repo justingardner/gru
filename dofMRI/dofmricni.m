@@ -2053,7 +2053,12 @@ if ~isempty(stimfileListing)
 	s.stimfileInfo(end).missingVolumes = find(diff(e.time(e.tracenum==volTrace))>(s.stimfileInfo(end).tr*1.5));
         % get some other info
         s.stimfileInfo(end).startTime = stimfile.myscreen.starttime;
-        s.stimfileInfo(end).endTime = stimfile.myscreen.endtime;
+	if isfield(stimfile.myscreen,'endtime')
+	  s.stimfileInfo(end).endTime = stimfile.myscreen.endtime;
+	else
+	  disp(sprintf('(dofmricni:getStimfiles) File %s is missing endTime',stimfileListing{i}));
+	  s.stimfileInfo(end).endTime = stimfile.myscreen.starttime;
+	end
         s.stimfileInfo(end).numVols = stimfile.myscreen.volnum;
         if isfield(stimfile.myscreen,'ignoredInitialVols')
           s.stimfileInfo(end).ignoredInitialVols = (stimfile.myscreen.ignoredInitialVols-stimfile.myscreen.ignoreInitialVols);
