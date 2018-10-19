@@ -67,40 +67,20 @@ imageStats = textureAnalysis(imageDataGray,nScales,nOrientations,nSpatialNeighbo
 %[imagePyramid,imagePyramidIndices] = buildSFpyr(imageDataGray,nScales,nOrientations-1);
 
 % initialize figure
-f = mlrSmartfig('dispPSStats','reuse');clf;
-subplotRows = 2;subplotCols = 2;
+figHist = mlrSmartfig('dispPSStats','reuse');clf;
+subplotRowsHist = 3;subplotColsHist = 2;
 
 % display original texture imaage
-subplot(subplotRows,subplotCols,1);
+subplot(subplotRowsHist,subplotColsHist,1);
 imagesc(imageData);
 title(sprintf('Texture image: %s (%i x %i)',imageFileName,imageWidth,imageHeight));
 
-% display histogram
-subplot(subplotRows,subplotCols,2);
-
-% figure out good setting for bins
-minHist = imageStats.pixelStats(5);
-maxHist = imageStats.pixelStats(6);
-binSize = (maxHist-minHist)/32;
-if (binSize>1),binSize = round(binSize);end
-myhist(imageData(:),minHist:binSize:maxHist);
-
-% set to 0 to 255 if that is the image range
-if (maxHist > 128) && (maxHist <= 255) && (minHist >=0)
-  xaxis(0,255);
-  set(gca,'XTick',[0 64 128 192 255]);
-end
-
-% set title to display pixel statistics
-title(sprintf('Mean: %0.2f Var: %0.2f Skew: %0.2f Kurtosis: %0.2f Minmax: [%0.1f %0.1f]',imageStats.pixelStats(1),imageStats.pixelStats(2),imageStats.pixelStats(3),imageStats.pixelStats(4),imageStats.pixelStats(5),imageStats.pixelStats(6)));
-ylabel('n');
-xlabel('Pixel value');
-
 % display pyramid bands
-mlrSmartfig('dispPSStats_pyramid','reuse');clf;
+figPyramid = mlrSmartfig('dispPSStats_pyramid','reuse');clf;
 subplotRows = nScales;subplotCols = nOrientations+1;
 bandIndex = 2;
 for iScale = 1:nScales
+  scaleValues{iScale} = [];
   for iOrientation = 1:nOrientations
     % get the image band for the scale / orientation
     imageBand = pyrBand(imagePyramid, imagePyramidIndices, bandIndex);
@@ -110,6 +90,8 @@ for iScale = 1:nScales
     title(sprintf('Scale: %i Orientation: %i',iScale,iOrientation));
     % update band number
     bandIndex = bandIndex + 1;
+    % keep all of the orientation images so that we can get histogram
+    scaleValues{iScale} = [scaleValues{iScale} imageBand(:)];
   end  
 end
 
@@ -127,4 +109,47 @@ title('Low pass residual');
 
 colormap(gray);
 
+% display histogram
+figure(figHist);
+subplot(subplotRowsHist,subplotColsHist,2);
+dispHist(imageData(:),imageStats.pixelStats,'');
+
+for iScale = 1:nScales
+  subplot(subplotRowsHist,subplotColsHist,2+iScale);
+  dispHist(abs(scaleValues{iScale}(:)),imageStats.pixelLPStats(iScale,:),sprintf('Scale %i: ',iScale));
+end
+
 keyboard
+
+%%%%%%%%%%%%%%%%%%
+%    dispHist    %
+%%%%%%%%%%%%%%%%%%
+function dispHist(histData,pixelStats,titleStr)
+
+% calculate min and max of distribution
+minHist = double(min(abs(histData)));
+maxHist = double(max(abs(histData)));
+
+binSize = (maxHist-minHist)/32;
+if (binSize>1),binSize = round(binSize);end
+
+bins = minHist:binSize:maxHist;
+
+% display histogram
+myhist(histData,bins);
+
+% set to 0 to 255 if that is the image range
+if (maxHist > 128) && (maxHist <= 255) && (minHist >=0)
+  xaxis(0,255);
+  set(gca,'XTick',[0 64 128 192 255]);
+end
+
+% set title to display pixel statistics
+if length(pixelStats) == 6
+  title(sprintf('%sMean: %0.2f Var: %0.2f Skew: %0.2f Kurtosis: %0.2f Minmax: [%0.1f %0.1f]',titleStr,pixelStats(1),pixelStats(2),pixelStats(3),pixelStats(4),pixelStats(5),pixelStats(6)));
+else
+  title(sprintf('%sSkew: %0.2f Kurtosis: %0.2f',titleStr,pixelStats(1),pixelStats(2)));
+end  
+ylabel('n');
+xlabel('Pixel value');
+
