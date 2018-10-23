@@ -60,7 +60,9 @@ imageColorPlanes = size(imageData,3);
 imageDataGray = mean(imageData,3);
 
 % run textureAnalysis to get Portilla and Simoncelli statistics
-imageStats = textureAnalysis(imageDataGray,nScales,nOrientations,nSpatialNeighborhood);
+% run a copy of the function that adds a couple of fields with
+% intermediate computations that can be displayed
+imageStats = gruTextureAnalysis(imageDataGray,nScales,nOrientations,nSpatialNeighborhood);
 
 % build pyramid representation of image
 [imagePyramid,imagePyramidIndices] = buildSCFpyr(imageDataGray,nScales,nOrientations-1);
@@ -68,12 +70,12 @@ imageStats = textureAnalysis(imageDataGray,nScales,nOrientations,nSpatialNeighbo
 
 % initialize figure
 figHist = mlrSmartfig('dispPSStats','reuse');clf;
-subplotRowsHist = 3;subplotColsHist = 2;
+subplotRowsHist = 2+nScales;subplotColsHist = 2;
 
 % display original texture imaage
 subplot(subplotRowsHist,subplotColsHist,1);
 imagesc(imageData);
-title(sprintf('Texture image: %s (%i x %i)',imageFileName,imageWidth,imageHeight));
+title(sprintf('Original texture image: %s (%i x %i)',imageFileName,imageWidth,imageHeight));
 
 % display pyramid bands
 figPyramid = mlrSmartfig('dispPSStats_pyramid','reuse');clf;
@@ -111,12 +113,22 @@ colormap(gray);
 
 % display histogram
 figure(figHist);
+colormap(gray);
 subplot(subplotRowsHist,subplotColsHist,2);
 dispHist(imageData(:),imageStats.pixelStats,'');
 
-for iScale = 1:nScales
-  subplot(subplotRowsHist,subplotColsHist,2+iScale);
-  dispHist(abs(scaleValues{iScale}(:)),imageStats.pixelLPStats(iScale,:),sprintf('Scale %i: ',iScale));
+for iScale = 1:nScales+1
+  % display reconstructed image
+  subplot(subplotRowsHist,subplotColsHist,3+(iScale-1)*2);
+  imagesc(imageStats.reconstructedImage{iScale});
+  if iScale == nScales+1
+    title(sprintf('Reconstructed low-frequency residual'));
+  else
+    title(sprintf('Reconstructed low-frequency residual to scale: %i',nScales-iScale+1));
+  end
+  % display histogram
+  subplot(subplotRowsHist,subplotColsHist,4+(iScale-1)*2);
+  dispHist(imageStats.reconstructedImage{iScale}(:),imageStats.pixelLPStats(iScale,:),sprintf('Scale %i: ',iScale-1));
 end
 
 keyboard
@@ -127,8 +139,8 @@ keyboard
 function dispHist(histData,pixelStats,titleStr)
 
 % calculate min and max of distribution
-minHist = double(min(abs(histData)));
-maxHist = double(max(abs(histData)));
+minHist = double(min(histData));
+maxHist = double(max(histData));
 
 binSize = (maxHist-minHist)/32;
 if (binSize>1),binSize = round(binSize);end
@@ -142,6 +154,8 @@ myhist(histData,bins);
 if (maxHist > 128) && (maxHist <= 255) && (minHist >=0)
   xaxis(0,255);
   set(gca,'XTick',[0 64 128 192 255]);
+else
+  set(gca,'XTick',[minHist:(maxHist-minHist)/3:maxHist]);
 end
 
 % set title to display pixel statistics
