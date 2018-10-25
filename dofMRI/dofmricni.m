@@ -217,23 +217,23 @@ for iFile = 1:length(fileList)
       checkName = checkNames{iCheck};
       % check the field (nifit or dicom)
       if isfield(fileList(iFile),checkName) && ~isempty(fileList(iFile).(checkName))
-	% check if the filename has any spaces in it
-	fileName = getLastDir(fileList(iFile).(checkName));
-	% see if it has spaces
-	if any(isspace(fileName))
-	  % then convert it
-	  spaceLessFileName = fixBadChars(fileName,fixList);
-	  spaceLessFullFileName = fullfile(fileList(iFile).filename,spaceLessFileName);
-	  % move it in the directory system if we have not already
-	  if ~isfile(spaceLessFullFileName)
-	    disp(sprintf('(dofmricni:fixDirectoryNameWithSpaces) Changing name "%s" => %s',fileName,spaceLessFileName));
-	    system(sprintf('mv "%s" %s',fullfile(fileList(iFile).filename,fileName),spaceLessFullFileName));
-	  end
-	  fileName = spaceLessFileName;
-	end
+        % check if the filename has any spaces in it
+        fileName = getLastDir(fileList(iFile).(checkName));
+        % see if it has spaces
+        if any(isspace(fileName))
+          % then convert it
+          spaceLessFileName = fixBadChars(fileName,fixList);
+          spaceLessFullFileName = fullfile(fileList(iFile).filename,spaceLessFileName);
+          % move it in the directory system if we have not already
+          if ~isfile(spaceLessFullFileName)
+            disp(sprintf('(dofmricni:fixDirectoryNameWithSpaces) Changing name "%s" => %s',fileName,spaceLessFileName));
+            system(sprintf('mv "%s" %s',fullfile(fileList(iFile).filename,fileName),spaceLessFullFileName));
+          end
+          fileName = spaceLessFileName;
+        end
+        % change the file name
+        fileList(iFile).(checkName) = fullfile(fileList(iFile).fullfile,fileName);
       end
-      % change the file name
-      fileList(iFile).(checkName) = fullfile(fileList(iFile).fullfile,fileName);
     end
   end      
 end
@@ -1658,14 +1658,16 @@ s.localDir = fullfile(toDir,getLastDir(s.cniDir));
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 function s = removeEscapeCodes(s)
 
-% strip off weird pre-code escape characters
-if s(1) == 27
-  % remove pre escape code
-  s = s(8:end);
-end
+if ~isempty(s)
+    % strip off weird pre-code escape characters
+    if s(1) == 27
+      % remove pre escape code
+      s = s(8:end);
+    end
 
-if ~isempty(find(s==27))
-  s = s(1:first(find(s==27)-1));
+    if ~isempty(find(s==27))
+      s = s(1:first(find(s==27)-1));
+    end
 end
 
 %%%%%%%%%%%%%%%%%%%
