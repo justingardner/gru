@@ -178,7 +178,10 @@ crossOrientFigure = mlrSmartfig('dispPSStats_cross_correlation_orienation','reus
 subplotRows = nScales;subplotCols = 1;
 for iScale = 1:nScales
   subplot(subplotRows,subplotCols,(iScale-1)*1+1);
-  imagesc(imageStats.cousinMagCorr(:,:,iScale));
+  % compute scale
+  corr = imageStats.cousinMagCorr(:,:,iScale);
+  maxScale = max(abs(corr(:)))
+  imagesc(corr,[-maxScale maxScale]);
   title(sprintf('Within scale orientation-correlation scale %i',iScale));
 end
 
