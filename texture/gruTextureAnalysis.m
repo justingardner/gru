@@ -1,8 +1,10 @@
-function [params] = gruTextureAnalysis(im0, Nsc, Nor, Na)
+function [params intermediateSteps] = gruTextureAnalysis(im0, Nsc, Nor, Na)
 %
 % This function is taken from Portilla & Simoncelli code and just adds
 % some comments to make it easier to read and stores some intermediate%
-% steps for display by dispPSStats 
+% steps for display by dispPSStats. Note that original comments are
+% typically prefixed by %% and new comments are always on their own 
+% line and are prefixed by %
 %
 % Analyze texture for application of Portilla-Simoncelli model/algorithm.
 %
@@ -124,7 +126,10 @@ cy = Nly/2+1;
 cx = Nlx/2+1;
 % compute auto-correlation in fourier domain
 ac = fftshift(real(ifft2(abs(fft2(im)).^2)))/prod(size(ch));
-% keep only the required part
+% keep for later display, full auto-correlation and what it was an auto-correlation of
+autoCorrelation{Nsc+1} = ac;
+autoCorrelationOf{Nsc+1} = im;
+% keep only the required part of the auto-correlation (i.e. the amount specified in the input argument Na)
 ac = ac(cy-le:cy+le,cx-le:cx+le);
 % put into a big matrix of auto correlation coefficients
 acr(la-le+1:la+le+1,la-le+1:la+le+1,Nsc+1) = ac;
@@ -140,6 +145,7 @@ if vari/var0 > 1e-6,
   skew0p(Nsc+1) = mean2(im.^3)/vari^1.5;
   kurt0p(Nsc+1) = mean2(im.^4)/vari^2;
 else
+  % unstable esitmate of variance, so use default values for a gaussian distribution
   skew0p(Nsc+1) = 0;
   kurt0p(Nsc+1) = 3;
 end
@@ -167,41 +173,56 @@ for nsc = Nsc:-1:1,
     % the fourier transform of the image by itself and then convert back
     % to the image domain using in the inverse fourier transform
     ac = fftshift(real(ifft2(abs(fft2(ch)).^2)))/prod(size(ch));
+    % keep for later display, full auto-correlation and what it was an auto-correlation of
+    autoCorrelationOrient{Nor*(nsc-1)+nor} = ac;
+    autoCorrelationOrientOf{Nor*(nsc-1)+nor} = ch;
     % and placing into a big matrix
     ac = ac(cy-le:cy+le,cx-le:cx+le);
     ace(la-le+1:la+le+1,la-le+1:la+le+1,nsc,nor) = ac;
   end
 
-  %% Combine ori bands
+  %% Combine orientation bands
 
+  % grab all the orientation bands from the pyramid for this spatial scale
   bandNums = [1:Nor] + (nsc-1)*Nor+1;  %ori bands only
   ind1 = pyrBandIndices(pind0, bandNums(1));
   indN = pyrBandIndices(pind0, bandNums(Nor));
   bandInds = [ind1(1):indN(length(indN))];
   %% Make fake pyramid, containing dummy hi, ori, lo
+  % that is, we are creating a "fake pyramid" that includes the response across
+  % all orientations for this spatial scale, and defaulting everything else
+  % to zero so that we can reconstruct with just this scale's information
   fakePind = [pind0(bandNums(1),:);pind0(bandNums(1):bandNums(Nor)+1,:)];
   fakePyr = [zeros(prod(fakePind(1,:)),1);...
 	 rpyr0(bandInds); zeros(prod(fakePind(size(fakePind,1),:)),1);];
-  % reconstruct the image using only these orientations adding on
-  % to the image that has already been reconstructed at lower bands
+  % reconstruct the image using only these orientations
   ch = reconSFpyr(fakePyr, fakePind, [1]);     % recon ori bands only
+  % upsample to the same resolution as the image
   im = real(expand(im,2))/4;
+  % and add this reconstruction to the image that has already been reconstructed from lower spatial scales
   im = im + ch;  
   % Take auto-correlation, using fourier transform - i.e. multiply
   % the fourier transform of the image by itself and then convert back
   % to the image domain using in the inverse fourier transform
   ac = fftshift(real(ifft2(abs(fft2(im)).^2)))/prod(size(ch));
+  % keep for later display, full auto-correlation and what it was an auto-correlation of
+  autoCorrelation{nsc} = ac;
+  autoCorrelationOf{nsc} = im;
+  % keep only necessary part of ac (i.e. that specified by the Na argument)
   ac = ac(cy-le:cy+le,cx-le:cx+le);
   acr(la-le+1:la+le+1,la-le+1:la+le+1,nsc) = ac;
   % variance is the auto-correlation at 0 lag
   vari = ac(le+1,le+1);
 
   if vari/var0 > 1e-6,
-        skew0p(nsc) = mean2(im.^3)/vari^1.5;
-        kurt0p(nsc) = mean2(im.^4)/vari^2;
+    % calculate skew and kurtosis in usual way - note that vari^1.5, vari^2 is std^3 and std^4 as 
+    % required by formulas
+    skew0p(nsc) = mean2(im.^3)/vari^1.5;
+    kurt0p(nsc) = mean2(im.^4)/vari^2;
   else
-        skew0p(nsc) = 0;
-        kurt0p(nsc) = 3;
+    % use gaussian defaults when variance estimate is unstable
+    skew0p(nsc) = 0;
+    kurt0p(nsc) = 3;
   end
   % keep the reconstructed image for display later
   reconstructedImage{nsc} = im;
@@ -210,52 +231,92 @@ end
 %% Compute the cross-correlation matrices of the coefficient magnitudes
 %% pyramid at the different levels and orientations
 
+% initialize correlation matrices, C0 and Cx0 are for correlation of real components
+% where C0 is correlation between orientations and Cx0 is between scales. 
+% Not sure, but I think these are getting initialized incorrectly - I think
+% C0 should have last dimension Nsc and not Nsc+1 since you do the cross-correlations
+% inside each scale (and dnon't do anything on the high-pass residual which doesn't have
+% orienation bands).
+% Likewise, Cx0 should be Nsc-1, since you can't compute a correlation with a lower spatial
+% scale once you get to the last scale. The entries into these parts of the matrix seem
+% to stay 0 after the code runs.
 C0 = zeros(Nor,Nor,Nsc+1);
 Cx0 = zeros(Nor,Nor,Nsc);
 
+% same thing but for real components of filter responses
 Cr0 = zeros(2*Nor,2*Nor,Nsc+1);
 Crx0 = zeros(2*Nor,2*Nor,Nsc);
 
+% iterate over scales
 for nsc = 1:Nsc,
+  % Get the pyramid band for the first orientation at this spatial scale
   firstBnum = (nsc-1)*Nor+2;
+  % size of each orientation band
   cousinSz = prod(pind0(firstBnum,:));
+  % calculate the indexes in the pyramid of all the orientation bands at this scale
   ind = pyrBandIndices(pind0,firstBnum);
   cousinInd = ind(1) + [0:Nor*cousinSz-1];
 
+  % if we have not yet reached the top of the pyramid in spatial scale
   if (nsc<Nsc)
+    % initialze 
     parents = zeros(cousinSz,Nor);
     rparents = zeros(cousinSz,Nor*2);
+    % iterate over orientations
     for nor=1:Nor,
+      % get the next lower scale band, at each orientation
       nband = (nsc-1+1)*Nor+nor+1;
-
+      % expand it to the same size as this correlation size
       tmp = expand(pyrBand(pyr0, pind0, nband),2)/4;
+      % break into readl and imaginary parts
       rtmp = real(tmp); itmp = imag(tmp);
       %% Double phase:
       tmp = sqrt(rtmp.^2 + itmp.^2) .* exp(2 * sqrt(-1) * atan2(rtmp,itmp));
+      % and put the real and imaginary parts into matrix (vectify is just a function
+      % call for turning into a vector and is equaivalent to the matrix(:) notation
       rparents(:,nor) = vectify(real(tmp));
       rparents(:,Nor+nor) = vectify(imag(tmp));
-
+      % get the absolute value
       tmp = abs(tmp);
+      % and store that away
       parents(:,nor) = vectify(tmp - mean2(tmp));
     end
   else
+    % here we deal with the lowest level of the pyramid in which you cannot go any further
+    % just expand out the lowest band to the correct dimensions
     tmp = real(expand(pyrLow(rpyr0,pind0),2))/4;
+    % and store in the right place in the matrix
     rparents = [vectify(tmp),...
 		vectify(shift(tmp,[0 1])), vectify(shift(tmp,[0 -1])), ...
 		vectify(shift(tmp,[1 0])), vectify(shift(tmp,[-1 0]))];
     parents = [];
   end
 
+  % now that everything is in place, compute cross-correlations
+  % the terminology here is that cousins are same scale different orientations
+  % and parents are across different scales - I believe the parent is
+  % the next lower scale, which seems a bit counter-intuitive to me.
+
+  % grab the data for all the orientation bands at this scale
   cousins = reshape(apyr0(cousinInd), [cousinSz Nor]);
   nc = size(cousins,2);   np = size(parents,2);
+  % and compute correlation 
   C0(1:nc,1:nc,nsc) = innerProd(cousins)/cousinSz;
+  % if there are two scales available, then compute the correlations
+  % between scales
   if (np > 0)
+    % compute the cross-correlation between scales
     Cx0(1:nc,1:np,nsc) = (cousins'*parents)/cousinSz;
+    % at the bottom of the pyramid
     if (nsc==Nsc)
+      % just compute the correlation of the parents with itself
+      % does this ever get called?
       C0(1:np,1:np,Nsc+1) = innerProd(parents)/(cousinSz/4);
+      keyboard
     end
   end
   
+  % now do the same thing for the real parts
   cousins = reshape(real(pyr0(cousinInd)), [cousinSz Nor]);
   nrc = size(cousins,2);   nrp = size(rparents,2);  
   Cr0(1:nrc,1:nrc,nsc) = innerProd(cousins)/cousinSz;
@@ -285,5 +346,9 @@ params = struct('pixelStats', statg0, ...
 		'parentRealCorr', Crx0, ...
 		'varianceHPR', vHPR0);
 
-params.reconstructedImage = reconstructedImage;
-
+% keep the images that we will display in dispPSStats
+intermediateSteps.reconstructedImage = reconstructedImage;
+intermediateSteps.autoCorrelation = autoCorrelation;
+intermediateSteps.autoCorrelationOf = autoCorrelationOf;
+intermediateSteps.autoCorrelationOrient = autoCorrelationOrient;
+intermediateSteps.autoCorrelationOrientOf = autoCorrelationOrientOf;

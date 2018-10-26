@@ -21,7 +21,7 @@ if nargin < 1
 end
 
 % get arguments
-getArgs(varargin,{'nScales=4','nOrientations=4','nSpatialNeighborhood=7'});
+getArgs(varargin,{'nScales=4','nOrientations=2','nSpatialNeighborhood=7'});
 
 % check for texture synth library
 if isempty(which('textureAnalysis'))
@@ -62,7 +62,7 @@ imageDataGray = mean(imageData,3);
 % run textureAnalysis to get Portilla and Simoncelli statistics
 % run a copy of the function that adds a couple of fields with
 % intermediate computations that can be displayed
-imageStats = gruTextureAnalysis(imageDataGray,nScales,nOrientations,nSpatialNeighborhood);
+[imageStats imageStatsIntermediateSteps] = gruTextureAnalysis(imageDataGray,nScales,nOrientations,nSpatialNeighborhood);
 
 % build pyramid representation of image
 [imagePyramid,imagePyramidIndices] = buildSCFpyr(imageDataGray,nScales,nOrientations-1);
@@ -120,7 +120,7 @@ dispHist(imageData(:),imageStats.pixelStats,'');
 for iScale = 1:nScales+1
   % display reconstructed image
   subplot(subplotRowsHist,subplotColsHist,3+(iScale-1)*2);
-  imagesc(imageStats.reconstructedImage{iScale});
+  imagesc(imageStatsIntermediateSteps.reconstructedImage{iScale});
   if iScale == nScales+1
     title(sprintf('Reconstructed low-frequency residual'));
   else
@@ -128,8 +128,81 @@ for iScale = 1:nScales+1
   end
   % display histogram
   subplot(subplotRowsHist,subplotColsHist,4+(iScale-1)*2);
-  dispHist(imageStats.reconstructedImage{iScale}(:),imageStats.pixelLPStats(iScale,:),sprintf('Scale %i: ',iScale-1));
+  dispHist(imageStatsIntermediateSteps.reconstructedImage{iScale}(:),imageStats.pixelLPStats(iScale,:),sprintf('Scale %i: ',iScale-1));
 end
+
+% display auto correlation of spatial scale bands
+acFigure = mlrSmartfig('dispPSStats_auto_correlation','reuse');clf;
+subplotRows = nScales+1;subplotCols = 3;
+for iScale = 1:nScales+1
+  subplot(subplotRows,subplotCols,3*(iScale-1)+1);
+  imagesc(imageStatsIntermediateSteps.autoCorrelationOf{iScale});
+  if iScale == nScales+1
+    title(sprintf('Reconstructed low-frequency residual'));
+  else
+    title(sprintf('Reconstructed low-frequency residual to scale: %i',nScales-iScale+1));
+  end
+  subplot(subplotRows,subplotCols,3*(iScale-1)+2);
+  imagesc(imageStatsIntermediateSteps.autoCorrelation{iScale});
+  title('Full auto-correlation');
+  subplot(subplotRows,subplotCols,3*(iScale-1)+3);
+  % the piece we are using in stats
+  imagesc(imageStats.autoCorrReal(:,:,iScale));
+  title('Auto-correlation stats');
+end
+
+% display auto correlation of orientation at each scale 
+acFigure = mlrSmartfig('dispPSStats_auto_correlation_orientation','reuse');clf;
+subplotRows = nScales;subplotCols = 3*nOrientations;
+for iScale = 1:nScales
+  for iOrientation = 1:nOrientations
+    subplot(subplotRows,subplotCols,subplotCols*(iScale-1)+(iOrientation-1)*3+1);
+    imagesc(imageStatsIntermediateSteps.autoCorrelationOrientOf{(iScale-1)*nOrientations+iOrientation});
+    if iScale == nScales+1
+      title(sprintf('Reconstructed low-frequency residual\norient %i',iOrientation));
+    else
+      title(sprintf('Reconstructed low-frequency residual to scale: %i\norient %i',nScales-iScale+1,iOrientation));
+    end
+    subplot(subplotRows,subplotCols,subplotCols*(iScale-1)+(iOrientation-1)*3+2);
+    imagesc(imageStatsIntermediateSteps.autoCorrelationOrient{(iScale-1)*nOrientations+iOrientation});
+    title('Full auto-correlation');
+    subplot(subplotRows,subplotCols,subplotCols*(iScale-1)+(iOrientation-1)*3+3);
+    % the piece we are using in stats
+    imagesc(imageStats.autoCorrMag(:,:,iScale,iOrientation));
+    title('Auto-correlation stats');
+  end
+end
+
+% display cross-correlations of orienation bands at each scale
+crossOrientFigure = mlrSmartfig('dispPSStats_cross_correlation_orienation','reuse');clf;
+subplotRows = nScales;subplotCols = 1;
+for iScale = 1:nScales
+  subplot(subplotRows,subplotCols,(iScale-1)*1+1);
+  imagesc(imageStats.cousinMagCorr(:,:,iScale));
+  title(sprintf('Within scale orientation-correlation scale %i',iScale));
+end
+
+% check for non-zero elements in last part of the matrix (I think these are mistakenly set
+% by the textureAnalysis program to 0 and are not necessary)
+if ~isempty(find(imageStats.cousinMagCorr(:,:,nScales+1)))
+  disp(sprintf('(dispPSStats) Hmm. Unknown coefficients in last part of cousinMagCorr'));
+end
+
+% display cross-correlations of scale bands
+crossScaleFigure = mlrSmartfig('dispPSStats_cross_correlation_scale','reuse');clf;
+subplotRows = nScales-1;subplotCols = 1;
+for iScale = 1:nScales-1
+  subplot(subplotRows,subplotCols,(iScale-1)*1+1);
+  imagesc(imageStats.cousinMagCorr(:,:,iScale));
+  title(sprintf('Cross-Scale orientation-correlation scale %i to %i',iScale,iScale+1));
+end
+
+% check for non-zero elements in last part of the matrix (I think these are mistakenly set
+% by the textureAnalysis program to 0 and are not necessary)
+if ~isempty(find(imageStats.cousinMagCorr(:,:,nScales+1)))
+  disp(sprintf('(dispPSStats) Hmm. Unknown coefficients in last part of cousinMagCorr'));
+end
+
 
 keyboard
 
