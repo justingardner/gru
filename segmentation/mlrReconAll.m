@@ -13,6 +13,12 @@ function mlrReconAll()
 % Exam number, you can find this on NIMS (cni.stanford.edu/nims/)
 % subjectName   who is this person, e.g. s300 or dan username      Your
 % Stanford suid, e.g. dbirman password      Your Stanford suid password
+%
+% MANUAL
+%   The command we use is: recon-all -subject SID -i FILE1 -i FILE2 ... -all -sd /data/freesurfer/subjects
+%
+%   If you copy a file in yourname@cnic7.stanford.edu:/data/... and then
+%   specify that you can run by hand
 
 %%
 disp('If this code hangs, ctrl+c out and try again.');
