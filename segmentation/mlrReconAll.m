@@ -40,7 +40,8 @@ s.teHigher = 35;
 
 %%
 % choose which directory to download from cni
-s = getCNIDir(s);
+%s = getCNIDir(s);
+s = getFlywheelDir(s);
 if isempty(s.cniDir),return,end
 
 %% Check if we are at Stanford in GRU lab (171.64.40.***)
@@ -52,8 +53,7 @@ if isempty(s.cniDir),return,end
 % end
 
 %% Fill out s
-
-s.cniDirFull = fullfile('/nimsfs','jlg',s.cniDir);
+s.cniDirFull = fullfile('jlg',s.cniDir);
 
 % get the subject id
 if ~isfield(s,'subjectID') || isempty(s.subjectID)
@@ -72,6 +72,7 @@ s.fstempPath = fullfile('/data/freesurfer/subjects/',s.subjectID);
 
 try
     command = sprintf('ssh %s@%s ls %s',s.sunetID,s.cniComputerName,s.cniDirFull);
+    command = sprintf('%s ls %s', s.commands.fw, s.cniDirFull);
     disp(command);
     disp('Enter password: ');
     [status,result] = system(command);
@@ -102,8 +103,18 @@ result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
 command = sprintf('mkdir %s',s.tempPath);
 result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
 
+%% Get the local directory
+%s.localSessionDir = fullfile(s.localDataDir,s.experimentName,sprintf('%s%s',s.subjectID,s.studyDate));
+mrParams = {{'localSessionDir',s.localDataDir,'Where is your data locally stored?'}};
+params = mrParamsDialog(mrParams,'Enter the full path to your local session directory');
+if isempty(params),return,end
+s.localSessionDir = params.localSessionDir;
+
+a = dir([s.localSessionDir '/Anatomy/*T1w*9mm*.nii']);
+anat_filename = a(1).name;
+
 %% Figure out which FILE is ours, first try finding a single T1
-corrFile = cellfun(@strfind,resultc,repmat({'T1w_9mm'},size(resultc)),'UniformOutput',false);
+corrFile = cellfun(@strfind,resultc,repmat({'T1w .9mm'},size(resultc)),'UniformOutput',false);
 pos = logical(1-cellfun(@isempty,corrFile));
 filePos = find(pos==1);
 
@@ -113,30 +124,33 @@ for i = 1:length(filePos)
     cFile = resultc{pos};
     if isempty(cFile)
         error('Failed to find your sequence...');
+    else
+      cFile = cFile(strfind(cFile, 'T1w') : end);
     end
     tempWithFile = fullfile(s.cniDirFull,cFile);
     
     % copy files
-    curFilePath = fullfile(s.tempPath,strcat(s.subjectID,'_',num2str(i),'_','c.nii.gz'));
+    curFilePath = fullfile(s.tempPath,strcat(s.subjectID,'_',num2str(i),'_','c.nii'));
     fileStem = getLastDir(tempWithFile);
     endLoc = findstr(fileStem,'_T1w');
     fileStem = fileStem(1:endLoc-1);
     curFileName = getLastDir(s.tempPath);
-    command = sprintf('cp %s %s',fullfile(tempWithFile,sprintf('%s.nii.gz',fileStem)),curFilePath);
-    
+    %command = sprintf('cp %s %s',fullfile(tempWithFile,sprintf('%s.nii.gz',fileStem)),curFilePath);
+    command = sprintf('rsync -av %s/Anatomy/%s "%s@%s:%s"', s.localSessionDir, anat_filename, s.sunetID, s.cniComputerName, curFilePath);
+    result = system(command);
     % in case it doesn't work with no quotation
     %we add double quotation in the command: seems to work
-    commandCheckExist = ['ls ' strcat([s.tempPath '/' s.subjectID,'_',num2str(i),'_','c.nii'])];    
-    [~,status] = doRemoteCommand(s.sunetID,s.cniComputerName,commandCheckExist);        
-    if status~=0
-        command = ['"' command '"'];
-    end    
+    %commandCheckExist = ['ls ' strcat([s.tempPath '/' s.subjectID,'_',num2str(i),'_','c.nii'])];
+    %[~,status] = doRemoteCommand(s.sunetID,s.cniComputerName,commandCheckExist);        
+    %if status~=0
+    %    command = ['"' command '"'];
+    %end
    
-    result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
+    %result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
     % gunzip
     pause(.1)
-    command = sprintf('gunzip -d %s',fullfile(curFilePath));
-    result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
+    %command = sprintf('gunzip -d %s',fullfile(curFilePath));
+    %result = doRemoteCommand(s.sunetID,s.cniComputerName,command);
     curFilePath = fullfile(s.tempPath,strcat(s.subjectID,'_',num2str(i),'_','c.nii'));
     
     pause(.1)
@@ -161,6 +175,98 @@ reconCommand = sprintf('recon-all -subject %s %s -all -sd /data/freesurfer/subje
 % You have to do this into a new terminal, it won't run through MATLAB
 % directly.
 disp(sprintf('\n\nAll of your files are now organized. Open a new terminal window.\nLeave the terminal window open until these commands complete (6-10 hours):\n\nssh -XY %s@cnic7.stanford.edu\n%s\n\nThat''s it!',s.sunetID,reconCommand));
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%    getFlywheelDir    %
+%%%%%%%%%%%%%%%%%%%%%%%%
+function s = getFlywheelDir(s)
+
+% tell user what is going on
+dispHeader;
+dispHeader('Querying Flywheel using fw CLI');
+dispHeader;
+s.commands.fw = 'fw';
+% user CLI to get list of experiments
+[status fwListing] = system(sprintf('%s ls %s',s.commands.fw,s.PI));
+if ~isequal(status,0)
+  disp(sprintf('(mlrReconAll:getFlywheelDir) fw ls command returned status: %i',status));
+  disp(sprintf('(mlrReconAll:getFlywheelDir) You may need to login to fw'));
+  return
+end
+
+% parse the results
+studyNames = textscan(fwListing,'%s %s');
+if length(studyNames) == 2,studyNames = studyNames{2};else,studyNames = {};end
+
+% check that we found something
+if isempty(studyNames)
+  disp(sprintf('(mlrReconAll) Could not find any studies'));
+  return
+end
+
+% now go through and get each of the scans for each studies
+for iStudy = 1:length(studyNames)
+  % remove annoying escape codes
+  studyNames{iStudy} = removeEscapeCodes(studyNames{iStudy});
+  % get list
+  [status fwListing] = system(sprintf('%s ls %s/%s',s.commands.fw,s.PI,studyNames{iStudy}));
+  % parse the results
+  expNamesParse = textscan(fwListing,'%s %s %s %s %s %s');
+  if length(expNamesParse) == 6
+    for iExp = 1:length(expNamesParse{6})
+      expNames{iStudy}{iExp} = removeEscapeCodes(expNamesParse{6}{iExp});
+      expFullNames{iStudy}{iExp} = sprintf('%s_%s_%s_%s',removeEscapeCodes(expNamesParse{2}{iExp}),removeEscapeCodes(expNamesParse{3}{iExp}),removeEscapeCodes(expNamesParse{5}{iExp}),removeEscapeCodes(expNamesParse{6}{iExp}));
+    end
+  end
+end
+
+% Now set up variables to have the default list be from all studies
+mrParams = {{'chooseNum',1,'minmax',[1 length(studyNames)],'incdec=[-1 1]'},...
+	    {'studyName',studyNames,'type=string','Name of studies','group=chooseNum','editable=0'},...
+	    {'expName',expFullNames,'Name of scan','group=chooseNum'}};
+params = mrParamsDialog(mrParams);
+if isempty(params),return,end
+studyName = params.studyName{params.chooseNum};
+expName = params.expName{params.chooseNum};
+
+% get subjectID
+underscores = strfind(expName,'_');
+s.subjectID = gruSubjectNum2ID(expName(underscores(2)+1:underscores(3)-1));
+
+% convert back expname to not have data and subjectID
+expName = expName(last(strfind(expName,'_'))+1:end);
+
+% set cniDir
+s.cniDir = fullfile(studyName,expName);
+disp(sprintf('(mlrReconAll:getFlywheelDir) Directory chosen is: %s',s.cniDir))
+
+% set the directory to which we resync data
+toDir = mlrReplaceTilde(fullfile(s.localDataDir,'temp/dofmricni'));
+if ~isdir(toDir)
+  try
+    mkdir(toDir);
+  catch
+    mrWarnDlg(sprintf('(mlrReconAll) Cannot make directory %s. Either you do not have permissions, or perhaps you have a line to a drive that is not currently mounted?',toDir));
+    return
+  end
+end
+s.localDir = fullfile(toDir,getLastDir(s.cniDir));
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    removeEscapeCodes    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function s = removeEscapeCodes(s)
+
+% strip off weird pre-code escape characters
+if s(1) == 27
+  % remove pre escape code
+  s = s(8:end);
+end
+
+if ~isempty(find(s==27))
+  s = s(1:first(find(s==27)-1));
+end
 
 %%%%%%%%%%%%%%%%%%%
 %%   getCNIDir   %%
@@ -221,7 +327,7 @@ end
 
 % check that we found something
 if isempty(cniDir)
-  disp(sprintf('(dofmricni) Could not find any studies'));
+  disp(sprintf('(mlrReconAll) Could not find any studies'));
   return
 end
 
@@ -264,7 +370,7 @@ end
 
 % set cniDir in system variable
 s.cniDir = fullfile(dirName,scanName);
-disp(sprintf('(dofmricni:getCNIDir) Directory chosen is: %s',s.cniDir))
+disp(sprintf('(mlrReconAll:getCNIDir) Directory chosen is: %s',s.cniDir))
 
 % set the directory to which we resync data
 toDir = mlrReplaceTilde(fullfile(s.localDataDir,'temp/dofmricni'));
@@ -286,14 +392,14 @@ function [retval,status] = doRemoteCommand(username,computerName,commandName)
 
 retval = [];
 command = sprintf('ssh %s@%s %s',username,computerName,commandName);
-disp(sprintf('(dofrmicni) Doing remote command: %s',command));
+disp(sprintf('(mlrReconAll) Doing remote command: %s',command));
 disp(sprintf('If you have not yet set passwordless ssh (see: http://gru.stanford.edu/doku.php/gruprivate/sshpassless) then enter your password here: ',computerName));
 [status,retval] = system(command,'-echo');
 if status~=0
-  disp(sprintf('(dofmricni) Could not ssh in to do remote command on: %s@%s',username,computerName));
+  disp(sprintf('(mlrReconAll) Could not ssh in to do remote command on: %s@%s',username,computerName));
   return
 end
-disp(sprintf('(dofmricni) Remote command on %s successful',computerName));
+disp(sprintf('(mlrReconAll) Remote command on %s successful',computerName));
 
 
 %%%%%%%%%%%%%%%%%%%%%
