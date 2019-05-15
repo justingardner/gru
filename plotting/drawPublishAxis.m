@@ -558,6 +558,13 @@ if ~isempty(yLabel)
   dpa.yAxis.label = text(yLabelX,yLabelY,yLabel,'VerticalAlignment',yLabelTextAlignment,'HorizontalAlignment','center','FontAngle','oblique','FontSize',labelFontSize,'Rotation',90,'FontName',fontName);
 end
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Legend font size
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+l = legend(gca,'boxoff');;
+set(l,'FontSize',labelFontSize);
+set(l,'Color','none');
+
 %%%%%%%%%%%%%%%%%%%%%%%
 %    validateParam    %
 %%%%%%%%%%%%%%%%%%%%%%%
