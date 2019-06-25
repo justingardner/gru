@@ -42,12 +42,6 @@ if nargin < 2
   help myerrorbar
   return
 end
- 
-% check for old style usage
-if (nargout == 1) || ((length(varargin) >= 1) && isnumeric(varargin{1}))
-  retval = myerrorbarold(x,y,varargin);
-  return
-end
 
 % get arguments
 getArgs(varargin);
@@ -163,7 +157,7 @@ else
 end
 
 % plot the symbols
-plot(x,y,Symbol,'MarkerFaceColor',MarkerFaceColor,'MarkerEdgeColor',MarkerEdgeColor,'Color',Color,'MarkerSize',MarkerSize,'LineWidth',LineWidth);
+retval = plot(x,y,Symbol,'MarkerFaceColor',MarkerFaceColor,'MarkerEdgeColor',MarkerEdgeColor,'Color',Color,'MarkerSize',MarkerSize,'LineWidth',LineWidth);
 
 
 
