@@ -21,6 +21,8 @@ if ~iscolumn(y_)
 end
 
 % r2 = 1 - (sum((y_-y).^2)/sum((y-mean(y)).^2));
-cc = corrcoef([y y_]);
-r2 = cc(1,2)^2;
+r2 = corr(y,y_)^2;
+% cc = corrcoef([y y_]);
+% r2 = cc(1,2)^2;
 
+% r2 = corr([y y_])^2;
