@@ -44,7 +44,11 @@ else
 end
 if isfield(instances{1},'name') % this is actually a cell of ROIs
     for i = 1:length(instances)
-        instances{i}.classify.instances = preprocessInstances(instances{i}.classify.instances,varargin{1},varargin{2});
+        if isfield(instances{i},'classify')
+            instances{i}.classify.instances = preprocessInstances(instances{i}.classify.instances,varargin{1},varargin{2});
+        else
+            instances{i}.instance.instances = preprocessInstances(instances{i}.instance.instances,varargin{1},varargin{2});
+        end
     end
     return
 end

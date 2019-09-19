@@ -54,13 +54,18 @@ getArgs(varargin,{'whichAxis=both','tickDir=out','lineWidth=1','titleStr=[]','la
 		  'xMin=[]','xMax=[]','xAxisLoc=[]','xAxisYpos=[]','xAxisMargin=1/64',...
 		  'xAxisOffset=-1/32','xScale=[]','xAxisMajorTickLen=-1/32','xAxisMinorTickLen=-1/48',...
 		  'xTick=[]','xTickLabel=[]','xTickLabelHide',false,'xAxisMin=[]','xAxisMax=[]','xAxisMinMaxSetByTicks=1',...
-		  'xMinorTick=[]','xLabel=[]','xLabelOffset=-4/64','xTickLabelSigfigs=-1',...
+		  'xMinorTick=[]','xLabel=[]','xLabelOffset=-7/64','xTickLabelSigfigs=-1',...
 		  'yMin=[]','yMax=[]','yAxisLoc=[]','yAxisXpos=[]','yAxisMargin=1/64',...
 		  'yAxisOffset=-1/32','yScale=[]','yAxisMajorTickLen=-1/32','yAxisMinorTickLen=-1/48',...
 		  'yTick=[]','yTickLabel=[]','yAxisMin=[]','yAxisMax=[]','yAxisMinMaxSetByTicks=1',...
 		  'yMinorTick=[]','yLabel=[]','yLabelOffset=-6/64','yTickLabelSigfigs=-1','forceDisplay=0',...
-		  'forceClear=0','fontName=Helvetica','figSize=2'...
+		  'forceClear=0','fontName=Helvetica','figSize=2','poster=0'...
 		 });
+     
+if poster
+    labelFontSize=18;
+    xLabelOffset=-6/64;
+end
      
 % set fig size
 if figSize
@@ -205,6 +210,7 @@ if isempty(xTickLabel)
   xTickLabelFromAxis = get(curAxis,'XTickLabel');
   xTickFromAxis = get(curAxis,'XTick');
   % try to get labels from axis
+  xTickLabelCellArray = {};
   for iTick = 1:length(xTick)
     matchFromAxis = find(xTickFromAxis==xTick(iTick));
     if isempty(matchFromAxis) || strcmp(xScale,'log')
@@ -271,6 +277,7 @@ if isempty(yTickLabel)
   yTickLabelFromAxis = get(curAxis,'YTickLabel');
   yTickFromAxis = get(curAxis,'YTick');
   % try to get labels from axis
+  yTickLabelCellArray = {};
   for iTick = 1:length(yTick)
     matchFromAxis = find(yTickFromAxis==yTick(iTick));
     if isempty(matchFromAxis) || strcmp(yScale,'log')
@@ -550,6 +557,13 @@ end
 if ~isempty(yLabel)
   dpa.yAxis.label = text(yLabelX,yLabelY,yLabel,'VerticalAlignment',yLabelTextAlignment,'HorizontalAlignment','center','FontAngle','oblique','FontSize',labelFontSize,'Rotation',90,'FontName',fontName);
 end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Legend font size
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+l = legend(gca,'boxoff');;
+set(l,'FontSize',labelFontSize);
+set(l,'Color','none');
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %    validateParam    %

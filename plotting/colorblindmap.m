@@ -3,6 +3,9 @@ function [cmap,names] = colorblindmap()
 % A set of colors that are unambiguous to common color blind users. The
 % first index is black. Colors are in RGB.
 %
+% Usage:
+%   [cmap,names] = colorblindmap();
+%
 % Dan Birman 2018/05/30
 %
 % From http://jfly.iam.u-tokyo.ac.jp/color/

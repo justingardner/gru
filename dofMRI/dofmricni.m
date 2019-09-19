@@ -428,6 +428,17 @@ for i = 1:length(fileList)
       % change nifti name
       fileList(i).nifti = uncompressedFilename;
       fileList(i).niftiExt = getext(uncompressedFilename);
+      if fileList(i).anat && ~strcmp(getext(uncompressedFilename),getext(fileList(i).toName))
+          disp('(dofmricni) Resolving incorrect anatomy extension');
+          cExt = getext(uncompressedFilename);
+          % resolve the difference in file names
+          toName = fileList(i).toName;
+          while ~isempty(getext(toName))
+              toName = stripext(toName);
+          end
+          fileList(i).toName = setext(toName,cExt);
+          fileList(i).niftiExt = cExt;
+      end
     end
   end
   disppercent(i/length(fileList));

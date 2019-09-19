@@ -205,7 +205,13 @@ if strcmp(lower(amplitudeType),'default'),amplitudeType = 'max';end
 d.amplitudeType = amplitudeType;
 
 % get all stimvolumes
-allStimvol = cell2mat(d.stimvol);
+
+% this code was broken:
+if ~iscolumn(d.stimvol)
+    allStimvol = cell2mat(d.stimvol');
+else
+    allStimvol = cell2mat(d.stimvol);
+end
 
 % now get the estimated mean response, i.e. the average one to
 % all stimulus types, start by making a new stimulusConvolutionMatrix
@@ -286,7 +292,7 @@ end
 
 % now try to compute the standard deviation of response. 
 if any(strcmp(lower(option),{'std'})) || ~isempty(stdGroups)
-  if d.dim(1) == 1,disp(sprintf('(fitTimecourse:glmFit) std not implemented yet for multiple voxel fit'));keyboard;end
+  if d.dim(1) ~= 1,disp(sprintf('(fitTimecourse:glmFit) std not implemented yet for multiple voxel fit'));keyboard;end
   disppercent(-inf,sprintf('(fitTimecourse) Computing std'));
   if isfield(d,'concatInfo'),n = d.concatInfo.n;else,n = 1;end
   allAmplitudes = [];
