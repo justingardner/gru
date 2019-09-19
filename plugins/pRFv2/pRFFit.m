@@ -90,6 +90,8 @@ if ~isempty(fitParams.junkFrames) && ~isequal(fitParams.junkFrames,0)
   end
 end
 
+% get volumes
+fitParams.nVols = viewGet(v,'nFrames',scanNum);
 
 % set up the fit routine params
 fitParams = setFitParams(fitParams);
@@ -361,14 +363,29 @@ modelResponse = [];residual = [];
 
 % create the model for each concat
 for i = 1:fitParams.concatInfo.n
-  % get a model hrf
-  hrf = getCanonicalHRF(p.canonical,fitParams.framePeriod);
+  
+  % get delta T of the stimulus
+  stimDeltaT = median(diff(fitParams.stimT));
+
+  % get a model hrf at that time resolution
+  hrf = getCanonicalHRF(p.canonical,stimDeltaT);
 
   %%%%%%%%%%%%%%%%%%%
   % Get model response, which involves convolving model with stimulus, and with HRF and dropping junk frames.
   thisModelResponse = prfModel('getModelResponse', fitParams, rfModel, hrf, p, i);
   %%%%%%%%%%%%%%%%%%%
 
+  % check if we need to resample, by seeing if the model response has the
+  % same number of samples as the concatInfo expects for the scan (which should
+  % occur if the stim images are sampled at the volume rate
+  nVols = (fitParams.concatInfo.runTransition(i,2)-fitParams.concatInfo.runTransition(i,1)+1);
+  if length(thisModelResponse) ~= nVols
+    % resample 
+    resampledTimeSeries = resample(timeseries(thisModelResponse,fitParams.stimT(1:length(thisModelResponse))),(0:(nVols-1))*fitParams.framePeriod);
+    % and pull out of timeseries structure
+    thisModelResponse = squeeze(resampledTimeSeries.Data);
+  end
+  
   %~~~~~~~~~~
   %keyboard
   %~~~~~~~~~~
