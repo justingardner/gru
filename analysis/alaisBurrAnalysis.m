@@ -89,9 +89,12 @@ for iCond = 1:d.nCond
   % plot in percentile
   myerrorbar(d.cond(iCond).uniquePosDiff,100*d.cond(iCond).correctBinned,'yError',100*d.cond(iCond).correctBinnedError,'Symbol','o','MarkerFaceColor',dataColors{iCond});
   xlabel('Position difference (deg)');
+  yaxis(0,100);
+  ylabel('Percent rightwards choices (100%%)');
 
   % append fit parameters to title
   titleStr = sprintf('%s\nMean: %0.2f Std: %0.2f lambda: %0.2f',titleStr,d.fit(iCond).mean,d.fit(iCond).std,d.fit(iCond).lambda);
+  
 end
 
 % display title
