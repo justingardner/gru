@@ -213,7 +213,7 @@ end
 % set experiment name and conditions
 if d.stimulus.bimodal
   % set experiment name
-  d.experimentName = sprintf('%s: [%s] width: %0.1f',d.stimulusType,mlrnum2str(d.displacement),d.visualWidth);
+  d.experimentName = sprintf('%s: [%s] width: %s',d.stimulusType,mlrnum2str(d.displacement),mlrnum2str(d.visualWidth));
   % set number of conditions
   d.nCond = length(d.displacement);
   % get trials for each condition
@@ -225,12 +225,14 @@ if d.stimulus.bimodal
   end
 elseif d.stimulus.visual
   % set experiment name
-  d.experimentName = sprintf('%s: width: %0.1f',d.stimulusType,d.visualWidth);
+  d.experimentName = sprintf('%s: width: %s',d.stimulusType,mlrnum2str(d.visualWidth));
   % set number of conditions
-  d.nCond = 1;
-  d.condNames{1} = sprintf('Visual: width: %0.1f',d.visualWidth);
-  % set trial nums to all
-  d.condTrialNums{1} = 1:d.nTrials;
+  d.nCond = length(d.visualWidth);
+  for iCond = 1:d.nCond
+    d.condNames{iCond} = sprintf('Visual: width: %s',mlrnum2str(d.visualWidth(iCond)));
+    % set trial nums to all
+    d.condTrialNums{iCond} = find(d.parameter.width == d.visualWidth(iCond));
+  end
 else
   % set experiment name
   d.experimentName = sprintf('%s',d.stimulusType);
