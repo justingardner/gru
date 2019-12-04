@@ -23,10 +23,14 @@ if isempty(e.path),return,end
 % check for valid files as we go through
 % nFiles will contain how many vaild files we have
 e.nFiles = 0;
+e.visualStaircase = {};
+e.auditoryStaircase = {};
 
 % cycle through all files
 for iFile = 1:length(stimfileNames)
-
+  % display what is happening
+  dispHeader(sprintf('(alaisBurrAnalysis) Analyzing file (%i/%i): %s        ',iFile,length(stimfileNames),stimfileNames{iFile}));
+  
   % load and parse the stimfile
   d = loadStimfile(fullfile(e.path,stimfileNames{iFile}));
 
@@ -38,31 +42,63 @@ for iFile = 1:length(stimfileNames)
     e.filenames{e.nFiles} = stimfileNames{iFile};
     % and the data
     e.d{e.nFiles} = d;
-
-    % fit psychometric function
-    e.d{e.nFiles} = fitPsychometricFunction(e.d{end});
+    if ~e.d{end}.isStaircase
+      % fit psychometric function
+      e.d{e.nFiles} = fitPsychometricFunction(e.d{end});
+      % keep which ones are psychometric functions
+      e.isPsycho(e.nFiles) = 1;
+    else
+      % collect staircases
+      if e.d{e.nFiles}.stimulus.visual
+	% add to the visual staircases
+	e.visualStaircase{end+1} = e.d{e.nFiles}.stimulus.stair;
+      else
+	% add to the auditory staircases
+	e.auditoryStaircase{end+1} = e.d{e.nFiles}.stimulus.stair;
+      end
+      % not a psychometric function
+      e.isPsycho(e.nFiles) = 0;
+    end
   end
 end
 
-% if no valid files found return
-if e.nFiles == 0,return,end
+% convert to struct
+e.visualStaircase = cell2mat(e.visualStaircase);
+e.auditoryStaircase = cell2mat(e.auditoryStaircase);
 
-% convert d into an array to make it easier to work with
-e.d = cell2mat(e.d);
+% if no valid files found return
+if e.nFiles == 0
+  disp(sprintf('(alaisBurrAnalysis) No files found'));
+  return
+end
 
 % display the fits
 if dispFit
   % open figure
   mlrSmartfig('alaisBurrAnalysis_psychometricfits','reuse');clf;
   % plot each function
-  for iFile = 1:e.nFiles
+  iSubplot = 0;
+  for iFile = find(e.isPsycho)
     % set subplot
-    subplot(1,e.nFiles,iFile);
+    iSubplot = iSubplot+1;
+    subplot(1,sum(e.isPsycho),iSubplot);
     %diplay fit
-    dispPsychometricFunction(e.d(iFile));
+    dispPsychometricFunction(e.d{iFile});
   end
+  % display visual staircase
+  if ~isempty(e.visualStaircase)
+    mlrSmartfig('alaisBurrAnalysis_visualStaircase','reuse');clf;
+    doStaircase('threshold',e.visualStaircase,'type=weibull','dispFig=1','titleStr=Visual staircase','useCurrentFig=1');
+  end
+  % display auditory staircase
+  if ~isempty(e.auditoryStaircase)
+    mlrSmartfig('alaisBurrAnalysis_auditoryStaircase','reuse');clf;
+    doStaircase('threshold',e.auditoryStaircase,'type=weibull','dispFig=1','titleStr=Auditory staircase','useCurrentFig=1');
+  end
+  keyboard
 end
 
+keyboard
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % display psychometric function %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -244,20 +280,20 @@ else
   d.condTrialNums{1} = 1:d.nTrials;
 end  
 
+% check if this is a staircase
+if isfield(d.stimulus,'useStaircase') && d.stimulus.useStaircase
+  d.isStaircase = 1;
+else
+  d.isStaircase = 0;
+end
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %    getStimfileNames    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 function [stimfilePath stimfileNames] = getStimfileNames(stimfileNames)
 
-
-%  if passed in empty then it means to run on current directory
-if isempty(stimfileNames)
-  % get current directory
-  stimfilePath = pwd;
-  % get everything in the directory that is a mat file
-  matfiles = dir('*.mat');
-  stimfileNames = {matfiles(:).name};
-elseif isfile(setext(stimfileNames,'mat'))
+%  check if we are examining a single mat file
+if isfile(setext(stimfileNames,'mat'))
   % make sure the extension is .mat
   stimfileNames = setext(stimfileNames,'mat');
   % first check to see if it has a path
@@ -268,9 +304,31 @@ elseif isfile(setext(stimfileNames,'mat'))
     stimfilePath = pwd;
   end
 else
-  disp(sprintf('(alaisBurrAnalysis) Could not find %s',stimfileNames));
-  stimfilePath = '';
-  stimfileNames = '';
+  % not a single file, so go look for the path
+  if isempty(stimfileNames)
+    % get current directory
+    stimfilePath = pwd;
+    % check if it is a directory
+  elseif isdir(stimfileNames)
+    % then use that as the path
+    stimfilePath = stimfileNames;
+    % see if it is a subject ID
+  elseif ((length(stimfileNames)>1) && (isequal(lower(stimfileNames(1)),'s'))) || isnumeric(stimfileNames)
+    % turn a numeric into a string SID
+    if isnumeric(stimfileNames)
+      stimfileNames = sprintf('s%03i',stimfileNames);
+    end
+    % get the path for this subject
+    stimfilePath = fullfile('~/data/alaisburr',stimfileNames);
+  else
+    disp(sprintf('(alaisBurrAnalysis) Could not find %s',stimfileNames));
+    stimfilePath = '';
+    stimfileNames = '';
+    return
+  end
+  % get everything in the directory that is a mat file
+  matfiles = dir(fullfile(stimfilePath,'*.mat'));
+  stimfileNames = {matfiles(:).name};
 end
 
 % make sure we are returning a cell array
