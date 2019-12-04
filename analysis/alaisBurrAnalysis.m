@@ -36,29 +36,39 @@ for iFile = 1:length(stimfileNames)
 
   % valid file, so keep its information
   if ~isempty(d)
-    % update count
-    e.nFiles = e.nFiles + 1;
-    % and list of filenames
-    e.filenames{e.nFiles} = stimfileNames{iFile};
-    % and the data
-    e.d{e.nFiles} = d;
-    if ~e.d{end}.isStaircase
-      % fit psychometric function
-      e.d{e.nFiles} = fitPsychometricFunction(e.d{end});
-      % keep which ones are psychometric functions
-      e.isPsycho(e.nFiles) = 1;
-    else
-      % collect staircases
-      if e.d{e.nFiles}.stimulus.visual
-	% add to the visual staircases
-	e.visualStaircase{end+1} = e.d{e.nFiles}.stimulus.stair;
+    [isNewFile e] = combineStimfiles(e,d);
+    if isNewFile
+      % update count
+      e.nFiles = e.nFiles + 1;
+      % and list of filenames
+      e.filenames{e.nFiles} = stimfileNames{iFile};
+      % and the data
+      e.d{e.nFiles} = d;
+      % see if this is a staircase or psychometric function
+      if ~e.d{e.nFiles}.isStaircase
+	% keep which ones are psychometric functions
+	e.isPsycho(e.nFiles) = 1;
       else
-	% add to the auditory staircases
-	e.auditoryStaircase{end+1} = e.d{e.nFiles}.stimulus.stair;
+	% collect staircases
+	if e.d{e.nFiles}.stimulus.visual
+	  % add to the visual staircases
+	  e.visualStaircase{end+1} = e.d{e.nFiles}.stimulus.stair;
+	else
+	  % add to the auditory staircases
+	  e.auditoryStaircase{end+1} = e.d{e.nFiles}.stimulus.stair;
+	end
+	% not a psychometric function
+	e.isPsycho(e.nFiles) = 0;
       end
-      % not a psychometric function
-      e.isPsycho(e.nFiles) = 0;
     end
+  end
+end
+
+% now cycle through and fit functions
+for iFile = 1:e.nFiles
+  if ~e.d{iFile}.isStaircase
+    % fit psychometric function
+    e.d{iFile} = fitPsychometricFunction(e.d{iFile});
   end
 end
 
@@ -74,16 +84,10 @@ end
 
 % display the fits
 if dispFit
-  % open figure
-  mlrSmartfig('alaisBurrAnalysis_psychometricfits','reuse');clf;
   % plot each function
-  iSubplot = 0;
   for iFile = find(e.isPsycho)
-    % set subplot
-    iSubplot = iSubplot+1;
-    subplot(1,sum(e.isPsycho),iSubplot);
     %diplay fit
-    dispPsychometricFunction(e.d{iFile});
+    dispFits(e.d{iFile});
   end
   % display visual staircase
   if ~isempty(e.visualStaircase)
@@ -95,41 +99,118 @@ if dispFit
     mlrSmartfig('alaisBurrAnalysis_auditoryStaircase','reuse');clf;
     doStaircase('threshold',e.auditoryStaircase,'type=weibull','dispFig=1','titleStr=Auditory staircase','useCurrentFig=1');
   end
-  keyboard
 end
 
-keyboard
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% display psychometric function %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function dispPsychometricFunction(d)
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    combineStimfiles    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+function [isNewFile e] = combineStimfiles(e,d)
+
+% default to adding to list
+isNewFile = true;
+
+% only combine bimodal conditions
+if d.stimulus.bimodal
+  % look for matching stimfiles
+  for iStimfile = 1:length(e.d)
+    % found a match
+    if isequal(e.d{iStimfile}.experimentName,d.experimentName)
+      e.d{iStimfile} = concatStimfile(e.d{iStimfile},d);
+      isNewFile = false;
+      return
+    end
+  end
+  % no matches
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%    concatStimfile    %
+%%%%%%%%%%%%%%%%%%%%%%%%
+function d = concatStimfile(d1,d2)
+
+% set the number of trials
+d.nTrials = d1.nTrials + d2.nTrials;
+
+% concat fields
+d.reactionTime = [d1.reactionTime d2.reactionTime];
+d.response = [d1.response d2.response];
+
+% copy these fileds
+copyFields = {'parameter','randVars'};
+for iField = 1:length(copyFields)
+  fieldsToConcat = fieldnames(d1.(copyFields{iField}));
+  for iConcatField = 1:length(fieldsToConcat)
+    d.(copyFields{iField}).(fieldsToConcat{iConcatField}) = [d1.(copyFields{iField}).(fieldsToConcat{iConcatField}) d2.(copyFields{iField}).(fieldsToConcat{iConcatField})];
+  end
+end
+
+% grab fields
+grabFields = {'stimulusType','visualWidth','displacement','experimentName','nCond','condNames','isStaircase','condWidth','condDisplacement'};
+for iField = 1:length(grabFields)
+  d.(grabFields{iField}) = d1.(grabFields{iField});
+end
+
+% concat the condTrialNums being careful to add the correct number of trials
+for iCond = 1:d.nCond
+  d.condTrialNums{iCond} = [d1.condTrialNums{iCond} (d2.condTrialNums{iCond}+d1.nTrials)];
+end
+
+%%%%%%%%%%%%%%%%
+% display fits %
+%%%%%%%%%%%%%%%%
+function dispFits(d)
+
+% open figure
+mlrSmartfig(sprintf('alaisBurrAnalysis_psychometricfits_%s',d.experimentName),'reuse');clf;
+
+nPlots = length(d.visualWidth);
+if nPlots > 1
+  % plot all together
+  nPlots = nPlots+1;
+  subplot(1,nPlots,1);
+  % display the psychometric functions all together
+  dispPsychometricFunction(d,1:d.nCond);
+  % now do each width separately
+  for iWidth = 1:length(d.visualWidth)
+    subplot(1,nPlots,iWidth+1);
+    dispPsychometricFunction(d,find(d.condWidth == d.visualWidth(iWidth)));
+  end
+else
+  % display the psychometric functions all together
+  dispPsychometricFunction(d,1:d.nCond);
+end
+  
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    display a psychometric function    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function dispPsychometricFunction(d,whichConds)
 
 % set colors to display in
-if (d.nCond == 1)
+if (length(whichConds) == 1)
   dataColors = {'k'};
   fitColors = {'r'};
 else
-  for iCond = 1:d.nCond
-    dataColors{iCond} = getSmoothColor(iCond,d.nCond,'cool');
-    fitColors{iCond} = getSmoothColor(iCond,d.nCond,'cool');
+  for iCond = 1:length(whichConds)
+    dataColors{iCond} = getSmoothColor(iCond,length(whichConds),'cool');
+    fitColors{iCond} = getSmoothColor(iCond,length(whichConds),'cool');
   end
 end
 
 % title string
 titleStr = d.experimentName;
 
-for iCond = 1:d.nCond
+for iCond = 1:length(whichConds)
   % plot fit
-  plot(d.fit(iCond).fitX,d.fit(iCond).fitY*100,'-','Color',fitColors{iCond});hold on
+  plot(d.fit(whichConds(iCond)).fitX,d.fit(whichConds(iCond)).fitY*100,'-','Color',fitColors{iCond});hold on
   
   % plot in percentile
-  myerrorbar(d.cond(iCond).uniquePosDiff,100*d.cond(iCond).correctBinned,'yError',100*d.cond(iCond).correctBinnedError,'Symbol','o','MarkerFaceColor',dataColors{iCond});
+  myerrorbar(d.cond(whichConds(iCond)).uniquePosDiff,100*d.cond(whichConds(iCond)).correctBinned,'yError',100*d.cond(whichConds(iCond)).correctBinnedError,'Symbol','o','MarkerFaceColor',dataColors{iCond});
   xlabel('Position difference (deg)');
   yaxis(0,100);
   ylabel('Percent rightwards choices (100%%)');
 
   % append fit parameters to title
-  titleStr = sprintf('%s\nMean: %0.2f Std: %0.2f lambda: %0.2f',titleStr,d.fit(iCond).mean,d.fit(iCond).std,d.fit(iCond).lambda);
+  titleStr = sprintf('%s\nMean: %0.2f Std: %0.2f lambda: %0.2f',titleStr,d.fit(whichConds(iCond)).mean,d.fit(whichConds(iCond)).std,d.fit(whichConds(iCond)).lambda);
   
 end
 
@@ -137,9 +218,9 @@ end
 title(titleStr);
 
 % display a legend for more than one
-if d.nCond > 1
+if length(whichConds) > 1
   % display legend
-  hLegend = mylegend(d.condNames,dataColors);
+  hLegend = mylegend({d.condNames{whichConds}},dataColors);
   set(hLegend,'Location','northwest');
 end
   
@@ -251,13 +332,21 @@ if d.stimulus.bimodal
   % set experiment name
   d.experimentName = sprintf('%s: [%s] width: %s',d.stimulusType,mlrnum2str(d.displacement),mlrnum2str(d.visualWidth));
   % set number of conditions
-  d.nCond = length(d.displacement);
+  d.nCond = length(d.displacement) * length(d.visualWidth);
   % get trials for each condition
-  for iCond = 1:d.nCond
-    % set condition names
-    d.condNames{iCond} = sprintf('Displacement: %s',mlrnum2str(d.displacement(iCond)));
-    % get trials for this condition
-    d.condTrialNums{iCond} = find(d.parameter.displacement == d.displacement(iCond));
+  iCond = 1;
+  for iDisplacementCond = 1:length(d.displacement)
+    for iWidthCond = 1:length(d.visualWidth)
+      % set condition names
+      d.condNames{iCond} = sprintf('Displacement: %s width: %s',mlrnum2str(d.displacement(iDisplacementCond)),mlrnum2str(d.visualWidth(iWidthCond)));
+      % get trials for this condition
+      d.condTrialNums{iCond} = find((d.parameter.displacement == d.displacement(iDisplacementCond)) & (d.parameter.width == d.visualWidth(iWidthCond)));
+      % remember the parameters
+      d.condWidth(iCond) = d.visualWidth(iWidthCond);
+      d.condDisplacement(iCond) = d.displacement(iDisplacementCond);
+      % update iCond
+      iCond = iCond + 1;
+    end
   end
 elseif d.stimulus.visual
   % set experiment name
@@ -268,6 +357,8 @@ elseif d.stimulus.visual
     d.condNames{iCond} = sprintf('Visual: width: %s',mlrnum2str(d.visualWidth(iCond)));
     % set trial nums to all
     d.condTrialNums{iCond} = find(d.parameter.width == d.visualWidth(iCond));
+    % remember the parameters
+    d.condWidth(iCond) = d.visualWidth(iCond);
   end
 else
   % set experiment name
