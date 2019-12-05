@@ -109,6 +109,9 @@ function [isNewFile e] = combineStimfiles(e,d)
 % default to adding to list
 isNewFile = true;
 
+% first file
+if ~isfield(e,'d'),return,end
+
 % only combine bimodal conditions
 if d.stimulus.bimodal
   % look for matching stimfiles
