@@ -1626,31 +1626,36 @@ for iStudy = 1:length(studyNames)
   expNamesParse = textscan(fwListing,'%s %s %s %s %s %s');
   if length(expNamesParse) == 6
     for iExp = 1:length(expNamesParse{6})
-      expNames{iStudy}{iExp} = removeEscapeCodes(expNamesParse{6}{iExp});
-      expFullNames{iStudy}{iExp} = sprintf('%s_%s_%s_%s',removeEscapeCodes(expNamesParse{2}{iExp}),removeEscapeCodes(expNamesParse{3}{iExp}),removeEscapeCodes(expNamesParse{5}{iExp}),removeEscapeCodes(expNamesParse{6}{iExp}));
+      expFullNames{iStudy}{iExp} = sprintf('%s',removeEscapeCodes(expNamesParse{2}{iExp}));
+      [status fwListing] = system(sprintf('%s ls %s/%s/%s',s.commands.fw,s.PI,studyNames{iStudy},...
+                                          sprintf('%s',removeEscapeCodes(expNamesParse{2}{iExp}))));
+      sessionNamesParse = textscan(fwListing,'%s %s %s %s %s %s');
+      sessionFullNames{iStudy}{iExp} = sprintf('%s',removeEscapeCodes(sessionNamesParse{5}{1}));
     end
   end
+  
 end
 
 % Now set up variables to have the default list be from all studies
 mrParams = {{'chooseNum',1,'minmax',[1 length(studyNames)],'incdec=[-1 1]'},...
 	    {'studyName',studyNames,'type=string','Name of studies','group=chooseNum','editable=0'},...
-	    {'expName',expFullNames,'Name of scan','group=chooseNum'}};
+	    {'expName',expFullNames,'Name of scan','group=chooseNum'},...
+        {'sessName',sessionFullNames,'Name of session','group=chooseNum'}};
 params = mrParamsDialog(mrParams);
 if isempty(params),return,end
 studyName = params.studyName{params.chooseNum};
 expName = params.expName{params.chooseNum};
+sessionName = params.sessName{params.chooseNum};
 
 % get subjectID
-underscores = strfind(expName,'_');
-s.subjectID = gruSubjectNum2ID(expName(underscores(2)+1:underscores(3)-1));
+s.subjectID = gruSubjectNum2ID(expName);
 
 % convert back expname to not have data and subjectID
-expName = expName(last(strfind(expName,'_'))+1:end);
+expName = s.subjectID;
 
 % set cniDir
-s.cniDir = fullfile(studyName,expName);
-disp(sprintf('(dofmricni:getFlywhellDir) Directory chosen is: %s',s.cniDir))
+s.cniDir = fullfile(studyName,expName,sessionName);
+disp(sprintf('(dofmricni:getFlywheelDir) Directory chosen is: %s',s.cniDir))
 
 % set the directory to which we resync data
 toDir = mlrReplaceTilde(fullfile(s.localDataDir,'temp/dofmricni'));
@@ -1662,7 +1667,7 @@ if ~isdir(toDir)
     return
   end
 end
-s.localDir = fullfile(toDir,getLastDir(s.cniDir));
+s.localDir = fullfile(toDir,s.subjectID);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    removeEscapeCodes    %
@@ -1827,23 +1832,27 @@ end
 system(sprintf('rm -f %s',tarfileName));
 
 % move out of the directory structure
-dataDir = fullfile(s.PI,fileparts(s.cniDir),s.subjectID,getLastDir(s.cniDir));
+dataDir = fullfile('scitran',s.PI,s.cniDir);
+keyboard
 if ~isdir(dataDir)
   disp(sprintf('(dofmricni:getFlywheelData) Directory %s not found in tar',dataDir));
   return
 end
 
 % remove existing directory if necessary
-if isdir(getLastDir(s.cniDir))
-  disp(sprintf('(dofmricni:getFlywheelData) Directory %s exists, removing',getLastDir(s.cniDir)));
-  system(sprintf('rm -rf %s',getLastDir(s.cniDir)));
+if isdir(s.subjectID)
+  disp(sprintf('(dofmricni:getFlywheelData) Directory %s exists, removing',s.subjectID));
+  system(sprintf('rm -rf %s',s.subjectID));
 end
   
 % move the directory
 system(sprintf('mv %s .',dataDir));
 
+% rename the directory to the subject number
+system(sprintf('mv %s %s',getLastDir(s.cniDir),s.subjectID));
+
 % remove the empty file structure
-system(sprintf('rm -rf %s',s.PI));
+system(sprintf('rm -rf %s','scitran'));
 
 tf = true;
 
@@ -2030,7 +2039,7 @@ if ~s.useLocalData
     paramsInfo{end+1} = {'computerName',s.stimComputerName,'Name of computer where files are located'};
     paramsInfo{end+1} = {'computerUserName',s.stimComputerUserName,'Name of user on computer for ssh login'};
     paramsInfo{end+1} = {'stimfileStem',s.stimfileStem,'The base of the stimfile names'};
-    paramsInfo{end+1} = {'dataDir',fullfile('data',s.experimentName,s.subjectID),'Name of directory on %s where stimfiles are located'};
+    paramsInfo{end+1} = {'dataDir',fullfile('data',s.subjectID),'Name of directory on %s where stimfiles are located'};
     params = mrParamsDialog(paramsInfo,sprintf('Indicate location of stimfiles'));
     if isempty(params),break,end
     stimfileListing = getRemoteListing(params.computerUserName,params.computerName,fullfile(params.dataDir,sprintf('%s*.mat',params.stimfileStem)));
