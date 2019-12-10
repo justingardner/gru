@@ -1833,7 +1833,6 @@ system(sprintf('rm -f %s',tarfileName));
 
 % move out of the directory structure
 dataDir = fullfile('scitran',s.PI,s.cniDir);
-keyboard
 if ~isdir(dataDir)
   disp(sprintf('(dofmricni:getFlywheelData) Directory %s not found in tar',dataDir));
   return
