@@ -171,7 +171,7 @@ end
 function dispFits(d,iFit)
 
 % open figure
-mlrSmartfig(sprintf('%i_alaisBurrAnalysis_psychometricfits_%s',iFit,d.experimentName),'reuse');clf;
+mlrSmartfig(sprintf('%i_%s',iFit,fixBadChars(d.experimentName)),'reuse');clf;
 
 nPlots = length(d.visualWidth);
 if nPlots > 1
