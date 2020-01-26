@@ -48,6 +48,7 @@
 %                   in your temp direcotry. Or set it to a string containing the path which
 %                   you want to use to get data from.
 %                'dicomFix=1': Use this for scans that we moved into /data/dicomfix and recreated dicoms for (11/2015)
+%                'flywheel=1': Use flywheel rather than cni system to get MRI data
 %
 function retval = dofmricni(varargin)
 
@@ -184,6 +185,59 @@ end
 
 tf = true;
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    fixDirectoryNamesWithSpaces    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function fileList = fixDirectoryNamesWithSpaces(s,fileList)
+
+% fix list for bad chars 
+fixList = {' ','_'};
+% also directories should not have . in them
+fixListDir = {'.','p'};
+
+for iFile = 1:length(fileList)
+  % check for spaces
+  if any(isspace(fileList(iFile).filename))
+    % convert name to remove spaces
+    originalPath = fileparts(fileList(iFile).fullfile);
+    originalName = fileList(iFile).filename;
+    spaceLessName = fixBadChars(originalName,fixList,fixListDir);
+    % change in the fileList structure
+    fileList(iFile).filename = spaceLessName;
+    fileList(iFile).fullfile = fullfile(originalPath,spaceLessName);
+    % if we haven't already, fixed the directory name in the file system
+    if ~isdir(fileList(iFile).fullfile)
+      % change it
+      disp(sprintf('(dofmricni:fixDirectoryNameWithSpaces) Changing name "%s" => %s',originalName,spaceLessName));
+      system(sprintf('mv "%s" %s',fullfile(originalPath,originalName),fileList(iFile).fullfile));
+    end
+    % fileNames to check
+    checkNames = {'nifti','dicom'};
+    for iCheck = 1:length(checkNames)
+      checkName = checkNames{iCheck};
+      % check the field (nifit or dicom)
+      if isfield(fileList(iFile),checkName) && ~isempty(fileList(iFile).(checkName))
+        % check if the filename has any spaces in it
+        fileName = getLastDir(fileList(iFile).(checkName));
+        % see if it has spaces
+        if any(isspace(fileName))
+          % then convert it
+          spaceLessFileName = fixBadChars(fileName,fixList);
+          spaceLessFullFileName = fullfile(fileList(iFile).filename,spaceLessFileName);
+          % move it in the directory system if we have not already
+          if ~isfile(spaceLessFullFileName)
+            disp(sprintf('(dofmricni:fixDirectoryNameWithSpaces) Changing name "%s" => %s',fileName,spaceLessFileName));
+            system(sprintf('mv "%s" %s',fullfile(fileList(iFile).filename,fileName),spaceLessFullFileName));
+          end
+          fileName = spaceLessFileName;
+        end
+        % change the file name
+        fileList(iFile).(checkName) = fullfile(fileList(iFile).fullfile,fileName);
+      end
+    end
+  end      
+end
+
 %%%%%%%%%%%%%%%%%%%%%
 %%   examineData   %%
 %%%%%%%%%%%%%%%%%%%%%
@@ -191,11 +245,14 @@ function [tf s] = examineData(s)
 
 tf = false;
 % get the list of filest that we have
-fileList = getFileList(s.localDir);
+fileList = getFileList(s,s.localDir);
+
+% fix any directory names with spaces in them, cause, that's annoying
+fileList = fixDirectoryNamesWithSpaces(s,fileList);
 
 % get dicom info
 disppercent(-inf,'(dofmricni) Getting dicom info');
-s.subjectID = [];
+if ~isfield(s,'subjectID'),s.subjectID = [];end
 s.magnet = [];
 s.operatorName = [];
 s.receiveCoilName = [];
@@ -371,6 +428,17 @@ for i = 1:length(fileList)
       % change nifti name
       fileList(i).nifti = uncompressedFilename;
       fileList(i).niftiExt = getext(uncompressedFilename);
+      if fileList(i).anat && ~strcmp(getext(uncompressedFilename),getext(fileList(i).toName))
+          disp('(dofmricni) Resolving incorrect anatomy extension');
+          cExt = getext(uncompressedFilename);
+          % resolve the difference in file names
+          toName = fileList(i).toName;
+          while ~isempty(getext(toName))
+              toName = stripext(toName);
+          end
+          fileList(i).toName = setext(toName,cExt);
+          fileList(i).niftiExt = cExt;
+      end
     end
   end
   disppercent(i/length(fileList));
@@ -1112,7 +1180,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%
 %%   getFileList   %%
 %%%%%%%%%%%%%%%%%%%%%
-function fileList = getFileList(dirname)
+function fileList = getFileList(s,dirname)
 
 fileList = [];
 
@@ -1157,15 +1225,42 @@ for i = 1:length(dirList)
   end
   % get name of dicom
   try
-    % look for an uncompress dicom directory
-    dicomDir = dir(sprintf('%s/*_dicoms',fullfile(dirname,dirList(i).name)));
-    if ~isempty(dicomDir)
-      fileList(end).dicom = fullfile(dirname,dirList(i).name,dicomDir(1).name);
+    if s.flywheel
+      % get current directory name
+      thisDir = fullfile(dirname,dirList(i).name);
+      % check for decompress dicom file
+      dicomDir = dir(fullfile(thisDir,'*.dicom'));
+      % if not see if it is zip'd
+      if isempty(dicomDir)
+	dicomDir = dir(fullfile(thisDir,'*.dicom.zip'));
+	% uncompres if it exists
+	if ~isempty(dicomDir)
+	  % cd to the directory
+	  thisPath = pwd;
+	  cd(thisDir);
+	  % uncompress
+	  system(sprintf('%s -q %s',s.commands.unzip,dicomDir(1).name));
+	  % return to path
+	  cd(thisPath);
+	end
+	dicomDir = dir(fullfile(thisDir,'*.dicom'));
+      end
+      if ~isempty(dicomDir)
+	fileList(end).dicom = fullfile(thisDir,dicomDir.name);
+      else
+	fileList(end).dicom = [];
+      end
     else
-      % if not looked for a compressed zip file
-      fileList(end).dicom = dir(sprintf('%s/*_dicoms.tgz',fullfile(dirname,dirList(i).name)));
-      if ~isempty(fileList(end).dicom)
-	fileList(end).dicom = fullfile(dirname,dirList(i).name,fileList(end).dicom.name);
+      % look for an uncompress dicom directory
+      dicomDir = dir(sprintf('%s/*_dicoms',fullfile(dirname,dirList(i).name)));
+      if ~isempty(dicomDir)
+	fileList(end).dicom = fullfile(dirname,dirList(i).name,dicomDir(1).name);
+      else
+	% if not looked for a compressed zip file
+	fileList(end).dicom = dir(sprintf('%s/*_dicoms.tgz',fullfile(dirname,dirList(i).name)));
+	if ~isempty(fileList(end).dicom)
+	  fileList(end).dicom = fullfile(dirname,dirList(i).name,fileList(end).dicom.name);
+	end
       end
     end
   catch
@@ -1198,14 +1293,20 @@ if getext(filename,'tgz')
 
   % change path back
   cd(curpwd);
+  
+  % strip the extension 
+  filename = stripext(filename);
 end
 
 % now do a dir to look at all the files and select the first dicom
-d = dir(fullfile(stripext(filename),'*.dcm'));
-
+d = dir(fullfile(filename,'*.dcm'));
+  
 % if we got one, then load it
 if length(d) >= 1
-  info = dicominfo(fullfile(stripext(filename),d(1).name));
+  info = dicominfo(fullfile(filename,d(1).name));
+else
+  disp(sprintf('(dofmricni:getDicomInfo) Missing dicom info for: %s',filename));
+  return
 end
 
 % get the subjectID
@@ -1248,7 +1349,7 @@ if s.fixMuxXform && (length(d)>1)
   foundFirstSlice = 0;
   % get the first xform
   refDicomNum = 1;
-  refXform = dicom2xform(fullfile(stripext(filename),d(refDicomNum).name));
+  refXform = dicom2xform(fullfile(filename,d(refDicomNum).name));
   % start by assuming this is the top slice
   topSliceXform = refXform;
   minSliceNum = 0;
@@ -1257,7 +1358,7 @@ if s.fixMuxXform && (length(d)>1)
   iDicom = refDicomNum+1;
   while foundFirstSlice < 2
     % get the slice x form for this dicom
-    sliceXform = dicom2xform(fullfile(stripext(filename),d(iDicom).name));
+    sliceXform = dicom2xform(fullfile(filename,d(iDicom).name));
     % find out the slice number
     slice2slice = inv(refXform)*sliceXform;
     sliceNum(end+1) = round(slice2slice(3,4));
@@ -1382,8 +1483,13 @@ preferredCommandNames = {'/usr/bin/tar','/usr/bin/gunzip'};
 commandNames = {'tar','gunzip'};
 helpFlag = {'-h','-h'};
 if s.flywheel
+  % add flywheel
   preferredCommandNames{end+1} = '/usr/bin/fw';
   commandNames{end+1} = 'fw';
+  helpFlag{end+1} = '-h';
+  % add unzip
+  preferredCommandNames{end+1} = '/usr/bin/unzip';
+  commandNames{end+1} = 'unzip';
   helpFlag{end+1} = '-h';
 end
 [retval s] = checkShellCommands(s,commandNames,preferredCommandNames,helpFlag);
@@ -1487,6 +1593,11 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%
 function s = getFlywheelDir(s)
 
+% tell user what is going on
+dispHeader;
+dispHeader('Querying Flywheel using fw CLI');
+dispHeader;
+
 % user CLI to get list of experiments
 [status fwListing] = system(sprintf('%s ls %s',s.commands.fw,s.PI));
 if ~isequal(status,0)
@@ -1515,27 +1626,36 @@ for iStudy = 1:length(studyNames)
   expNamesParse = textscan(fwListing,'%s %s %s %s %s %s');
   if length(expNamesParse) == 6
     for iExp = 1:length(expNamesParse{6})
-      expNames{iStudy}{iExp} = removeEscapeCodes(expNamesParse{6}{iExp});
-      expFullNames{iStudy}{iExp} = sprintf('%s_%s_%s_%s',removeEscapeCodes(expNamesParse{2}{iExp}),removeEscapeCodes(expNamesParse{3}{iExp}),removeEscapeCodes(expNamesParse{5}{iExp}),removeEscapeCodes(expNamesParse{6}{iExp}));
+      expFullNames{iStudy}{iExp} = sprintf('%s',removeEscapeCodes(expNamesParse{2}{iExp}));
+      [status fwListing] = system(sprintf('%s ls %s/%s/%s',s.commands.fw,s.PI,studyNames{iStudy},...
+                                          sprintf('%s',removeEscapeCodes(expNamesParse{2}{iExp}))));
+      sessionNamesParse = textscan(fwListing,'%s %s %s %s %s %s');
+      sessionFullNames{iStudy}{iExp} = sprintf('%s',removeEscapeCodes(sessionNamesParse{5}{1}));
     end
   end
+  
 end
 
 % Now set up variables to have the default list be from all studies
 mrParams = {{'chooseNum',1,'minmax',[1 length(studyNames)],'incdec=[-1 1]'},...
 	    {'studyName',studyNames,'type=string','Name of studies','group=chooseNum','editable=0'},...
-	    {'expName',expFullNames,'Name of scan','group=chooseNum'}};
+	    {'expName',expFullNames,'Name of scan','group=chooseNum'},...
+        {'sessName',sessionFullNames,'Name of session','group=chooseNum'}};
 params = mrParamsDialog(mrParams);
 if isempty(params),return,end
 studyName = params.studyName{params.chooseNum};
-expName = params.expName{1};
+expName = params.expName{params.chooseNum};
+sessionName = params.sessName{params.chooseNum};
+
+% get subjectID
+s.subjectID = gruSubjectNum2ID(expName);
 
 % convert back expname to not have data and subjectID
-expName = expName(last(strfind(expName,'_'))+1:end);
+expName = s.subjectID;
 
 % set cniDir
-s.cniDir = fullfile(studyName,expName);
-disp(sprintf('(dofmricni:getFlywhellDir) Directory chosen is: %s',s.cniDir))
+s.cniDir = fullfile(studyName,expName,sessionName);
+disp(sprintf('(dofmricni:getFlywheelDir) Directory chosen is: %s',s.cniDir))
 
 % set the directory to which we resync data
 toDir = mlrReplaceTilde(fullfile(s.localDataDir,'temp/dofmricni'));
@@ -1547,21 +1667,23 @@ if ~isdir(toDir)
     return
   end
 end
-s.localDir = fullfile(toDir,getLastDir(s.cniDir));
+s.localDir = fullfile(toDir,s.subjectID);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    removeEscapeCodes    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 function s = removeEscapeCodes(s)
 
-% strip off weird pre-code escape characters
-if s(1) == 27
-  % remove pre escape code
-  s = s(8:end);
-end
+if ~isempty(s)
+    % strip off weird pre-code escape characters
+    if s(1) == 27
+      % remove pre escape code
+      s = s(8:end);
+    end
 
-if ~isempty(find(s==27))
-  s = s(1:first(find(s==27)-1));
+    if ~isempty(find(s==27))
+      s = s(1:first(find(s==27)-1));
+    end
 end
 
 %%%%%%%%%%%%%%%%%%%
@@ -1689,7 +1811,8 @@ tf = false;
 
 % download whole direcotry
 cd(fileparts(s.localDir));
-status = system(sprintf('%s download -e pfile %s',s.commands.fw,fullfile(s.PI,s.cniDir)));
+dispHeader('(dofmricni:getFlywheelData) Downloading data from flywheel - this may take several minutes');
+status = system(sprintf('%s download -f -e pfile %s',s.commands.fw,fullfile(s.PI,s.cniDir)));
 
 % check to see if the tar file downloaded properly
 tarfileName = setext(getLastDir(s.cniDir),'tar');
@@ -1704,6 +1827,31 @@ if ~isequal(status,0)
   disp(sprintf('(dofmricni:getFlywheelData) Could not untar: %s',tarfileName));
   return
 end
+
+% remove the tar file
+system(sprintf('rm -f %s',tarfileName));
+
+% move out of the directory structure
+dataDir = fullfile('scitran',s.PI,s.cniDir);
+if ~isdir(dataDir)
+  disp(sprintf('(dofmricni:getFlywheelData) Directory %s not found in tar',dataDir));
+  return
+end
+
+% remove existing directory if necessary
+if isdir(s.subjectID)
+  disp(sprintf('(dofmricni:getFlywheelData) Directory %s exists, removing',s.subjectID));
+  system(sprintf('rm -rf %s',s.subjectID));
+end
+  
+% move the directory
+system(sprintf('mv %s .',dataDir));
+
+% rename the directory to the subject number
+system(sprintf('mv %s %s',getLastDir(s.cniDir),s.subjectID));
+
+% remove the empty file structure
+system(sprintf('rm -rf %s','scitran'));
 
 tf = true;
 
@@ -1890,7 +2038,7 @@ if ~s.useLocalData
     paramsInfo{end+1} = {'computerName',s.stimComputerName,'Name of computer where files are located'};
     paramsInfo{end+1} = {'computerUserName',s.stimComputerUserName,'Name of user on computer for ssh login'};
     paramsInfo{end+1} = {'stimfileStem',s.stimfileStem,'The base of the stimfile names'};
-    paramsInfo{end+1} = {'dataDir',fullfile('data',s.experimentName,s.subjectID),'Name of directory on %s where stimfiles are located'};
+    paramsInfo{end+1} = {'dataDir',fullfile('data',s.subjectID),'Name of directory on %s where stimfiles are located'};
     params = mrParamsDialog(paramsInfo,sprintf('Indicate location of stimfiles'));
     if isempty(params),break,end
     stimfileListing = getRemoteListing(params.computerUserName,params.computerName,fullfile(params.dataDir,sprintf('%s*.mat',params.stimfileStem)));
@@ -1926,7 +2074,12 @@ if ~isempty(stimfileListing)
 	s.stimfileInfo(end).missingVolumes = find(diff(e.time(e.tracenum==volTrace))>(s.stimfileInfo(end).tr*1.5));
         % get some other info
         s.stimfileInfo(end).startTime = stimfile.myscreen.starttime;
-        s.stimfileInfo(end).endTime = stimfile.myscreen.endtime;
+	if isfield(stimfile.myscreen,'endtime')
+	  s.stimfileInfo(end).endTime = stimfile.myscreen.endtime;
+	else
+	  disp(sprintf('(dofmricni:getStimfiles) File %s is missing endTime',stimfileListing{i}));
+	  s.stimfileInfo(end).endTime = stimfile.myscreen.starttime;
+	end
         s.stimfileInfo(end).numVols = stimfile.myscreen.volnum;
         if isfield(stimfile.myscreen,'ignoredInitialVols')
           s.stimfileInfo(end).ignoredInitialVols = (stimfile.myscreen.ignoredInitialVols-stimfile.myscreen.ignoreInitialVols);

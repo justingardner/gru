@@ -29,6 +29,12 @@
 %             % then compute the final threshold
 %             threshold = doStaircase('threshold',s);
 %
+%             % to make a display of staircases with the threshold (s can be an array of staircases)
+%             threshold = doStaircase('threshold',s,'dispFig=1','titleStr=My staircase','useCurrentFig=1');
+%
+%             % to plot current staircase
+%             doStaircase('display',s);
+%
 %             You can get help for how to run by doing e.g.:
 %             doStaircase('init','upDown','help');
 %             doStaircase('init','quest','help');
@@ -100,6 +106,8 @@ switch lower(command)
     retval = getStop(varargin);
  case {'combine','c','combinestaircase','combinestaircases'}
     retval = combineStaircases(varargin);
+ case {'display','d','dispfig','displayfig','displayfigure','disp'}
+    displayStaircase(varargin,1);
  case {'test'}
     testStaircase(varargin);
  otherwise
@@ -556,53 +564,94 @@ s(end).response(end+1) = r;
 s(end).trialNum = s(end).trialNum+1;
 
 % display the history
-if (s(end).dispFig == 1)
-  history = doStaircase('getHistory',s);
-  smartfig('doStaircase','reuse');
-  subplot(s(end).subplotRows,s(end).subplotCols,s(end).subplotNum);
-  cla;
-  % draw line
-  plot(history.testValues,'k-');
-  hold on
-  xlabel('Trial #');
-  ylabel('Test value');
-  % for a normal non-ratings experiment
-  if isempty(history.ratings)
-    % plot the correct trials in green
-    correctTrialNums = find(history.response==1);
-    if ~isempty(correctTrialNums)
-      plot(correctTrialNums,history.testValues(correctTrialNums),'go','MarkerFaceColor','g');
-    end
-    % plot the incorrect trials in red
-    incorrectTrialNums = find(history.response==0);
-    if ~isempty(incorrectTrialNums)
-      plot(incorrectTrialNums,history.testValues(incorrectTrialNums),'ro','MarkerFaceColor','r');
-    end
+displayStaircase(s,s(end).dispFig);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    displayStaircase    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+function displayStaircase(s,dispFig)
+
+% default values
+useCurrentFig = 0;
+useSingleAxis = 0;
+plotAllStaircases = 0;
+
+% check if we are being called with varargin
+if ~isStaircase(s) 
+  if iscell(s) && (length(s) >= 1) && isStaircase(s{1})
+    % parse input arguments
+    getArgs(s{2:end},{'useCurrentFig=0','useSingleAxis=1','plotAllStaircases=1'});
+    % passed in a staircase
+    s = s{1};
   else
-    % get ratings info
-    ratings = unique(history.ratings);
-    maxRating = s.s.ratings;
-    % size of markers to show rating
-    minMarkerSize = 3;
-    maxMarkerSize = 20;
-    for rating = ratings
-      % get the marker size to display at
-      markerSize = minMarkerSize+(maxMarkerSize-minMarkerSize)*(rating-1)/(maxRating-1);
+    % not a staircase
+    disp(sprintf('(doStaircase:displayStaircase) Must pass in a staircase structure'));
+    return
+  end
+end
+
+% get the staircases we are supposed to plot
+if plotAllStaircases
+  stairNums = 1:length(s);
+else
+  stairNums = length(s);
+end
+
+% now display
+if dispFig == 1
+  if ~useCurrentFig
+    smartfig('doStaircase','reuse');
+  end
+  for iStair = stairNums
+    % get history
+    history = doStaircase('getHistory',s(iStair));
+    % do subplot if we are plotting each staircase separately
+    if ~useSingleAxis
+      subplot(s(iStair).subplotRows,s(iStair).subplotCols,s(iStair).subplotNum);
+      cla;
+    end
+    % draw line
+    plot(history.testValues,'k-');
+    hold on
+    xlabel('Trial #');
+    ylabel('Test value');
+    % for a normal non-ratings experiment
+    if isempty(history.ratings)
       % plot the correct trials in green
-      correctTrialNums = find((history.response==1) & (history.ratings == rating));
+      correctTrialNums = find(history.response==1);
       if ~isempty(correctTrialNums)
-	plot(correctTrialNums,history.testValues(correctTrialNums),'go','MarkerFaceColor','g','MarkerSize',markerSize);
+	plot(correctTrialNums,history.testValues(correctTrialNums),'go','MarkerFaceColor','g');
       end
       % plot the incorrect trials in red
-      incorrectTrialNums = find((history.response==0) & (history.ratings == rating));
+      incorrectTrialNums = find(history.response==0);
       if ~isempty(incorrectTrialNums)
-	plot(incorrectTrialNums,history.testValues(incorrectTrialNums),'ro','MarkerFaceColor','r','MarkerSize',markerSize);
+	plot(incorrectTrialNums,history.testValues(incorrectTrialNums),'ro','MarkerFaceColor','r');
       end
-      
+    else
+      % get ratings info
+      ratings = unique(history.ratings);
+      maxRating = s.s.ratings;
+      % size of markers to show rating
+      minMarkerSize = 3;
+      maxMarkerSize = 20;
+      for rating = ratings
+	% get the marker size to display at
+	markerSize = minMarkerSize+(maxMarkerSize-minMarkerSize)*(rating-1)/(maxRating-1);
+	% plot the correct trials in green
+	correctTrialNums = find((history.response==1) & (history.ratings == rating));
+	if ~isempty(correctTrialNums)
+	  plot(correctTrialNums,history.testValues(correctTrialNums),'go','MarkerFaceColor','g','MarkerSize',markerSize);
+	end
+	% plot the incorrect trials in red
+	incorrectTrialNums = find((history.response==0) & (history.ratings == rating));
+	if ~isempty(incorrectTrialNums)
+	  plot(incorrectTrialNums,history.testValues(incorrectTrialNums),'ro','MarkerFaceColor','r','MarkerSize',markerSize);
+	end
+      end
     end
   end
   drawnow
-elseif s(end).dispFig == 2
+elseif dispFig == 2
   disp(sprintf('(doStaircase:update) %i:Strength: %f Response: %i',s(end).trialNum,strength,r));
 end
 
@@ -875,7 +924,7 @@ end
 function threshold = getWeibullThreshold(s,args)
 
 p = [];help = [];gamma = [];dispFig=[];dispPsycho=[];doFit=[];
-getArgs(args,{'p=[]','gamma=0.5','help=0','dispFig=0','dispPsycho=0','verbose=1','doFit=1'});
+getArgs(args,{'p=[]','gamma=0.5','help=0','dispFig=0','dispPsycho=0','verbose=1','doFit=1','titleStr=[]','useCurrentFig=0'});
 
 if help
   disp(sprintf('gamma=%f\t\tFits the weibull with the guessing rate (i.e. percent correct when no signal is present)',gamma));
@@ -987,8 +1036,12 @@ if (dispFig || dispPsycho)  && ~isempty(testValues)
   
   if dispFig
     %now display the staircases
-    f = smartfig('doStaircaseFit','reuse');
-    clf(f)
+    if ~useCurrentFig 
+      f = smartfig('doStaircaseFit','reuse');
+      clf(f)
+    else
+      f = gcf;
+    end
     staircaseStart = 1;
     maxStaircaseLen = max(diff([0 staircaseEnd]));
     allStaircases = nan(length(staircaseEnd),maxStaircaseLen);
@@ -1016,16 +1069,22 @@ if (dispFig || dispPsycho)  && ~isempty(testValues)
     plot(find(incorrectVals),testValues(find(incorrectVals)),'r.');
     xlabel('Trial #');
     ylabel('Test value');
-    title(sprintf('%s staircases (n=%i) ',h.dispType,length(staircaseEnd)));
+    if ~isempty(titleStr)
+      title(sprintf('%s: %s staircases (n=%i) ',titleStr,h.dispType,length(staircaseEnd)));
+    else
+      title(sprintf('%s staircases (n=%i) ',h.dispType,length(staircaseEnd)));
+    end
+      
     vline(staircaseEnd);
     hline(threshold.threshold);
+    yaxis(min(testValues),max(testValues));
     subplot(2,3,4);
     plot(nanmean(allStaircases),'k-','LineWidth',2);
     xlabel('Trial #');
     ylabel('Test value');
     title('All staircases + average');
     hline(threshold.threshold);
-
+    yaxis(min(testValues),max(testValues));
     subplot(2,3,5);
   end
 
@@ -1046,7 +1105,7 @@ if (dispFig || dispPsycho)  && ~isempty(testValues)
   if ~isempty(p)
     hline(p);
   end
-  xaxis(xDispMin,xDispMax);
+  xaxis(min(testValues),max(testValues));
 end
 
 

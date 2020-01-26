@@ -1,0 +1,10 @@
+date,username,time,task,computer,stimfile
+05/21/2016,gru,21-May-2016 19:28:41,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s328/160521_stim01.mat
+05/21/2016,gru,21-May-2016 19:35:27,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s328/160521_stim02.mat
+05/21/2016,gru,21-May-2016 19:41:34,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s328/160521_stim03.mat
+05/21/2016,gru,21-May-2016 19:47:36,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s328/160521_stim04.mat
+05/21/2016,gru,21-May-2016 19:53:37,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s328/160521_stim05.mat
+05/21/2016,gru,21-May-2016 20:00:01,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s328/160521_stim06.mat
+05/21/2016,gru,21-May-2016 20:06:27,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s328/160521_stim07.mat
+05/21/2016,gru,21-May-2016 20:12:59,mglRetinotopy.m,oban.stanford.edu,~/data/mglRetinotopy/s328/160521_stim08.mat
+05/21/2016,gru,21-May-2016 20:18:15,expectationDetectionLocalizer.m,oban.stanford.edu,~/proj/rentzi/data/expectationDetectionLocalizer/s328/fmriRoom/160521_stim09.mat

@@ -451,7 +451,10 @@ for i = 1:length(s)
   % have a task which is mglRetinotopy
   taskNum = [];
   for iTask = 1:2
-    if (length(thiss.task) >= iTask) && (isequal(thiss.task{iTask}{1}.taskFilename,'mglRetinotopy.m') || isequal(thiss.task{iTask}{1}.taskFilename,'gruRetinotopy.m') || isequal(thiss.task{iTask}{1}.taskFilename, 'mglDoubleBars.m'))
+    % list of tasks which can be automatically analyzed by pRFFit.m
+    prfTaskNames = {'mglRetinotopy.m','gruRetinotopy.m','offsetRetinotopy.m','mglDoublebars.m'};
+    fname = thiss.task{iTask}{1}.taskFilename;
+    if (length(thiss.task) >= iTask) && any(cellfun(@(x) isequal(fname,x),prfTaskNames))
       taskNum = iTask;
     end
   end

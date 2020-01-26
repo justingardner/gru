@@ -1,0 +1,26 @@
+date,username,time,task,computer,stimfile
+04/27/2016,gru,27-Apr-2016 21:15:07,cohcon_localizer.m,oban.stanford.edu,~/data/cohcon_localizer/s043/160427_stim01.mat
+04/27/2016,gru,27-Apr-2016 21:22:46,cohcon_localizer.m,oban.stanford.edu,~/data/cohcon_localizer/s043/160427_stim02.mat
+04/27/2016,gru,27-Apr-2016 21:31:40,cohcon_localizer.m,oban.stanford.edu,~/data/cohcon_localizer/s043/160427_stim03.mat
+04/27/2016,gru,27-Apr-2016 21:39:11,cohcon_localizer.m,oban.stanford.edu,~/data/cohcon_localizer/s043/160427_stim04.mat
+04/27/2016,gru,27-Apr-2016 21:47:39,cohcon_localizer.m,oban.stanford.edu,~/data/cohcon_localizer/s043/160427_stim05.mat
+04/27/2016,gru,27-Apr-2016 21:55:21,cohcon_localizer.m,oban.stanford.edu,~/data/cohcon_localizer/s043/160427_stim06.mat
+04/27/2016,gru,27-Apr-2016 22:03:57,cohcon_localizer.m,oban.stanford.edu,~/data/cohcon_localizer/s043/160427_stim07.mat
+04/27/2016,gru,27-Apr-2016 22:11:27,cohcon_localizer.m,oban.stanford.edu,~/data/cohcon_localizer/s043/160427_stim08.mat
+05/09/2016,gru,09-May-2016 17:14:56,cohcon_localizer.m,oban.stanford.edu,~/data/cohcon_localizer/s043/160509_stim01.mat
+05/09/2016,gru,09-May-2016 17:22:38,cohcon_localizer.m,oban.stanford.edu,~/data/cohcon_localizer/s043/160509_stim02.mat
+05/09/2016,gru,09-May-2016 17:30:14,cohcon_localizer.m,oban.stanford.edu,~/data/cohcon_localizer/s043/160509_stim03.mat
+05/09/2016,gru,09-May-2016 17:37:57,cohcon_localizer.m,oban.stanford.edu,~/data/cohcon_localizer/s043/160509_stim04.mat
+05/09/2016,gru,09-May-2016 17:45:39,cohcon_localizer.m,oban.stanford.edu,~/data/cohcon_localizer/s043/160509_stim05.mat
+05/09/2016,gru,09-May-2016 17:54:20,cohcon_localizer.m,oban.stanford.edu,~/data/cohcon_localizer/s043/160509_stim06.mat
+05/09/2016,gru,09-May-2016 18:02:00,cohcon_localizer.m,oban.stanford.edu,~/data/cohcon_localizer/s043/160509_stim07.mat
+05/09/2016,gru,09-May-2016 18:10:28,cohcon_localizer.m,oban.stanford.edu,~/data/cohcon_localizer/s043/160509_stim08.mat
+06/08/2016,gru,08-Jun-2016 14:16:34,cohcon.m,oban.stanford.edu,~/data/cohcon/s043/160608_stim01.mat
+06/08/2016,gru,08-Jun-2016 14:24:31,cohcon.m,oban.stanford.edu,~/data/cohcon/s043/160608_stim02.mat
+06/08/2016,gru,08-Jun-2016 14:33:05,cohcon.m,oban.stanford.edu,~/data/cohcon/s043/160608_stim03.mat
+06/08/2016,gru,08-Jun-2016 14:41:13,cohcon.m,oban.stanford.edu,~/data/cohcon/s043/160608_stim04.mat
+06/08/2016,gru,08-Jun-2016 14:50:24,cohcon.m,oban.stanford.edu,~/data/cohcon/s043/160608_stim05.mat
+06/08/2016,gru,08-Jun-2016 14:58:30,cohcon.m,oban.stanford.edu,~/data/cohcon/s043/160608_stim06.mat
+06/08/2016,,08-Jun-2016 15:06:51,cohcon.m,oban.stanford.edu,~/data/cohcon/s043/160608_stim07.mat
+06/08/2016,,08-Jun-2016 15:13:00,cohcon.m,oban.stanford.edu,~/data/cohcon/s043/160608_stim08.mat
+06/08/2016,gru,08-Jun-2016 15:19:22,cohcon.m,oban.stanford.edu,~/data/cohcon/s043/160608_stim09.mat
