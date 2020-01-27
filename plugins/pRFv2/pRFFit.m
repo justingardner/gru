@@ -27,6 +27,7 @@ if isempty(fitParams.concatInfo)
   fitParams.concatInfo.whichScan = ones(1,nFrames);
   fitParams.concatInfo.whichVolume = 1:nFrames;
   fitParams.concatInfo.runTransition = [1 nFrames];
+  fitParams.concatInfo.junkFrames = viewGet(v,'junkFrames');
   fitParams.concatInfo.totalJunkedFrames = viewGet(v,'totalJunkedFrames',scanNum);
   if length(fitParams.concatInfo.totalJunkedFrames > 1)
     % first check for consistency in totalJunkedFrames
