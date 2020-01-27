@@ -133,15 +133,22 @@ params.pRFFit.splitData = 0;
 % display verbose info
 params.pRFFit.verbose = 1;
 
-% parameters for canonical HRF
-params.pRFFit.timelag = 1;
-params.pRFFit.tau = 0.8;
-params.pRFFit.exponent = 6;
-params.pRFFit.diffOfGamma = 1;
-params.pRFFit.amplitudeRatio = 0.2;
-params.pRFFit.timelag2 = 4;
-params.pRFFit.tau2 = 2;
-params.pRFFit.exponent2 = 4;
+% parameters for canonical HRF using vistasoft code
+params.pRFFit.canonicalFunction = 'rmHrfTwoGammas';
+params.pRFFit.canonicalParams = [5.4 5.2 10.8 7.35 0.35];
+
+% old way of generating difference of gammas
+if 0
+  params.pRFFit.canonicalFunction = 'getGammaHrf';
+  params.pRFFit.timelag = 1;
+  params.pRFFit.tau = 0.8;
+  params.pRFFit.exponent = 6;
+  params.pRFFit.diffOfGamma = 1;
+  params.pRFFit.amplitudeRatio = 0.2;
+  params.pRFFit.timelag2 = 4;
+  params.pRFFit.tau2 = 2;
+  params.pRFFit.exponent2 = 4;
+end
 
 % run it
 v = pRF(v,params);
@@ -158,7 +165,7 @@ end
 
 % convert to cartesian
 results.x = cos(results.polarAngle) .* results.eccentricity;
-results.y = cos(results.polarAngle) .* results.eccentricity;
+results.y = sin(results.polarAngle) .* results.eccentricity;
 
 % set status to good
 results.status = 1;
@@ -167,11 +174,28 @@ results.status = 1;
 results = cleanUp(results);
 
 % display the hdr
-if doDispHDR,dispHDR(params.pRFFit);end
+if doDispHDR,dispHDR(v);end
 
 % display fits 
 if doDispFits,dispFits(results,stimradius);end
 
+%%%%%%%%%%%%%%%%%
+%    dispHDR    %
+%%%%%%%%%%%%%%%%%
+function dispHDR(v)
+
+% get analysis strucuture
+a = viewGet(v,'Analysis');
+d = a.d{1};
+
+% make figure with canonical plot
+mlrSmartfig('pmMLR_hdr','reuse');clf;
+plot(d.canonicalModel.time,d.canonicalModel.hrf);
+xlabel('Time (s)');
+ylabel('Response amplitude (% signal change)');
+title('(pmMLR) Canonical hemodynamic response');
+
+  
 %%%%%%%%%%%%%%%%%%
 %    dispFits    %
 %%%%%%%%%%%%%%%%%%
@@ -218,50 +242,3 @@ results = rmfield(results,'dataDir');
 % quit MLR and clean-up views
 mrQuit;
 
-%%%%%%%%%%%%%%%%%
-%    dispHDR    %
-%%%%%%%%%%%%%%%%%
-function dispHDR(params)
-
-retval = [];
-
-% compute for 25 seconds
-t = 0:0.1:25;
-
-% get the first gamma function
-hdr = thisGamma(t,1,params.timelag,0,params.tau,params.exponent);
-titleStr = sprintf('(timelag: %s tau: %s exponent: %s)',mlrnum2str(params.timelag),mlrnum2str(params.tau),mlrnum2str(params.exponent));
-
-% if difference of gamma subtract second gamma from this one
-if params.diffOfGamma
-  hdr = hdr - thisGamma(t,params.amplitudeRatio,params.timelag2,0,params.tau2,params.exponent2);
-  titleStr = sprintf('%s - %s x (timelag2: %s tau2: %s exponent2: %s)',titleStr,mlrnum2str(params.amplitudeRatio),mlrnum2str(params.timelag2),mlrnum2str(params.tau2),mlrnum2str(params.exponent2));
-end
-hdr = hdr/max(hdr);
-
-% display
-mlrSmartfig('dispHDR','reuse');clf;
-plot(t,hdr,'k.-');
-title(titleStr);
-xlabel('Time (sec)');
-ylabel('Amplitude');
-
-
-%%%%%%%%%%%%%%%%%%%
-%%   thisGamma   %%
-%%%%%%%%%%%%%%%%%%%
-function gammafun = thisGamma(time,amplitude,timelag,offset,tau,exponent)
-
-exponent = round(exponent);
-% gamma function
-gammafun = (((time-timelag)/tau).^(exponent-1).*exp(-(time-timelag)/tau))./(tau*factorial(exponent-1));
-
-% negative values of time are set to zero,
-% so that the function always starts at zero
-gammafun(find((time-timelag) < 0)) = 0;
-
-% normalize the amplitude
-if (max(gammafun)-min(gammafun))~=0
-  gammafun = (gammafun-min(gammafun)) ./ (max(gammafun)-min(gammafun));
-end
-gammafun = (amplitude*gammafun+offset);
