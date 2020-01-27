@@ -161,6 +161,7 @@ for scanNum = params.scanNum
   prefit = fit.prefit;
   paramsInfo = fit.paramsInfo;
   pRFAnal.d{scanNum}.paramsInfo = paramsInfo;
+
   % grab all these fields and stick them onto a structure called paramsInfo
   % preallocate some space
   rawParams = nan(fit.nParams,n);
@@ -231,7 +232,7 @@ for scanNum = params.scanNum
       % can't load each voxel's time series one at a time. If this is
       % too large for memory then you can comment this out and not
       % pass it into pRFFit and pRFFit will load the tSeries itself
-      loadROI = loadROITSeries(v,loadROI,scanNum,params.groupName);
+      loadROI = loadROITSeries(v,loadROI,scanNum,params.groupName,'keepNAN',true);
       % reorder x,y,z coordinates since they can get scrambled in loadROITSeries
       x(blockStart:blockEnd) = loadROI.scanCoords(1,1:blockSize);
       y(blockStart:blockEnd) = loadROI.scanCoords(2,1:blockSize);
@@ -245,7 +246,7 @@ for scanNum = params.scanNum
       end
 
       % now loop over each voxel
-      parfor i = blockStart:blockEnd
+      for i = blockStart:blockEnd
         fit = pRFFit(v,scanNum,x(i),y(i),z(i),'stim',stim,'concatInfo',concatInfo,'prefit',prefit,'fitTypeParams',params.pRFFit,'dispIndex',i,'dispN',n,'tSeries',loadROI.tSeries(i-blockStart+1,:)','framePeriod',framePeriod,'junkFrames',junkFrames,'paramsInfo',paramsInfo);
         if ~isempty(fit)
           % keep data, note that we are keeping temporarily in
@@ -260,7 +261,7 @@ for scanNum = params.scanNum
           r(i,:) = fit.r;
         end
       end
-        
+
       % set overlays
       for i = 1:n
         r2.data{scanNum}(x(i),y(i),z(i)) = thisr2(i);
@@ -276,6 +277,10 @@ for scanNum = params.scanNum
     
     pRFAnal.d{scanNum}.params = rawParams;
     pRFAnal.d{scanNum}.r = r;
+
+    % keep canonical
+    pRFAnal.d{scanNum}.canonical = fit.canonical;
+    pRFAnal.d{scanNum}.canonicalModel = fit.canonicalModel;
 
     iScan = find(params.scanNum == scanNum);
     thisParams.scanNum = params.scanNum(iScan);

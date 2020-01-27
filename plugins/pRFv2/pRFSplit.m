@@ -55,7 +55,7 @@ loadROI = makeEmptyROI(v, 'scanNum', scanNum, 'groupNum', params.groupName);
 loadROI.coords(1,:) = x;
 loadROI.coords(2,:) = y;
 loadROI.coords(3,:) = z;
-loadROI = loadROITSeries(v, loadROI, scanNum, params.groupName);
+loadROI = loadROITSeries(v, loadROI, scanNum, params.groupName,'keepNAN',true);
 
 disp(sprintf('Running on %i voxels to calculate runtime',vnum));
 % Run on a few voxels to calculate runtime -- use this later to calculate number of splits

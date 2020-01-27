@@ -85,7 +85,11 @@ elseif strcmp(varargin{1}, 'getFitParams')
   p.x = params(1);
   p.y = params(2);
   p.std = params(3);
-  % use a fixed single gaussian
+  % pass on canonical parameters
+  if isfield(fitParams,'canonicalFunction')
+    p.canonical.function = fitParams.canonicalFunction;
+    p.canonical.params = fitParams.canonicalParams;
+  end
   p.canonical.type = 'gamma';
   p.canonical.lengthInSeconds = 25;
   p.canonical.timelag = fitParams.timelag;
