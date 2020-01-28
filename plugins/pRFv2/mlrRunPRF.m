@@ -47,7 +47,7 @@
 %             rfHalfWidth: Std of gaussian fit for each voxel
 %
 %       e.g.: 
-%r = mlrRunPRF('~/Desktop/temp','~/Desktop/bold.nii.gz','~/Desktop/stim.nii.gz',[20 20],'dispFigs=1');
+%r = mlrRunPRF('~/Desktop/temp','~/Desktop/bold.nii.gz','~/Desktop/stim.nii.gz',[20 20],'dispFigs=1','parallel=1');
 %
 function results = mlrRunPRF(homedir, datafile, stimfile, stimsize, varargin)
 
