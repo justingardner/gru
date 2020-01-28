@@ -246,7 +246,7 @@ for scanNum = params.scanNum
       end
 
       % now loop over each voxel
-      for i = blockStart:blockEnd
+      parfor i = blockStart:blockEnd
         fit = pRFFit(v,scanNum,x(i),y(i),z(i),'stim',stim,'concatInfo',concatInfo,'prefit',prefit,'fitTypeParams',params.pRFFit,'dispIndex',i,'dispN',n,'tSeries',loadROI.tSeries(i-blockStart+1,:)','framePeriod',framePeriod,'junkFrames',junkFrames,'paramsInfo',paramsInfo);
         if ~isempty(fit)
           % keep data, note that we are keeping temporarily in
@@ -278,9 +278,9 @@ for scanNum = params.scanNum
     pRFAnal.d{scanNum}.params = rawParams;
     pRFAnal.d{scanNum}.r = r;
 
-    % keep canonical
-    pRFAnal.d{scanNum}.canonical = fit.canonical;
-    pRFAnal.d{scanNum}.canonicalModel = fit.canonicalModel;
+    % get canonical, by asking for model response from the first voxel
+    fit = pRFFit(v,scanNum,x(1),y(1),z(1),'params',rawParams(:,1),'stim',stim,'concatInfo',concatInfo,'prefit',prefit,'fitTypeParams',params.pRFFit,'dispIndex',i,'dispN',n,'framePeriod',framePeriod,'junkFrames',junkFrames,'paramsInfo',paramsInfo,'getModelResponse=1');
+    pRFAnal.d{scanNum}.canonicalModel = fit.canonical;
 
     iScan = find(params.scanNum == scanNum);
     thisParams.scanNum = params.scanNum(iScan);
