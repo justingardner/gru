@@ -35,7 +35,7 @@
 %             canonicalParams: (Default [5.4 5.2 10.8 7.35 0.35]) array of parameters for canonical difference of
 %               gamma function [peak1 fwhm1 peak2 fwhm2 dip]. See rmHrfTwogammas in Vistasoft for more info.
 %             rfType: (default 'gaussian') The name of the pRF model we are fitting. See the models directory
-%               of pRFv2 to see models that have been coded
+%               of pRFv2 to see models that have been codedpR
 %
 %             Return variable (results) has the following fields
 %
@@ -62,7 +62,7 @@ if (nargin < 4) || (nargout ~= 1)
   return
 end
 
-% check and interpret arguments, load stim and data and put into images
+% check and interpret arguments, load stim and data
 [results inputs flags] = checkArguments(homedir, datafile, stimfile, stimsize, varargin, results);
 if results.status == -1,return,end
 
@@ -103,7 +103,7 @@ function results = getAnalysisResults(v,results)
 scanNum = viewGet(v,'curScan');
   
 % get the overlays
-overlayNames = {'r2','polarAngle','eccentricity','rfHalfWidth'};
+overlayNames = viewGet(v,'overlayNames');
 
 % cycle over each one, extracting from the view
 for iOverlay = 1:length(overlayNames)
@@ -201,7 +201,6 @@ mrQuit;
 makeEmptyMLRDir(inputs.dataDir,'description=Temporary directory for mlrRunPRF to process pRF data','defaultParams=1');
 
 % get a view from the temporary directory
-
 cd(inputs.dataDir);
 v = newView;
 
