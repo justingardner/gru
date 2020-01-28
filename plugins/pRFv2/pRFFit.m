@@ -208,6 +208,8 @@ if isfield(fitParams,'prefit') && ~isempty(fitParams.prefit)
     fit.r = maxr;
     fit.bestFitVoxel = bestModel;
     [fit.polarAngle fit.eccentricity] = cart2pol(fit.x,fit.y);
+    % return canonical
+    fit.canonicalModel = getCanonicalHRF(fit.canonical,fitParams.framePeriod);
     % display
     if fitParams.verbose
       disp(sprintf('%s[%2.f %2.f %2.f] r2=%0.2f polarAngle=%6.1f eccentricity=%6.1f rfHalfWidth=%6.1f',fitParams.dispstr,x,y,z,fit.r2,r2d(fit.polarAngle),fit.eccentricity,fit.std));
@@ -684,7 +686,10 @@ rfModel = [];
 if any(strcmp(fitParams.rfType,{'gaussian','gaussian-hdr', 'gaussian-exp', 'gaussian-diffs', 'gaussian-divs', 'gaussian-DoG-CSS'}))
   rfModel = makeRFGaussian(params,fitParams);
 else
-  disp(sprintf('(pRFFit:getRFModel) Unknown rfType: %s',fitParams.rfType));
+  disp('');
+  dispHeader
+  dispHeader(sprintf('(pRFFit:getRFModel) Unknown rfType: %s',fitParams.rfType));
+  dispHeader
 end
 
 %%%%%%%%%%%%%%%%%%%
