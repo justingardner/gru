@@ -30,7 +30,7 @@
 %
 %             dispFigs: (default 0) display figures with fits
 %             quickFit: (default 0) just do a quick prefit to test code
-%             parallel: (default 0) Set to number of parallel workers to startup, 0 to not use parallel toolbox
+%             parallel: (default 1) Set to number of parallel workers to startup, 0 to not use parallel toolbox
 %               set to 1 to bring up a dialog box that will ask to set workers
 %             canonicalParams: (Default [5.4 5.2 10.8 7.35 0.35]) array of parameters for canonical difference of
 %               gamma function [peak1 fwhm1 peak2 fwhm2 dip]. See rmHrfTwogammas in Vistasoft for more info.
@@ -47,7 +47,7 @@
 %             rfHalfWidth: Std of gaussian fit for each voxel
 %
 %       e.g.: 
-%r = mlrRunPRF('~/Desktop/temp','~/Desktop/bold.nii.gz','~/Desktop/stim.nii.gz',[20 20],'dispFigs=1','parallel=1');
+%r = mlrRunPRF('~/Desktop/temp','~/Desktop/bold.nii.gz','~/Desktop/stim.nii.gz',[20 20],'dispFigs=1');
 %
 function results = mlrRunPRF(homedir, datafile, stimfile, stimsize, varargin)
 
@@ -224,7 +224,7 @@ end
 function [results inputs flags] = checkArguments(homedir, datafile, stimfile, stimsize, varargin, results);
 
 % check arguments
-getArgs(varargin,{'dispFigs=0','quickFit=0','parallel=0','canonicalParams=[5.4 5.2 10.8 7.35 0.35]','rfType=gaussian'},'verbose=1');
+getArgs(varargin,{'dispFigs=0','quickFit=0','parallel=1','canonicalParams=[5.4 5.2 10.8 7.35 0.35]','rfType=gaussian'},'verbose=1');
 
 % deal with parallel workers for parfor loops
 global mlrNoParallel;
