@@ -30,7 +30,7 @@
 %
 %             dispFigs: (default 0) display figures with fits
 %             quickFit: (default 0) just do a quick prefit to test code
-%             parallel: (default 1) Set to number of parallel workers to startup, 0 to not use parallel toolbox
+%             doParallel: (default 1) Set to number of doParallel workers to startup, 0 to not use parallel toolbox
 %               set to 1 to bring up a dialog box that will ask to set workers
 %             canonicalParams: (Default [5.4 5.2 10.8 7.35 0.35]) array of parameters for canonical difference of
 %               gamma function [peak1 fwhm1 peak2 fwhm2 dip]. See rmHrfTwogammas in Vistasoft for more info.
@@ -224,15 +224,15 @@ end
 function [results inputs flags] = checkArguments(homedir, datafile, stimfile, stimsize, varargin, results);
 
 % check arguments
-getArgs(varargin,{'dispFigs=0','quickFit=0','parallel=1','canonicalParams=[5.4 5.2 10.8 7.35 0.35]','rfType=gaussian'},'verbose=1');
+getArgs(varargin,{'dispFigs=0','quickFit=0','doParallel=1','canonicalParams=[5.4 5.2 10.8 7.35 0.35]','rfType=gaussian'},'verbose=1');
 
 % deal with parallel workers for parfor loops
 global mlrNoParallel;
-if parallel == 0
+if doParallel == 0
   mlrNoParallel = 1;
-elseif parallel >= 1
+elseif doParallel >= 1
   mlrNoParallel = 0;
-  mlrNumWorkers(parallel);
+  mlrNumWorkers(doParallel);
 end
     
 % some flags for different debugging displays
@@ -383,6 +383,9 @@ set(gca,'YTick',-inputs.stimulusHeight/2:1:inputs.stimulusHeight/2);
 %%%%%%%%%%%%%%%%%
 function results = cleanUp(results,inputs)
 
+% quit MLR and clean-up views
+mrQuit;
+
 % display error string
 if (results.status == -1) && ~isempty(results.errorString)
   disp(results.errorString);
@@ -393,10 +396,9 @@ if isdir(inputs.dataDir)
   system(sprintf('rm -rf %s',inputs.dataDir));
 end
 
-% quit MLR and clean-up views
-mrQuit;
-
 % switch back to staruting directory
 if isfield(inputs,'startDir') & isdir(inputs.startDir)
   cd(inputs.startDir);
 end
+
+mlrPath revert
