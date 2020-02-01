@@ -62,6 +62,10 @@ if (nargin < 4) || (nargout ~= 1)
   return
 end
 
+% make sure that pRF version is the right one
+results = checkPRFPath(results);
+if results.status == -1,return,end
+
 % check and interpret arguments, load stim and data
 [results inputs flags] = checkArguments(homedir, datafile, stimfile, stimsize, varargin, results);
 if results.status == -1,return,end
@@ -192,7 +196,7 @@ stim.t = 0:inputs.framePeriod:inputs.framePeriod*(stim.size(3)-1);
 %%%%%%%%%%%%%%%%%%
 %    setupMLR    %
 %%%%%%%%%%%%%%%%%%
-function [results v] = setupMLR(inputs, results);
+function [results v] = setupMLR(inputs, results)
 
 % make sure that MLR is in a default quit state
 mrQuit;
@@ -217,6 +221,56 @@ if viewGet(v,'nScans') ~= 1
   results = cleanUp(results,inputs);
   return
 end
+
+%%%%%%%%%%%%%%%%%%%%%%
+%    checkPRFPath    %
+%%%%%%%%%%%%%%%%%%%%%%
+function results = checkPRFPath(results)
+
+% check the pRF path
+pRFPath = which('-all','pRF');
+
+% not in path
+if isempty(pRFPath)
+  % set error
+  results.status = -1;
+  % set error string
+  results.errorString = '(mlrRunPRF:checkPRFPath) Cannot find necessary function pRF';
+  return
+end
+  
+% if there are two, then only keep the pRFv2 one
+if length(pRFPath) > 1
+  goodPath = [];badPath = [];
+  for iPath = 1:length(pRFPath)
+    % If we found pRFv2
+    if ~isempty(strfind(pRFPath{iPath},'pRFv2'))
+      % then remember that
+      goodPath = iPath;
+    else
+      % if not found then, we will likely get rid of it
+      badPath(end+1) = iPath;
+    end
+  end
+
+  % ok, make sure we found a good path
+  if isempty(goodPath)
+    % set error
+    results.status = -1;
+    % set error string
+    results.errorString = '(mlrRunPRF:checkPRFPath) Did not find pRFv2 Path';
+    return
+  end
+
+  % now go and remove bad paths
+  for iPath = badPath
+    rmpath(genpath(fileparts(pRFPath{iPath})));
+  end
+end
+
+% check the pRF path again, things should return the right thing now,
+% so just display
+disp(sprintf('(mlrRunPRF:checkPRFPath) Using pRF found at: %s',which('pRF')));
 
 %%%%%%%%%%%%%%%%%%%%%%%%
 %    checkArguments    %
