@@ -27,6 +27,9 @@
 %             end
 %
 %             % then compute the final threshold
+%             % Note that if s is an array of staircases then the code will compute each individual
+%             % staircase threshold and also return the weighted average where the weight is calculated
+%             % based on the number of trials run in each staircase
 %             threshold = doStaircase('threshold',s);
 %
 %             % to make a display of staircases with the threshold (s can be an array of staircases)
@@ -610,42 +613,51 @@ if dispFig == 1
       subplot(s(iStair).subplotRows,s(iStair).subplotCols,s(iStair).subplotNum);
       cla;
     end
-    % draw line
-    plot(history.testValues,'k-');
-    hold on
-    xlabel('Trial #');
-    ylabel('Test value');
-    % for a normal non-ratings experiment
-    if isempty(history.ratings)
-      % plot the correct trials in green
-      correctTrialNums = find(history.response==1);
-      if ~isempty(correctTrialNums)
-	plot(correctTrialNums,history.testValues(correctTrialNums),'go','MarkerFaceColor','g');
-      end
-      % plot the incorrect trials in red
-      incorrectTrialNums = find(history.response==0);
-      if ~isempty(incorrectTrialNums)
-	plot(incorrectTrialNums,history.testValues(incorrectTrialNums),'ro','MarkerFaceColor','r');
-      end
+    % if constant stimuli, draw differently
+    if strcmp(s(iStair).dispType,'Method of constant stimuli')
+      cla;
+      psycho = doStaircase('getPsycho',s(iStair));
+      myerrorbar(psycho.stimStrength,psycho.pCorrect,'yError',psycho.pSte);
+      xlabel('Stimulus strenth');
+      ylabel('Percentile correct');
     else
-      % get ratings info
-      ratings = unique(history.ratings);
-      maxRating = s.s.ratings;
-      % size of markers to show rating
-      minMarkerSize = 3;
-      maxMarkerSize = 20;
-      for rating = ratings
-	% get the marker size to display at
-	markerSize = minMarkerSize+(maxMarkerSize-minMarkerSize)*(rating-1)/(maxRating-1);
-	% plot the correct trials in green
-	correctTrialNums = find((history.response==1) & (history.ratings == rating));
-	if ~isempty(correctTrialNums)
-	  plot(correctTrialNums,history.testValues(correctTrialNums),'go','MarkerFaceColor','g','MarkerSize',markerSize);
-	end
-	% plot the incorrect trials in red
-	incorrectTrialNums = find((history.response==0) & (history.ratings == rating));
-	if ~isempty(incorrectTrialNums)
-	  plot(incorrectTrialNums,history.testValues(incorrectTrialNums),'ro','MarkerFaceColor','r','MarkerSize',markerSize);
+      % draw line
+      plot(history.testValues,'k-');
+      hold on
+      xlabel('Trial #');
+      ylabel('Test value');
+      % for a normal non-ratings experiment
+      if isempty(history.ratings)
+        % plot the correct trials in green
+        correctTrialNums = find(history.response==1);
+        if ~isempty(correctTrialNums)
+	  plot(correctTrialNums,history.testValues(correctTrialNums),'go','MarkerFaceColor','g');
+        end
+        % plot the incorrect trials in red
+        incorrectTrialNums = find(history.response==0);
+        if ~isempty(incorrectTrialNums)
+	  plot(incorrectTrialNums,history.testValues(incorrectTrialNums),'ro','MarkerFaceColor','r');
+        end
+      else
+        % get ratings info
+        ratings = unique(history.ratings);
+        maxRating = s.s.ratings;
+        % size of markers to show rating
+        minMarkerSize = 3;
+        maxMarkerSize = 20;
+        for rating = ratings
+	  % get the marker size to display at
+ 	  markerSize = minMarkerSize+(maxMarkerSize-minMarkerSize)*(rating-1)/(maxRating-1);
+  	  % plot the correct trials in green
+	  correctTrialNums = find((history.response==1) & (history.ratings == rating));
+	  if ~isempty(correctTrialNums)
+	    plot(correctTrialNums,history.testValues(correctTrialNums),'go','MarkerFaceColor','g','MarkerSize',markerSize);
+	  end
+  	  % plot the incorrect trials in red
+	  incorrectTrialNums = find((history.response==0) & (history.ratings == rating));
+	  if ~isempty(incorrectTrialNums)
+	    plot(incorrectTrialNums,history.testValues(incorrectTrialNums),'ro','MarkerFaceColor','r','MarkerSize',markerSize);
+	  end
 	end
       end
     end
@@ -1217,6 +1229,9 @@ for i = 1:length(p.stimStrength)
   p.n(i) = length(whichTrials);
   p.pCorrect(i) = sum(h.response(whichTrials))/p.n(i);
 end
+
+% compute standard error
+p.pSte = sqrt((p.pCorrect .* (1-p.pCorrect))./p.n);
 
 %%%%%%%%%%%%%%%%%%%%
 %    getHistory    %
