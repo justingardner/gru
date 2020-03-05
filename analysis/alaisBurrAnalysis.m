@@ -14,7 +14,7 @@ fit = [];
 if nargin < 1, stimfileNames = [];end
 
 % parse arguments
-getArgs(varargin,{'dispFit=1'});
+getArgs(varargin,{'dispFit=1','combineData=1'});
 
 % get filenames and path
 [e.path stimfileNames] = getStimfileNames(stimfileNames);
@@ -36,7 +36,14 @@ for iFile = 1:length(stimfileNames)
 
   % valid file, so keep its information
   if ~isempty(d)
-    [isNewFile e] = combineStimfiles(e,d);
+    if combineData
+      % if combining, then a stimfile that contains the same
+      % conditions as a previous one will be combined together
+      [isNewFile e] = combineStimfiles(e,d);
+    else
+      % if not combining then treat every file as new
+      isNewFile = 1;
+    end
     if isNewFile
       % update count
       e.nFiles = e.nFiles + 1;
@@ -99,7 +106,7 @@ if dispFit
   % plot each psychometric function
   for iFile = find(e.isPsycho)
     %diplay fit
-    dispFits(e.d{iFile});
+    dispFits(e.d{iFile},iFile);
   end
   % display visual staircase
   if ~isempty(e.visualStaircase)
@@ -191,10 +198,10 @@ end
 %%%%%%%%%%%%%%%%
 % display fits %
 %%%%%%%%%%%%%%%%
-function dispFits(d)
+function dispFits(d,iFit)
 
 % open figure
-mlrSmartfig(sprintf('alaisBurrAnalysis_psychometricfits_%s',d.experimentName),'reuse');clf;
+mlrSmartfig(sprintf('%i_%s',iFit,fixBadChars(d.experimentName)),'reuse');clf;
 
 nPlots = length(d.visualWidth);
 if nPlots > 1
@@ -243,7 +250,11 @@ for iCond = 1:length(whichConds)
   ylabel('Percent rightwards choices (100%%)');
 
   % append fit parameters to title
+<<<<<<< HEAD
   titleStr = sprintf('%s\nMean: %0.2f Std: %0.2f lambda: %0.2f goodness: %g',titleStr,d.fit(whichConds(iCond)).mean,d.fit(whichConds(iCond)).std,d.fit(whichConds(iCond)).lambda,d.fit(whichConds(iCond)).percent);
+=======
+  titleStr = sprintf('%s\nMean: %0.2f Std: %0.2f lambda: %0.2f\nnTrials: %i (~%i per)',titleStr,d.fit(whichConds(iCond)).mean,d.fit(whichConds(iCond)).std,d.fit(whichConds(iCond)).lambda,sum(d.cond(iCond).nTrials),median(d.cond(iCond).nTrials));
+>>>>>>> 21a85a861f21df4d8c44c6db6c0f62a6df6e9b56
   
 end
 
@@ -284,6 +295,8 @@ for iCond = 1:d.nCond
     d.cond(iCond).correctBinned(iVal) = sum(correct(whichTrials))/nTrials;
     % compute ste
     d.cond(iCond).correctBinnedError(iVal) = d.cond(iCond).correctBinned(iVal)*(1-d.cond(iCond).correctBinned(iVal))/sqrt(nTrials);
+    % remember nTrials
+    d.cond(iCond).nTrials(iVal) = nTrials;
   end
 
   % fit a cumulative gaussian to data

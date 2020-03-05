@@ -27,6 +27,7 @@ if isempty(fitParams.concatInfo)
   fitParams.concatInfo.whichScan = ones(1,nFrames);
   fitParams.concatInfo.whichVolume = 1:nFrames;
   fitParams.concatInfo.runTransition = [1 nFrames];
+  fitParams.concatInfo.junkFrames = viewGet(v,'junkFrames');
   fitParams.concatInfo.totalJunkedFrames = viewGet(v,'totalJunkedFrames',scanNum);
   if length(fitParams.concatInfo.totalJunkedFrames > 1)
     % first check for consistency in totalJunkedFrames
@@ -207,6 +208,8 @@ if isfield(fitParams,'prefit') && ~isempty(fitParams.prefit)
     fit.r = maxr;
     fit.bestFitVoxel = bestModel;
     [fit.polarAngle fit.eccentricity] = cart2pol(fit.x,fit.y);
+    % return canonical
+    fit.canonicalModel = getCanonicalHRF(fit.canonical,fitParams.framePeriod);
     % display
     if fitParams.verbose
       disp(sprintf('%s[%2.f %2.f %2.f] r2=%0.2f polarAngle=%6.1f eccentricity=%6.1f rfHalfWidth=%6.1f',fitParams.dispstr,x,y,z,fit.r2,r2d(fit.polarAngle),fit.eccentricity,fit.std));
@@ -231,6 +234,9 @@ end
 fit = getFitParams(params,fitParams);
 fit.rfType = fitParams.rfType;
 fit.params = params;
+
+% get the canonical
+fit.canonicalModel = getCanonicalHRF(fit.canonical,fitParams.framePeriod);
 
 % compute r^2
 [residual modelResponse rfModel fit.r] = getModelResidual(params,tSeries,fitParams);
@@ -573,10 +579,101 @@ gammafun = (amplitude*gammafun+offset);
 function hrf = getCanonicalHRF(params,sampleRate)
 
 hrf.time = 0:sampleRate:params.lengthInSeconds;
-hrf.hrf = getGammaHRF(hrf.time,params);
 
-% normalize to amplitude of 1
-hrf.hrf = hrf.hrf / max(hrf.hrf);
+% default to using getGammaHRF
+if ~isfield(params,'function')
+  params.function = 'getGammaHRF';
+end
+
+switch params.function
+    case {'rmHrfTwoGammas'}
+    % use vistasoft parameterization
+    hrf.hrf = rmHrfTwogammas(hrf.time,params.params);
+  case {'getGammaHRF'}
+    hrf.hrf = getGammaHRF(hrf.time,params);
+    % normalize to amplitude of 1
+    hrf.hrf = hrf.hrf / max(hrf.hrf);
+  otherwise
+    disp(sprintf('(prFFit:getCanonicalHRF) Unknown canonical function: %s',params.function));
+    keyboard
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%    rmHrfTwoGammas    %
+%%%%%%%%%%%%%%%%%%%%%%%%
+function [h]=rmHrfTwogammas(t,params)
+% Copied from Vistasoft
+%
+% Create an HRF based on the SPM two gamma model. 
+% 
+% [h]=rmHrfTwogammas(t,params)
+% 
+% t: a range of latencies
+% params(1): peak gamma 1
+% params(2): fwhm gamma 1
+% params(3): peak gamma 2
+% params(4): fwhm gamma 2
+% params(5): dip
+% Final hrf is:   gamma1/max(gamma1)-dip*gamma2/max(gamma2)
+% from Glover, NeuroImage, 9:416-429
+%
+%
+% Example 1 Use defaults.
+%   tr = 1.5;
+%   t  = tr * (0:50);
+%   h = rmHrfTwogammas(t);
+%   figure; plot(t, h); 
+%   xlabel('time (seconds)'); 
+%   ylabel('response');
+%
+% Example 2 Put in your own parameters
+%   tr = 1.5;
+%   t  = tr * (0:50);
+%   params = [3 5 15 20 0.2];
+%   h1 = rmHrfTwogammas(t);
+%   h2 = rmHrfTwogammas(t, params);
+%   figure; plot(t, h1, 'r', t, h2, 'g'); 
+%   xlabel('time (seconds)'); 
+%   ylabel('response');
+%   legend('Default', 'Subject specfic');
+
+% 2.11.2011 JW: Cropped out of rfConvolveTC and made into a separate function 
+
+% If no HRF parameters input, use defauls
+if nargin < 2 || isempty(params), 
+    params = [5.4 5.2 10.8 7.35 0.35];
+end;
+
+% params
+peak1 = params(1);
+fwhm1 = params(2);
+peak2 = params(3);
+fwhm2 = params(4);
+dip   = params(5);
+
+% sanity check
+if(peak1 == 0 || fwhm1 ==0),
+    fprintf('[%s]: zero params',mfilename);
+    params, %#ok<NOPRT>
+    return;
+end;
+
+% Taylor:
+alpha1=peak1^2/fwhm1^2*8*log(2);
+beta1=fwhm1^2/peak1/8/log(2);
+gamma1=(t/peak1).^alpha1.*exp(-(t-peak1)./beta1);
+
+if peak2>0 && fwhm2>0
+    alpha2=peak2^2/fwhm2^2*8*log(2);
+    beta2=fwhm2^2/peak2/8/log(2);
+    gamma2=(t/peak2).^alpha2.*exp(-(t-peak2)./beta2);
+else
+    gamma2=min(abs(t-peak2))==abs(t-peak2);
+end
+h = gamma1-dip*gamma2;
+%h = h./sum(h);
+
+return;
 
 %%%%%%%%%%%%%%%%%%%%
 %%   getRFModel   %%
@@ -589,7 +686,10 @@ rfModel = [];
 if any(strcmp(fitParams.rfType,{'gaussian','gaussian-hdr', 'gaussian-exp', 'gaussian-diffs', 'gaussian-divs', 'gaussian-DoG-CSS'}))
   rfModel = makeRFGaussian(params,fitParams);
 else
-  disp(sprintf('(pRFFit:getRFModel) Unknown rfType: %s',fitParams.rfType));
+  disp('');
+  dispHeader
+  dispHeader(sprintf('(pRFFit:getRFModel) Unknown rfType: %s',fitParams.rfType));
+  dispHeader
 end
 
 %%%%%%%%%%%%%%%%%%%

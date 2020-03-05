@@ -15,6 +15,14 @@ if ~any(nargin == [0 1])
   return
 end
 
+% chosse which emacs to us (prefer Aquamacs if it is there)
+aquamacs = '/Applications/Aquamacs.app';
+if isdir(aquamacs)
+  whichEmacs = aquamacs;
+else
+  whichEmacs = '/Applications/Emacs.app';
+end
+
 if nargin == 0
   % check which editor we think we are using
   gCurrentBuiltInEditor = com.mathworks.services.Prefs.getBooleanPref('EditorBuiltinEditor');
@@ -26,7 +34,7 @@ if nargin == 0
 end
 
 if whichEditor == 1
-  com.mathworks.services.Prefs.setStringPref('EditorOtherEditor','/Applications/Emacs.app');
+  com.mathworks.services.Prefs.setStringPref('EditorOtherEditor',whichEmacs);
   com.mathworks.services.Prefs.setBooleanPref('EditorBuiltinEditor',false);
   com.mathworks.services.Prefs.setBooleanPref('EditorGraphicalDebugging',false);
   disp(sprintf('(switchEditor) Switching to Emacs'));
