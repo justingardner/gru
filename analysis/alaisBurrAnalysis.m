@@ -248,13 +248,9 @@ for iCond = 1:length(whichConds)
   xlabel('Position difference (deg)');
   yaxis(0,100);
   ylabel('Percent rightwards choices (100%%)');
-
   % append fit parameters to title
-<<<<<<< HEAD
   titleStr = sprintf('%s\nMean: %0.2f Std: %0.2f lambda: %0.2f goodness: %g',titleStr,d.fit(whichConds(iCond)).mean,d.fit(whichConds(iCond)).std,d.fit(whichConds(iCond)).lambda,d.fit(whichConds(iCond)).percent);
-=======
-  titleStr = sprintf('%s\nMean: %0.2f Std: %0.2f lambda: %0.2f\nnTrials: %i (~%i per)',titleStr,d.fit(whichConds(iCond)).mean,d.fit(whichConds(iCond)).std,d.fit(whichConds(iCond)).lambda,sum(d.cond(iCond).nTrials),median(d.cond(iCond).nTrials));
->>>>>>> 21a85a861f21df4d8c44c6db6c0f62a6df6e9b56
+
   
 end
 
@@ -1184,4 +1180,4 @@ str = sprintf('Bimodal width: %g, discrepancy: %g, r2 = %g, percentile = %g',e.d
 title(str)
 end
     
-    
+   
