@@ -70,18 +70,34 @@ if e.nFiles == 0
   return
 end
 
+%remove junk first term from response list
+d.task{1}{1}.randVars.calculated.est = d.task{1}{1}.randVars.calculated.est(2:end)
+
 [resp, dists] = binData(d)
 
 
 for iGraph = 1:dists
-    k = resp(iGraph,1:length(d.response))
+    k = resp(iGraph,1:length(d.task{1}{1}.randVars.calculated.est))
     j = find(k < 100)
     estimateValues = ones(1,length(j))
     for iValue = 1:length(j)
         estimateValues(iValue) = k(j(iValue))
     end
+    
+    %titles
+    conditions = ones(3,dists)
+    %width
+    conditions(1,1:dists) = repmat(d.originalTaskParameter.width, 1, (length(d.originalTaskParameter.posDiff)*length(d.originalTaskParameter.displacement)));
+    %posDif
+    conditions(2,1:dists) = repmat(repelem(d.originalTaskParameter.posDiff, length(d.originalTaskParameter.width)), 1, length(d.originalTaskParameter.displacement));
+    %AV disc
+    conditions(3,1:dists) = repelem(d.originalTaskParameter.displacement, (length(d.originalTaskParameter.posDiff)*length(d.originalTaskParameter.width)));
+    %create hist
+    
     figure
     hist(estimateValues)
+    titleStr = sprintf('Width: %0.2f Center Offset: %0.2f AV diff: %0.2f',conditions(1,iGraph),conditions(2,iGraph),conditions(3,iGraph));
+    title(titleStr)
 end
 k=2
                
@@ -418,20 +434,20 @@ stimfileNames = cellArray(stimfileNames);
 
 %% binData %%
 %% create a matrix of responses filtered by trial parameters %%
-%%  matrix is build downwards: width -> center offset -> AV discrepancy %%
+%%  matrix is build downwards: AV discrepancy -> center offset -> width (av1 c1 w1 -> av1 c1 w2)
 %% each row is a different condition, 1000 is a blank
 function [resp, dists] = binData(d)
-d.condDisplacement = unique(d.condDisplacement)
+d.displacement = unique(d.displacement)
 dists = length(d.originalTaskParameter.posDiff) * length(d.visualWidth) * length(d.originalTaskParameter.displacement)
-resp(1:dists,1:length(d.response)) = 1000;
+resp(1:dists,1:length(d.task{1}{1}.randVars.calculated.est)) = 1000;
 for iDiscrep = 1:length(d.originalTaskParameter.displacement)
    for iPos = 1:length(d.originalTaskParameter.posDiff)
        for iWidth = 1:length(d.visualWidth)
-           for iTrial = 1:length(d.response)
+           for iTrial = 1:length(d.task{1}{1}.randVars.calculated.est)
                if ((d.parameter.displacement(iTrial) == d.originalTaskParameter.displacement(iDiscrep)) ...
                    && (d.parameter.posDiff(iTrial) == d.originalTaskParameter.posDiff(iPos)) ...
                    && (d.parameter.width(iTrial) == d.originalTaskParameter.width(iWidth)))
-                   resp((iDiscrep-1)*length(d.originalTaskParameter.posDiff)*length(d.visualWidth) + (iPos-1)*length(d.visualWidth)+iWidth, iTrial) = d.response(iTrial);
+                   resp((iDiscrep-1)*length(d.originalTaskParameter.posDiff)*length(d.visualWidth) + (iPos-1)*length(d.visualWidth)+iWidth, iTrial) = d.task{1}{1}.randVars.calculated.est(iTrial);
                else end
            end
        end         
