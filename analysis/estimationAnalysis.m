@@ -98,6 +98,11 @@ for iGraph = 1:dists
     hist(estimateValues,(0:.04:1))
     titleStr = sprintf('Width: %0.2f Center Offset: %0.2f AV diff: %0.2f',conditions(1,iGraph),conditions(2,iGraph),conditions(3,iGraph));
     title(titleStr)
+    hold on
+    scatter(.5+((conditions(2,iGraph)+conditions(3,iGraph))/40),0,'red')
+    scatter(.5+((conditions(2,iGraph)-conditions(3,iGraph))/40),0,'green')
+    hold off
+    
 end
 k=2
                
