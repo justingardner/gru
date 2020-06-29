@@ -76,9 +76,10 @@ d.task{1}{1}.randVars.calculated.est = d.task{1}{1}.randVars.calculated.est(2:en
 [resp, dists] = binData(d)
 
 
-for iGraph = 1:dists
-    k = resp(iGraph,1:length(d.task{1}{1}.randVars.calculated.est))
-    j = find(k < 100)
+for iGraph = 7:(dists-6)
+    i = length(d.originalTaskParameter.displacement)*length(d.originalTaskParameter.width)
+    k = [resp(iGraph-(2*i),1:length(d.task{1}{1}.randVars.calculated.est))+.05 resp(iGraph-i,1:length(d.task{1}{1}.randVars.calculated.est))+.025 resp(iGraph,1:length(d.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(d.task{1}{1}.randVars.calculated.est))-.025 resp(iGraph+(2*i),1:length(d.task{1}{1}.randVars.calculated.est))-.05]
+    j = find(k < 101)
     estimateValues = ones(1,length(j))
     for iValue = 1:length(j)
         estimateValues(iValue) = k(j(iValue))
@@ -88,19 +89,19 @@ for iGraph = 1:dists
     conditions = ones(3,dists)
     %width
     conditions(1,1:dists) = repmat(d.originalTaskParameter.width, 1, (length(d.originalTaskParameter.posDiff)*length(d.originalTaskParameter.displacement)));
-    %posDif
-    conditions(2,1:dists) = repmat(repelem(d.originalTaskParameter.posDiff, length(d.originalTaskParameter.width)), 1, length(d.originalTaskParameter.displacement));
-    %AV disc
-    conditions(3,1:dists) = repelem(d.originalTaskParameter.displacement, (length(d.originalTaskParameter.posDiff)*length(d.originalTaskParameter.width)));
+    %AV discrepancy
+    conditions(2,1:dists) = repmat(repelem(d.originalTaskParameter.displacement, length(d.originalTaskParameter.width)), 1, length(d.originalTaskParameter.posDiff));
+    %center offset
+    conditions(3,1:dists) = repelem(d.originalTaskParameter.posDiff, (length(d.originalTaskParameter.displacement)*length(d.originalTaskParameter.width)));
     %create hist
     
     figure
     hist(estimateValues,(0:.04:1))
-    titleStr = sprintf('Width: %0.2f Center Offset: %0.2f AV diff: %0.2f',conditions(1,iGraph),conditions(2,iGraph),conditions(3,iGraph));
+    titleStr = sprintf('Width: %0.2f AV diff: %0.2f Center offset: %0.2f',conditions(1,iGraph),conditions(2,iGraph),conditions(3,iGraph));
     title(titleStr)
     hold on
-    scatter(.5+((conditions(2,iGraph)+conditions(3,iGraph))/40),0,'red')
-    scatter(.5+((conditions(2,iGraph)-conditions(3,iGraph))/40),0,'green')
+    scatter(.5+((conditions(3,iGraph)+conditions(2,iGraph))/(2*d.task{1}{1}.parameter.rightCue)),0,'red')
+    scatter(.5+((conditions(3,iGraph)-conditions(2,iGraph))/(2*d.task{1}{1}.parameter.rightCue)),0,'green')
     hold off
     
 end
@@ -439,20 +440,20 @@ stimfileNames = cellArray(stimfileNames);
 
 %% binData %%
 %% create a matrix of responses filtered by trial parameters %%
-%%  matrix is build downwards: AV discrepancy -> center offset -> width (av1 c1 w1 -> av1 c1 w2)
+%%  matrix is build downwards:  center offset -> AV discrepancy -> width (av1 c1 w1 -> av1 c1 w2)
 %% each row is a different condition, 1000 is a blank
 function [resp, dists] = binData(d)
 d.displacement = unique(d.displacement)
 dists = length(d.originalTaskParameter.posDiff) * length(d.visualWidth) * length(d.originalTaskParameter.displacement)
 resp(1:dists,1:length(d.task{1}{1}.randVars.calculated.est)) = 1000;
-for iDiscrep = 1:length(d.originalTaskParameter.displacement)
-   for iPos = 1:length(d.originalTaskParameter.posDiff)
+for iPos = 1:length(d.originalTaskParameter.posDiff)
+   for iDiscrep = 1:length(d.originalTaskParameter.displacement)
        for iWidth = 1:length(d.visualWidth)
            for iTrial = 1:length(d.task{1}{1}.randVars.calculated.est)
                if ((d.parameter.displacement(iTrial) == d.originalTaskParameter.displacement(iDiscrep)) ...
                    && (d.parameter.posDiff(iTrial) == d.originalTaskParameter.posDiff(iPos)) ...
                    && (d.parameter.width(iTrial) == d.originalTaskParameter.width(iWidth)))
-                   resp((iDiscrep-1)*length(d.originalTaskParameter.posDiff)*length(d.visualWidth) + (iPos-1)*length(d.visualWidth)+iWidth, iTrial) = d.task{1}{1}.randVars.calculated.est(iTrial);
+                   resp((iPos-1)*length(d.originalTaskParameter.displacement)*length(d.visualWidth) + (iDiscrep-1)*length(d.visualWidth)+iWidth, iTrial) = d.task{1}{1}.randVars.calculated.est(iTrial);
                else end
            end
        end         
