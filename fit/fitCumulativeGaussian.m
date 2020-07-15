@@ -3,8 +3,24 @@
 %      usage: fitCumulativeGaussian(x,y)
 %         by: justin gardner
 %       date: 10/11/2019
-%    purpose: fit a cumulative gaussian to psychophysical
-%             y should be values between 0 and 1              
+%    purpose: fit a cumulative gaussian to psychophysical data
+%             y should be correct proportions (values between 0 and 1)
+%    options: 'minParams=[-inf 0 0]' The minimum values parameters can go to
+%             'maxParams=[inf inf inf] The maximum values parameters can go to
+%             'initParams=[]' Starting values of parameters - defaults to median and std of x values
+%             'maxIter=inf' How many iterations to search for best parameters
+%             'fitType=basic' Fits just mean and standard deviation. Set to 'lapse' to also fit a lapse rate
+%             'guessRate=0' Sets the guess rate, if you have a 2AFC you should set to 0.5
+%
+%       e.g.: 
+%             x = [1 5 10 20 30 40];
+%             y = [0.02 0.1 0.15 0.3 0.7 0.9];
+%             fit = fitCumulativeGaussian(x,y,'fitType=lapse')
+%             clf; plot(x,y,'ko'); hold on; plot(fit.fitX,fit.fitY,'r-');
+%             xlabel('stimulus value');ylabel('Correct (proportion)');
+%             title(sprintf('Mean %f Std %f lambda %f',fit.mean,fit.std,fit.lambda));
+%              
+%
 %
 function bestfit = fitCumulativeGaussian(x,y,varargin)
 
@@ -14,7 +30,7 @@ if nargin < 2
 end
 
 % parse input arguments
-getArgs(varargin,{'minParams',[-inf 0 0],'maxParams',[inf inf inf],'initParams',[],'maxIter=inf','fitType=basic'});
+getArgs(varargin,{'minParams',[-inf 0 0],'maxParams',[inf inf inf],'initParams',[],'maxIter=inf','fitType=basic','guessRate=0'});
 
 % make sure we have a column vector
 x = x(:)';y = y(:)';
@@ -50,7 +66,7 @@ optimParams = optimset('MaxIter',maxIter);
 global numIters;numIters = 0;
 
 % fit function using lsqnonlin in LevenbergMarquardt mode.
-[fitParams resnorm residual exitflag output lambda jacobian] = lsqnonlin(@cumulativeGaussianErr,initParams,minParams,maxParams,optimParams,x,y,fitType);
+[fitParams resnorm residual exitflag output lambda jacobian] = lsqnonlin(@cumulativeGaussianErr,initParams,minParams,maxParams,optimParams,x,y,fitType,guessRate);
 
 % Taken from Numerical Recipies, 
 % the leastsq function seems to return the transposed gradient
@@ -66,7 +82,7 @@ bestfit.covar = covar;
 bestfit.output = output;
 
 % get the fit
-[bestfit.err bestfit.fit] = cumulativeGaussianErr(bestfit.params,x,y,fitType);
+[bestfit.err bestfit.fit] = cumulativeGaussianErr(bestfit.params,x,y,fitType,guessRate);
 
 % compute r2 of fit
 bestfit.r2 = 1-var(bestfit.err)/var(y);
@@ -77,18 +93,18 @@ bestfit.fitX = min(x):(max(x)-min(x))/(nFitPoints-1):max(x);
 
 % note here that the y variable is just a dummy value since we don't
 % care about the error 
-[~,bestfit.fitY] = cumulativeGaussianErr(bestfit.params,bestfit.fitX,zeros(1,nFitPoints),fitType);
+[~,bestfit.fitY] = cumulativeGaussianErr(bestfit.params,bestfit.fitX,zeros(1,nFitPoints),fitType,guessRate);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    cumulativeGaussianErr    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [err, fit] = cumulativeGaussianErr(fitParams,x,y,fitType)
+function [err, fit] = cumulativeGaussianErr(fitParams,x,y,fitType,guessRate)
 
 % get the parmas
 p = extractParams(fitParams, fitType);
 
 % calculate the gaussian
-fit = p.lambda+(normcdf(x,p.mean,p.std)*(1-2*p.lambda));
+fit = guessRate+p.lambda+(normcdf(x,p.mean,p.std)*((1-guessRate)-2*p.lambda));
 
 % update number of iterations
 global numIters;
