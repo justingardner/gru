@@ -1,9 +1,10 @@
-% alaisBurrAnalysis.m
+% visAnalysis.m
 %
-%      usage: alaisBurrAnalysis()
-%         by: justin gardner
-%       date: 10/11/19
-%    purpose: analyze data from Alais & Burr replication (experiment alaisburr.m)
+%      usage: visAnalysis() in the directory with stim file(s)
+%         by: Josh Wilson
+%       date: 7/27/20
+%    purpose: analysis for unimodal visual component of AB 2afc task;
+%    allows for running as a seperate task
 %
 function e = visAnalysis(stimfileNames,varargin)
 
