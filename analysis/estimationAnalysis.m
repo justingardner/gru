@@ -75,14 +75,15 @@ d.task{1}{1}.randVars.calculated.est = d.task{1}{1}.randVars.calculated.est(2:en
 
 [resp, dists] = binData(d)
 
+shift = 1/d.task{1}{1}.parameter.numberOffsets; 
 
 for iGraph = 7:(dists-6)
-    i = length(d.originalTaskParameter.displacement)*length(d.originalTaskParameter.width)
-    k = [resp(iGraph-(2*i),1:length(d.task{1}{1}.randVars.calculated.est))+.05 resp(iGraph-i,1:length(d.task{1}{1}.randVars.calculated.est))+.025 resp(iGraph,1:length(d.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(d.task{1}{1}.randVars.calculated.est))-.025 resp(iGraph+(2*i),1:length(d.task{1}{1}.randVars.calculated.est))-.05]
-    j = find(k < 101)
-    estimateValues = ones(1,length(j))
-    for iValue = 1:length(j)
-        estimateValues(iValue) = k(j(iValue))
+    i = length(d.originalTaskParameter.displacement)*length(d.originalTaskParameter.width);
+    k = [resp(iGraph-(2*i),1:length(d.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(d.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(d.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(d.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(d.task{1}{1}.randVars.calculated.est))-2*shift];
+    j = find(k < 101);
+    estimateValues = ones(1,length(j));
+    for iValue = 1:length(j);
+        estimateValues(iValue) = k(j(iValue));
     end
     
     %titles
@@ -95,8 +96,10 @@ for iGraph = 7:(dists-6)
     conditions(3,1:dists) = repelem(d.originalTaskParameter.posDiff, (length(d.originalTaskParameter.displacement)*length(d.originalTaskParameter.width)));
     %create hist
     
+    %d.task{1}{1}.parameter.rightCue = 20;
+    
     figure
-    hist(estimateValues,(0:.04:1))
+    hist(estimateValues,(0:.01:1))
     titleStr = sprintf('Width: %0.2f AV diff: %0.2f Center offset: %0.2f',conditions(1,iGraph),conditions(2,iGraph),conditions(3,iGraph));
     title(titleStr)
     hold on
