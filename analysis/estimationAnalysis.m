@@ -77,37 +77,8 @@ d.task{1}{1}.randVars.calculated.est = d.task{1}{1}.randVars.calculated.est(2:en
 
 shift = 1/d.task{1}{1}.parameter.numberOffsets; 
 
-for iGraph = 7:(dists-6)
-    i = length(d.originalTaskParameter.displacement)*length(d.originalTaskParameter.width);
-    k = [resp(iGraph-(2*i),1:length(d.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(d.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(d.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(d.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(d.task{1}{1}.randVars.calculated.est))-2*shift];
-    j = find(k < 101);
-    estimateValues = ones(1,length(j));
-    for iValue = 1:length(j);
-        estimateValues(iValue) = k(j(iValue));
-    end
-    
-    %titles
-    conditions = ones(3,dists)
-    %width
-    conditions(1,1:dists) = repmat(d.originalTaskParameter.width, 1, (length(d.originalTaskParameter.posDiff)*length(d.originalTaskParameter.displacement)));
-    %AV discrepancy
-    conditions(2,1:dists) = repmat(repelem(d.originalTaskParameter.displacement, length(d.originalTaskParameter.width)), 1, length(d.originalTaskParameter.posDiff));
-    %center offset
-    conditions(3,1:dists) = repelem(d.originalTaskParameter.posDiff, (length(d.originalTaskParameter.displacement)*length(d.originalTaskParameter.width)));
-    %create hist
-    
-    %d.task{1}{1}.parameter.rightCue = 20;
-    
-    figure
-    hist(estimateValues,(0:.01:1))
-    titleStr = sprintf('Width: %0.2f AV diff: %0.2f Center offset: %0.2f',conditions(1,iGraph),conditions(2,iGraph),conditions(3,iGraph));
-    title(titleStr)
-    hold on
-    scatter(.5+((conditions(3,iGraph)+conditions(2,iGraph))/(2*d.task{1}{1}.parameter.rightCue)),0,'red')
-    scatter(.5+((conditions(3,iGraph)-conditions(2,iGraph))/(2*d.task{1}{1}.parameter.rightCue)),0,'green')
-    hold off
-    
-end
+graphDists(resp, dists, d, shift)
+
 k=2
                
                
@@ -443,9 +414,10 @@ stimfileNames = cellArray(stimfileNames);
 
 %% binData %%
 %% create a matrix of responses filtered by trial parameters %%
-%%  matrix is build downwards:  center offset -> AV discrepancy -> width (av1 c1 w1 -> av1 c1 w2)
+%% matrix is build downwards:  center offset -> AV discrepancy -> width (av1 c1 w1 -> av1 c1 w2)
 %% each row is a different condition, 1000 is a blank
 function [resp, dists] = binData(d)
+if d.stimulusType(1) == 'B'
 d.displacement = unique(d.displacement)
 dists = length(d.originalTaskParameter.posDiff) * length(d.visualWidth) * length(d.originalTaskParameter.displacement)
 resp(1:dists,1:length(d.task{1}{1}.randVars.calculated.est)) = 1000;
@@ -462,4 +434,86 @@ for iPos = 1:length(d.originalTaskParameter.posDiff)
        end         
    end
 end
+end
+if d.stimulusType ~= 'B'
+d.displacement = unique(d.displacement)
+dists = length(d.originalTaskParameter.posDiff) * length(d.visualWidth)
+resp(1:dists,1:length(d.task{1}{1}.randVars.calculated.est)) = 1000;
+for iPos = 1:length(d.originalTaskParameter.posDiff)
+       for iWidth = 1:length(d.visualWidth)
+           for iTrial = 1:length(d.task{1}{1}.randVars.calculated.est)
+               if  (d.parameter.posDiff(iTrial) == d.originalTaskParameter.posDiff(iPos)) ...
+                   && (d.parameter.width(iTrial) == d.originalTaskParameter.width(iWidth))
+                   resp((iPos-1)*length(d.visualWidth)+iWidth, iTrial) = d.task{1}{1}.randVars.calculated.est(iTrial);
+               else end
+           end
+       end         
+end
+end
 
+
+function graphDists(resp, dists, d, shift)
+if d.stimulusType(1) == 'B'
+for iGraph = 7:(dists-6)
+    i = length(d.originalTaskParameter.displacement)*length(d.originalTaskParameter.width);
+    k = [resp(iGraph-(2*i),1:length(d.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(d.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(d.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(d.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(d.task{1}{1}.randVars.calculated.est))-2*shift];
+    j = find(k < 101);
+    estimateValues = ones(1,length(j));
+    for iValue = 1:length(j);
+        estimateValues(iValue) = k(j(iValue));
+    end
+    
+    %titles
+    conditions = ones(3,dists)
+    %width
+    conditions(1,1:dists) = repmat(d.originalTaskParameter.width, 1, (length(d.originalTaskParameter.posDiff)*length(d.originalTaskParameter.displacement)));
+    %AV discrepancy
+    conditions(2,1:dists) = repmat(repelem(d.originalTaskParameter.displacement, length(d.originalTaskParameter.width)), 1, length(d.originalTaskParameter.posDiff));
+    %center offset
+    conditions(3,1:dists) = repelem(d.originalTaskParameter.posDiff, (length(d.originalTaskParameter.displacement)*length(d.originalTaskParameter.width)));
+    %create hist
+    
+    %d.task{1}{1}.parameter.rightCue = 20;
+    
+    figure
+    hist(estimateValues,(0:.01:1))
+    titleStr = sprintf('Width: %0.2f AV diff: %0.2f Center offset: %0.2f',conditions(1,iGraph),conditions(2,iGraph),conditions(3,iGraph));
+    title(titleStr)
+    hold on
+    scatter(.5+((conditions(3,iGraph)+conditions(2,iGraph))/(2*d.task{1}{1}.parameter.rightCue)),0,'red')
+    scatter(.5+((conditions(3,iGraph)-conditions(2,iGraph))/(2*d.task{1}{1}.parameter.rightCue)),0,'green')
+    hold off
+end
+end
+if d.stimulusType ~= 'B'
+    for iGraph = 7:(dists-6)
+    i = length(d.originalTaskParameter.width);
+    k = [resp(iGraph-(2*i),1:length(d.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(d.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(d.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(d.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(d.task{1}{1}.randVars.calculated.est))-2*shift];
+    j = find(k < 101);
+    estimateValues = ones(1,length(j));
+    for iValue = 1:length(j);
+        estimateValues(iValue) = k(j(iValue));
+    end
+    
+    %titles
+    conditions = ones(3,dists)
+    %width
+    conditions(1,1:dists) = repmat(d.originalTaskParameter.width, 1, (length(d.originalTaskParameter.posDiff)));
+    %AV discrepancy
+    %% conditions(2,1:dists) = repmat(repelem(d.originalTaskParameter.displacement, length(d.originalTaskParameter.width)), 1, length(d.originalTaskParameter.posDiff));
+    %center offset
+    conditions(3,1:dists) = repelem(d.originalTaskParameter.posDiff, (length(d.originalTaskParameter.width)));
+    %create hist
+    
+    %d.task{1}{1}.parameter.rightCue = 20;
+    
+    figure
+    hist(estimateValues,(0:.01:1))
+    titleStr = sprintf('Width: %0.2f Center offset: %0.2f',conditions(1,iGraph),conditions(3,iGraph));
+    title(titleStr)
+    hold on
+    scatter(.5+((conditions(3,iGraph)+conditions(2,iGraph))/(2*d.task{1}{1}.parameter.rightCue)),0,'red')
+    scatter(.5+((conditions(3,iGraph)-conditions(2,iGraph))/(2*d.task{1}{1}.parameter.rightCue)),0,'green')
+    hold off
+    end
+end
