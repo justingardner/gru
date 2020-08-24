@@ -134,6 +134,7 @@ hold on
 %grap predicted PSEs
 graphPredictedPSE(scsSubVisW,scsSubAudW,aSTD,vSTD,deltaArray,widthArray,vPSE,aPSE,bPSE,delta)
 graphNoShiftPredictedPSE(aSTD,vSTD,deltaArray,widthArray,vPSE,aPSE,bPSE,bErr)
+
 end
 
 
@@ -237,7 +238,7 @@ else
 end
 
 % title string
-titleStr = d.experimentName;
+titleStr = d.stimulusType;
 
 for iCond = 1:length(whichConds)
   % plot fit
@@ -249,7 +250,7 @@ for iCond = 1:length(whichConds)
   yaxis(0,100);
   ylabel('Percent rightwards choices (100%%)');
   % append fit parameters to title
-  titleStr = sprintf('%s\nMean: %0.2f Std: %0.2f lambda: %0.2f goodness: %g',titleStr,d.fit(whichConds(iCond)).mean,d.fit(whichConds(iCond)).std,d.fit(whichConds(iCond)).lambda,d.fit(whichConds(iCond)).percent);
+  titleStr = sprintf('%s\nMean: %0.2f Std: %0.2f lambda: %0.2f P: %g',titleStr,d.fit(whichConds(iCond)).mean,d.fit(whichConds(iCond)).std,d.fit(whichConds(iCond)).lambda,1-d.fit(whichConds(iCond)).percent);
 
   
 end
@@ -331,7 +332,7 @@ end
 
 % check task filename
 taskFilename = s.task{1}{1}.taskFilename;
-if isempty(strfind(lower(taskFilename),'alaisburr'))
+if isempty(strfind(lower(taskFilename),'alaisburr')) & isempty(strfind(lower(taskFilename),'estimation'))
   disp(sprintf('(alaiasBurrAnalysis:loadStimfile) Incorrect task in stimfile: %s',taskFilename));
   return
 end
@@ -538,21 +539,39 @@ SCS = sqrt((scsSubVisW*(vSTD(whichWidth)*vSTD(whichWidth)))+(scsSubAudW*(aSTD*aS
 function graphModelThresholds(aSTD,vSTD,mle,SCS,suboptimal,bSTD,widthArray,whichWidth,visID,bID,audID,e,aErr,vErr,bErr)
 
 % formalize bar graph inputs
-graphStats = [vSTD(whichWidth) aSTD bSTD(whichWidth+length(vSTD)) mle suboptimal SCS];
+avgbSTD = (bSTD(whichWidth)+bSTD(whichWidth+length(vSTD))+bSTD(whichWidth+length(vSTD)+length(vSTD)))/3
+graphStats = [vSTD(whichWidth) aSTD avgbSTD mle suboptimal SCS];
 graphWidth = widthArray(whichWidth);
 
 % initiate figure
 figure(whichWidth+3);
 nplots = 4
+conditionString = 'Visual Width Condition: %g'
+conditionTitle = sprintf(conditionString,graphWidth)
+title(conditionTitle)
 subplot(1,4,1)
 
 % call bar graph
 bar(graphStats);
 hold on
-errorbar(graphStats,[vErr(2,(whichWidth*2)) aErr(2,2) bErr(2,(2*length(vSTD)+whichWidth*2)) 0 0 0],'.')
+
+% show error bars, taken from covar matrix (bimodal averaged)
+avgBerr = sqrt(((bErr(2,whichWidth*2))^2 + (bErr(2,(2*length(vSTD)+whichWidth*2)))^2 + (bErr(2,(3*length(vSTD)+whichWidth*2)))^2)/3)
+errorbar(graphStats,[vErr(2,(whichWidth*2)) aErr(2,2) avgBerr 0 0 0],'.')
+
+% calculate p values for model predictions
+[mleH mleP] = ztest(mle,avgbSTD,avgBerr,'tail','both')
+[subH subP] = ztest(suboptimal,avgbSTD,avgBerr,'tail','both')
+[scsH scsP] = ztest(SCS,avgbSTD,avgBerr,'tail','both')
+format shortE
+text(3.55,mle+.2,[num2str(mleP)],'fontsize',7)
+text(4.55,suboptimal+.2,[num2str(subP)],'fontsize',7)
+text(5.55,SCS+.2,[num2str(scsP)],'fontsize',7)
+
 % label
-set(gca,'XTickLabel',{'visual','audio','observed','mle','suboptimal','SCS'})
+set(gca,'XTickLabel',{'V','A','Bimodal','OI','SI','SCS'})
 ylabel('Localization Error (degrees)')
+xlabel('Threshold Calculation')
 intString = 'Threshold comparisons, width = %g'
 graphTitle = sprintf(intString,graphWidth)
 title(graphTitle)
@@ -1029,7 +1048,7 @@ plot([-5 0 5],[5 0 -5],['--','black'])
 plot([-5 0 5],[-5 0 5],['--','cyan'])
 
 % label and title
-title('Observed PSEs vs mle Predictions')
+title('Observed PSEs with Optimal Integration Prediction')
 xlabel('Audio-Visual discrepancy (delta)')
 ylabel('Observed PSE')
 
@@ -1104,7 +1123,7 @@ plot([-5 0 5],[5 0 -5],['--','black'])
 plot([-5 0 5],[-5 0 5],['--','cyan'])
 
 % label and title
-title('Observed PSEs vs SCS/sub predicted')
+title('Observed PSEs with SCS & Suboptimal Integration Predictions')
 xlabel('Audio-Visual discrepancy (delta)')
 ylabel('Observed PSE')
 
@@ -1125,10 +1144,10 @@ hold off
 
 
 %%%%%%%%%%%%%%%%%%%%%%%
-% goodnessOfFit %
+% Curve goodnessOfFit %
 %%%%%%%%%%%%%%%%%%%%%%%
 function [audR2Percent,visR2Percent,bR2Percent] = goodnessOfFit(e,audID,visID,bID)
-perms = 1000
+perms = 5
 
 %auditory
 r2RandAUD = []
