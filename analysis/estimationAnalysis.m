@@ -7,7 +7,7 @@ fit = [];
 if nargin < 1, stimfileNames = [];end
 
 % parse arguments
-getArgs(varargin,{'dispFit=1','combineData=1','numBins=50'});
+getArgs(varargin,{'dispFit=1','combineData=1','numBins=33'});
 
 % get filenames and path
 [e.path stimfileNames] = getStimfileNames(stimfileNames);
@@ -70,15 +70,18 @@ if e.nFiles == 0
   return
 end
 
+for iFile = 1:length(stimfileNames)
+
 %remove junk first term from response list
-d.task{1}{1}.randVars.calculated.est = d.task{1}{1}.randVars.calculated.est(2:end)
+e.d{iFile}.task{1}{1}.randVars.calculated.est = e.d{iFile}.task{1}{1}.randVars.calculated.est(2:end)
 
-[resp, dists] = binData(d)
+[resp, dists] = binData(e.d{iFile})
 
-shift = 1/d.task{1}{1}.parameter.numberOffsets; 
+shift = 1/e.d{iFile}.task{1}{1}.parameter.numberOffsets; 
 
-graphDists(resp, dists, d, shift, numBins)
+graphDists(resp, dists, e, shift, numBins, iFile)
 
+end
 k=2
                
                
@@ -452,11 +455,11 @@ end
 end
 
 
-function graphDists(resp, dists, d, shift, numBins)
-if d.stimulusType(1) == 'B' %%bimodal data
+function graphDists(resp, dists, e, shift, numBins, iFile)
+if e.d{iFile}.stimulusType(1) == 'B' %%bimodal data
 for iGraph = 7:(dists-6)
-    i = length(d.originalTaskParameter.displacement)*length(d.originalTaskParameter.width);
-    k = [resp(iGraph-(2*i),1:length(d.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(d.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(d.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(d.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(d.task{1}{1}.randVars.calculated.est))-2*shift];
+    i = length(e.d{iFile}.originalTaskParameter.displacement)*length(e.d{iFile}.originalTaskParameter.width);
+    k = [resp(iGraph-(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-2*shift];
     j = find(k < 101);
     estimateValues = ones(1,length(j));
     for iValue = 1:length(j);
@@ -466,40 +469,39 @@ for iGraph = 7:(dists-6)
     %titles
     conditions = ones(3,dists)
     %width
-    conditions(1,1:dists) = repmat(d.originalTaskParameter.width, 1, (length(d.originalTaskParameter.posDiff)*length(d.originalTaskParameter.displacement)));
+    conditions(1,1:dists) = repmat(e.d{iFile}.originalTaskParameter.width, 1, (length(e.d{iFile}.originalTaskParameter.posDiff)*length(e.d{iFile}.originalTaskParameter.displacement)));
     %AV discrepancy
-    conditions(2,1:dists) = repmat(repelem(d.originalTaskParameter.displacement, length(d.originalTaskParameter.width)), 1, length(d.originalTaskParameter.posDiff));
+    conditions(2,1:dists) = repmat(repelem(e.d{iFile}.originalTaskParameter.displacement, length(e.d{iFile}.originalTaskParameter.width)), 1, length(e.d{iFile}.originalTaskParameter.posDiff));
     %center offset
-    conditions(3,1:dists) = repelem(d.originalTaskParameter.posDiff, (length(d.originalTaskParameter.displacement)*length(d.originalTaskParameter.width)));
-    conditions(3,1:dists) = conditions(3,1:dists)*(.5/d.task{1}{1}.parameter.rightCue)+.50
+    conditions(3,1:dists) = repelem(e.d{iFile}.originalTaskParameter.posDiff, (length(e.d{iFile}.originalTaskParameter.displacement)*length(e.d{iFile}.originalTaskParameter.width)));
+    conditions(3,1:dists) = conditions(3,1:dists)*(.5/e.d{iFile}.task{1}{1}.parameter.rightCue)+.50
     %create hist
     
-    figure
-    subplot(1,2,1)
+    figure(iGraph-6)
+    subplot(2,2,2*iFile-1)
     hist(estimateValues,(0:(1/numBins):1))
     titleStr = sprintf('Width: %0.2f AV diff: %0.2f Center offset: %0.2f',conditions(1,iGraph),conditions(2,iGraph),conditions(3,iGraph));
     title(titleStr)
     hold on
-    scatter(.5+((conditions(3,iGraph)+conditions(2,iGraph))/(2*d.task{1}{1}.parameter.rightCue)),0,'black')
-    scatter(.5+((conditions(3,iGraph)-conditions(2,iGraph))/(2*d.task{1}{1}.parameter.rightCue)),0,'green')
+    scatter(.5+((conditions(3,iGraph)+conditions(2,iGraph))/(2*e.d{iFile}.task{1}{1}.parameter.rightCue)),0,'black')
+    scatter(.5+((conditions(3,iGraph)-conditions(2,iGraph))/(2*e.d{iFile}.task{1}{1}.parameter.rightCue)),0,'green')
     %pdf
     [m,s] = normfit(estimateValues)
     pdf = normpdf((0:.005:1),m,s)
     plot((0:.005:1),pdf)
     scatter(m,0,'red')
     %qqplot
-    subplot(1,2,2)
+    subplot(2,2,2*iFile)
     qqplot(estimateValues);
     [h, p, kstat] = lillietest(estimateValues);
     titleStr = sprintf('Normal Data: %0.2f; P = %0.2f',abs(1-h),p);
     title(titleStr)
-    hold off
 end
 end
-if d.stimulusType ~= 'B' %% unimodal data
+if e.d{iFile}.stimulusType ~= 'B' %% unimodal data
     for iGraph = 7:(dists-6)
-    i = length(d.originalTaskParameter.width);
-    k = [resp(iGraph-(2*i),1:length(d.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(d.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(d.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(d.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(d.task{1}{1}.randVars.calculated.est))-2*shift];
+    i = length(e.d{iFile}.originalTaskParameter.width);
+    k = [resp(iGraph-(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-2*shift];
     j = find(k < 101);
     estimateValues = ones(1,length(j));
     for iValue = 1:length(j);
@@ -509,16 +511,16 @@ if d.stimulusType ~= 'B' %% unimodal data
     %titles
     conditions = ones(3,dists)
     %width
-    conditions(1,1:dists) = repmat(d.originalTaskParameter.width, 1, (length(d.originalTaskParameter.posDiff)));
+    conditions(1,1:dists) = repmat(e.d{iFile}.originalTaskParameter.width, 1, (length(e.d{iFile}.originalTaskParameter.posDiff)));
     %AV discrepancy
     %% conditions(2,1:dists) = repmat(repelem(d.originalTaskParameter.displacement, length(d.originalTaskParameter.width)), 1, length(d.originalTaskParameter.posDiff));
     %center offset
-    conditions(3,1:dists) = repelem(d.originalTaskParameter.posDiff, (length(d.originalTaskParameter.width)));
-    conditions(3,1:dists) = conditions(3,1:dists)*(.5/d.task{1}{1}.parameter.rightCue)+.5
+    conditions(3,1:dists) = repelem(e.d{iFile}.originalTaskParameter.posDiff, (length(e.d{iFile}.originalTaskParameter.width)));
+    conditions(3,1:dists) = conditions(3,1:dists)*(.5/e.d{iFile}.task{1}{1}.parameter.rightCue)+.5
     
     %create hist
-    figure
-    subplot(1,2,1)
+    figure(iGraph-6)
+    subplot(2,2,2*iFile-1)
     hist(estimateValues,(0:(1/numBins):1))
     titleStr = sprintf('Width: %0.2f Center offset: %0.2f',conditions(1,iGraph),conditions(3,iGraph));
     title(titleStr)
@@ -530,11 +532,10 @@ if d.stimulusType ~= 'B' %% unimodal data
     plot((0:.005:1),pdf)
     scatter(m,0,'red')
     %% qq plot
-    subplot(1,2,2)
+    subplot(2,2,2*iFile)
     qqplot(estimateValues);
     [h, p, kstat] = lillietest(estimateValues);
     titleStr = sprintf('Normal Data: %0.2f; P = %0.2f',abs(1-h),p);
     title(titleStr)
-    hold off
     end
 end
