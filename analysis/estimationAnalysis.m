@@ -498,7 +498,7 @@ for iGraph = 7:(dists-6)
     title(titleStr)
 end
 end
-if e.d{iFile}.stimulusType ~= 'B' %% unimodal data
+if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
     for iGraph = 7:(dists-6)
     i = length(e.d{iFile}.originalTaskParameter.width);
     k = [resp(iGraph-(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-2*shift];
@@ -522,8 +522,15 @@ if e.d{iFile}.stimulusType ~= 'B' %% unimodal data
     figure(iGraph-6)
     subplot(2,2,2*iFile-1)
     hist(estimateValues,(0:(1/numBins):1))
-    titleStr = sprintf('Width: %0.2f Center offset: %0.2f',conditions(1,iGraph),conditions(3,iGraph));
+    [m,s] = normfit(estimateValues)
+    if e.d{iFile}.stimulusType(1) == 'V'
+    titleStr = sprintf('%s: Width: %0.2f // Center offset: %0.2f // N: %0.2f // Mu: %.02f Sigma: %0.2f',e.d{iFile}.stimulusType,conditions(1,iGraph),conditions(3,iGraph),length(estimateValues),m,s);
     title(titleStr)
+    end
+    if e.d{iFile}.stimulusType(1) == 'A'
+    titleStr = sprintf('%s: Center offset: %0.2f // N: %.02f // Mu: %.02f Sigma: %0.2f',e.d{iFile}.stimulusType,conditions(3,iGraph),length(estimateValues),m,s);
+    title(titleStr)
+    end
     hold on
     scatter((conditions(3,iGraph)),0,'black')
     %pdf
