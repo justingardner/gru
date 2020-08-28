@@ -456,8 +456,13 @@ end
 
 
 function graphDists(resp, dists, e, shift, numBins, iFile)
+%initialize empty arrays for summary statistics
+posOffs = []
+estAvg = []
+estSig = []
+%pull and graph estimates at each offset
 if e.d{iFile}.stimulusType(1) == 'B' %%bimodal data
-for iGraph = 7:(dists-6)
+for iGraph = 4:(dists-3)
     i = length(e.d{iFile}.originalTaskParameter.displacement)*length(e.d{iFile}.originalTaskParameter.width);
     k = [resp(iGraph-(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-2*shift];
     j = find(k < 101);
@@ -477,29 +482,37 @@ for iGraph = 7:(dists-6)
     conditions(3,1:dists) = conditions(3,1:dists)*(.5/e.d{iFile}.task{1}{1}.parameter.rightCue)+.50
     %create hist
     
-    figure(iGraph-6)
+    figure(iGraph-3)
     subplot(2,2,2*iFile-1)
     hist(estimateValues,(0:(1/numBins):1))
+    ylim([0 20])
     titleStr = sprintf('Width: %0.2f AV diff: %0.2f Center offset: %0.2f',conditions(1,iGraph),conditions(2,iGraph),conditions(3,iGraph));
     title(titleStr)
+    xlabel('Offset estimate')
+    ylabel('Number of Judgements')
     hold on
-    scatter(.5+((conditions(3,iGraph)+conditions(2,iGraph))/(2*e.d{iFile}.task{1}{1}.parameter.rightCue)),0,'black')
-    scatter(.5+((conditions(3,iGraph)-conditions(2,iGraph))/(2*e.d{iFile}.task{1}{1}.parameter.rightCue)),0,'green')
+    L1 = scatter(.5+((conditions(3,iGraph)+conditions(2,iGraph))/(2*e.d{iFile}.task{1}{1}.parameter.rightCue)),0,'black','DisplayName','Auditory Cue')
+    L2 = scatter(.5+((conditions(3,iGraph)-conditions(2,iGraph))/(2*e.d{iFile}.task{1}{1}.parameter.rightCue)),0,'green','DisplayName','Visual Cue')
     %pdf
     [m,s] = normfit(estimateValues)
     pdf = normpdf((0:.005:1),m,s)
     plot((0:.005:1),pdf)
-    scatter(m,0,'red')
+    L3 = scatter(m,0,'red','DisplayName','Estimate Average')
+    legend([L1,L2,L3], 'Auditory location','Visual location', 'Estimate Average')
     %qqplot
     subplot(2,2,2*iFile)
     qqplot(estimateValues);
     [h, p, kstat] = lillietest(estimateValues);
     titleStr = sprintf('Normal Data: %0.2f; P = %0.2f',abs(1-h),p);
     title(titleStr)
+    %label axis
+    posOffs = [posOffs conditions(3,iGraph)]
+    estAvg = [estAvg m]
+    estSig = [estSig s]
 end
 end
 if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
-    for iGraph = 7:(dists-6)
+    for iGraph = 4:(dists-3)
     i = length(e.d{iFile}.originalTaskParameter.width);
     k = [resp(iGraph-(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-2*shift];
     j = find(k < 101);
@@ -519,10 +532,12 @@ if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
     conditions(3,1:dists) = conditions(3,1:dists)*(.5/e.d{iFile}.task{1}{1}.parameter.rightCue)+.5
     
     %create hist
-    figure(iGraph-6)
+    figure(iGraph-3)
     subplot(2,2,2*iFile-1)
     hist(estimateValues,(0:(1/numBins):1))
+    ylim([0 20])
     [m,s] = normfit(estimateValues)
+    %title graphs
     if e.d{iFile}.stimulusType(1) == 'V'
     titleStr = sprintf('%s: Width: %0.2f // Center offset: %0.2f // N: %0.2f // Mu: %.02f Sigma: %0.2f',e.d{iFile}.stimulusType,conditions(1,iGraph),conditions(3,iGraph),length(estimateValues),m,s);
     title(titleStr)
@@ -531,18 +546,43 @@ if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
     titleStr = sprintf('%s: Center offset: %0.2f // N: %.02f // Mu: %.02f Sigma: %0.2f',e.d{iFile}.stimulusType,conditions(3,iGraph),length(estimateValues),m,s);
     title(titleStr)
     end
+    %label axis
+    xlabel('Offset estimate')
+    ylabel('Number of Judgements')
     hold on
-    scatter((conditions(3,iGraph)),0,'black')
+    L1 = scatter((conditions(3,iGraph)),0,'black','DisplayName','Stimulus Offset')
     %pdf
     [m,s] = normfit(estimateValues)
     pdf = normpdf((0:.005:1),m,s)
     plot((0:.005:1),pdf)
-    scatter(m,0,'red')
+    L2 = scatter(m,0,'red','DisplayName','Estimate Average')
+    legend([L1,L2], 'Cue Location', 'Estimate Average')
     %% qq plot
     subplot(2,2,2*iFile)
     qqplot(estimateValues);
     [h, p, kstat] = lillietest(estimateValues);
     titleStr = sprintf('Normal Data: %0.2f; P = %0.2f',abs(1-h),p);
     title(titleStr)
+    %grab offest parameters for summary statistics
+    posOffs = [posOffs conditions(3,iGraph)]
+    estAvg = [estAvg m]
+    estSig = [estSig s]
     end
+    
+ %summary statistic graphs
+ figure(100)
+ subplot(2,2,2*iFile-1)
+ scatter(posOffs,estAvg)
+ 
+ titleStr = sprintf('Unimodal %s Estimates',e.d{iFile}.stimulusType);
+ title(titleStr)
+ xlabel('Stimulus Offset')
+ ylabel('Average Response')
+ subplot(2,2,2*iFile)
+ scatter(posOffs,estSig)
+ ylim([.04 .15])
+ titleStr = sprintf('Unimodal %s Variation',e.d{iFile}.stimulusType);
+ title(titleStr)
+ xlabel('Stimulus Offset')
+ ylabel('Response Standard Deviation')
 end
