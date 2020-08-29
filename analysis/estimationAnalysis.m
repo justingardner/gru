@@ -573,7 +573,7 @@ if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
  figure(100)
  subplot(2,2,2*iFile-1)
  scatter(posOffs,estAvg)
- 
+ ylim([0 1])
  titleStr = sprintf('Unimodal %s Estimates',e.d{iFile}.stimulusType);
  title(titleStr)
  xlabel('Stimulus Offset')
