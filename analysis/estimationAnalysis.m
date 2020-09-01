@@ -70,30 +70,28 @@ if e.nFiles == 0
   return
 end
 
-%switch order in which we do analysis (cleaner imo)
+%switch order in which we do analysis (cleaner imo but can change)
 if e.nFiles == 3
     temp = e.d{2}
     e.d{2} = e.d{3}
     e.d{3} = temp
+    e.d{3}.originalTaskParameter.displacement = unique(e.d{3}.originalTaskParameter.displacement)
 end
+numSubs = e.nFiles+length(e.d{3}.originalTaskParameter.displacement)-1
+numSkips = 6
 
 for iFile = 1:e.nFiles  %FIX THIS LATER --------------------------------------------
 %trim files
 e.d{iFile}.task{1}{1}.randVars.calculated.est = e.d{iFile}.task{1}{1}.randVars.calculated.est(2:end)
 
-if iFile == 3
-        k=2
-end
-
 if e.d{iFile}.stimulusType(1) == 'B'
-e.d{iFile}.originalTaskParameter.displacement = unique(e.d{iFile}.originalTaskParameter.displacement)
 end
 
 [resp, dists] = binData(e, iFile) %organize responses
 
 shift = 1/(e.d{iFile}.task{1}{1}.parameter.numberOffsets-1); %graph input
 
-graphDists(resp, dists, e, shift, numBins, iFile)
+graphDists(resp, dists, e, shift, numBins, iFile, numSubs, numSkips)
 
 end
 k=2
@@ -478,14 +476,14 @@ end
 end
 
 
-function graphDists(resp, dists, e, shift, numBins, iFile)
+function graphDists(resp, dists, e, shift, numBins, iFile, numSubs, numSkips)
 %initialize empty arrays for summary statistics
 posOffs = []
 estAvg = []
 estSig = []
 %pull and graph estimates at each offset
 if e.d{iFile}.stimulusType(1) == 'B' %%bimodal data
-for iGraph = 7:(dists-6)
+for iGraph = numSkips*length(e.d{3}.originalTaskParameter.displacement)+1:(dists-numSkips*length(e.d{3}.originalTaskParameter.displacement))
     i = length(e.d{iFile}.originalTaskParameter.displacement)*length(e.d{iFile}.originalTaskParameter.width);
     k = [resp(iGraph-(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-2*shift];
     j = find(k < 101);
@@ -506,8 +504,8 @@ for iGraph = 7:(dists-6)
     conditions(3,1:dists) = conditions(3,1:dists)*(.5/e.d{iFile}.task{1}{1}.parameter.rightCue)+.50
     %create hist
     
-    figure(iGraph-3)
-    subplot(2,2,2*iFile-1)
+    figure(ceil((iGraph-numSkips*length(e.d{3}.originalTaskParameter.displacement))/2))
+    subplot(2,numSubs,2*iFile-1+2*mod(iGraph-1, length(e.d{3}.originalTaskParameter.displacement)))
     hist(estimateValues,(0:(1/numBins):1))
     ylim([0 20])
     titleStr = sprintf('Width: %0.2f AV diff: %0.2f Center offset: %0.2f',conditions(1,iGraph),conditions(2,iGraph),conditions(3,iGraph));
@@ -524,7 +522,7 @@ for iGraph = 7:(dists-6)
     L3 = scatter(m,0,'red','DisplayName','Estimate Average')
     %legend([L1,L2,L3], 'Auditory location','Visual location', 'Estimate Average')
     %qqplot
-    subplot(2,2,2*iFile)
+    subplot(2,numSubs,2*iFile++2*mod(iGraph-1, length(e.d{3}.originalTaskParameter.displacement)))
     qqplot(estimateValues);
     %[h, p, kstat] = lillietest(estimateValues);
     %titleStr = sprintf('Normal Data: %0.2f; P = %0.2f',abs(1-h),p);
@@ -536,7 +534,7 @@ for iGraph = 7:(dists-6)
 end
 end
 if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
-    for iGraph = 7:(dists-6)
+    for iGraph = numSkips+1:(dists-numSkips)
     i = length(e.d{iFile}.originalTaskParameter.width);
     k = [resp(iGraph-(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-2*shift];
     j = find(k < 101);
@@ -556,8 +554,8 @@ if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
     conditions(3,1:dists) = conditions(3,1:dists)*(.5/e.d{iFile}.task{1}{1}.parameter.rightCue)+.5
     
     %create hist
-    figure(iGraph-3)
-    subplot(2,2,2*iFile-1)
+    figure(iGraph-numSkips)
+    subplot(2,numSubs,2*iFile-1)
     hist(estimateValues,(0:(1/numBins):1))
     ylim([0 20])
     [m,s] = normfit(estimateValues)
@@ -582,7 +580,7 @@ if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
     L2 = scatter(m,0,'red','DisplayName','Estimate Average')
     legend([L1,L2], 'Cue Location', 'Estimate Average')
     %% qq plot
-    subplot(2,2,2*iFile)
+    subplot(2,numSubs,2*iFile)
     qqplot(estimateValues);
     [h, p, kstat] = lillietest(estimateValues);
     titleStr = sprintf('Normal Data: %0.2f; P = %0.2f',abs(1-h),p);
