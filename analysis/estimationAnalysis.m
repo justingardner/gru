@@ -70,14 +70,25 @@ if e.nFiles == 0
   return
 end
 
-for iFile = 1:length(stimfileNames)
+for iFile = 1:1  %FIX THIS LATER --------------------------------------------
+%trim files
+e.d{iFile}.parameter.displacement = e.d{iFile}.parameter.displacement(1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))
+e.d{iFile}.parameter.width = e.d{iFile}.parameter.width(1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))
+e.d{iFile}.parameter.posDiff = e.d{iFile}.parameter.posDiff(1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))
+for point = length(e.d{iFile}.task{1}{1}.randVars.calculated.est):-1:1
+    if isnan(e.d{iFile}.task{1}{1}.randVars.calculated.est(point))
+        e.d{iFile}.task{1}{1}.randVars.calculated.est(point) = []
+        e.d{iFile}.parameter.displacement(point) = []
+        e.d{iFile}.parameter.width(point) = []
+        e.d{iFile}.parameter.posDiff(point) = []
+    end
+end
 
-%remove junk first term from response list
-e.d{iFile}.task{1}{1}.randVars.calculated.est = e.d{iFile}.task{1}{1}.randVars.calculated.est(2:end)
+e.d{iFile}.originalTaskParameter.displacement = unique(e.d{iFile}.originalTaskParameter.displacement)
 
-[resp, dists] = binData(e.d{iFile})
+[resp, dists] = binData(e, iFile) %organize responses
 
-shift = 1/e.d{iFile}.task{1}{1}.parameter.numberOffsets; 
+shift = 1/(e.d{iFile}.task{1}{1}.parameter.numberOffsets-1); %graph input
 
 graphDists(resp, dists, e, shift, numBins, iFile)
 
@@ -121,6 +132,12 @@ d.nTrials = d1.nTrials + d2.nTrials;
 % concat fields
 d.reactionTime = [d1.reactionTime d2.reactionTime];
 d.response = [d1.response d2.response];
+d.task{1}{1}.randVars.calculated.est = [d1.task{1}{1}.randVars.calculated.est d2.task{1}{1}.randVars.calculated.est]
+d.originalTaskParameter.posDiff =  d1.originalTaskParameter.posDiff
+d.originalTaskParameter.displacement = d1.originalTaskParameter.displacement
+d.originalTaskParameter.width = d1.originalTaskParameter.width
+d.task{1}{1}.parameter.numberOffsets = d1.task{1}{1}.parameter.numberOffsets
+d.task{1}{1}.parameter.rightCue = d1.task{1}{1}.parameter.rightCue
 
 % copy these fileds
 copyFields = {'parameter','randVars'};
@@ -419,35 +436,34 @@ stimfileNames = cellArray(stimfileNames);
 %% create a matrix of responses filtered by trial parameters %%
 %% matrix is build downwards:  center offset -> AV discrepancy -> width (av1 c1 w1 -> av1 c1 w2)
 %% each row is a different condition, 1000 is a blank
-function [resp, dists] = binData(d)
-if d.stimulusType(1) == 'B'
-d.displacement = unique(d.displacement)
-dists = length(d.originalTaskParameter.posDiff) * length(d.visualWidth) * length(d.originalTaskParameter.displacement)
-resp(1:dists,1:length(d.task{1}{1}.randVars.calculated.est)) = 1000;
-for iPos = 1:length(d.originalTaskParameter.posDiff)
-   for iDiscrep = 1:length(d.originalTaskParameter.displacement)
-       for iWidth = 1:length(d.visualWidth)
-           for iTrial = 1:length(d.task{1}{1}.randVars.calculated.est)
-               if ((d.parameter.displacement(iTrial) == d.originalTaskParameter.displacement(iDiscrep)) ...
-                   && (d.parameter.posDiff(iTrial) == d.originalTaskParameter.posDiff(iPos)) ...
-                   && (d.parameter.width(iTrial) == d.originalTaskParameter.width(iWidth)))
-                   resp((iPos-1)*length(d.originalTaskParameter.displacement)*length(d.visualWidth) + (iDiscrep-1)*length(d.visualWidth)+iWidth, iTrial) = d.task{1}{1}.randVars.calculated.est(iTrial);
+function [resp, dists] = binData(e, iFile)
+if e.d{iFile}.stimulusType(1) == 'B'
+dists = length(e.d{iFile}.originalTaskParameter.posDiff) * length(e.d{iFile}.visualWidth) * length(e.d{iFile}.originalTaskParameter.displacement)
+resp(1:dists,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)) = 1000;
+for iPos = 1:length(e.d{iFile}.originalTaskParameter.posDiff)
+   for iDiscrep = 1:length(e.d{iFile}.originalTaskParameter.displacement)
+       for iWidth = 1:length(e.d{iFile}.visualWidth)
+           for iTrial = 1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)
+               if ((e.d{iFile}.parameter.displacement(iTrial) == e.d{iFile}.originalTaskParameter.displacement(iDiscrep)) ...
+                   && (e.d{iFile}.parameter.posDiff(iTrial) == e.d{iFile}.originalTaskParameter.posDiff(iPos)) ...
+                   && (e.d{iFile}.parameter.width(iTrial) == e.d{iFile}.originalTaskParameter.width(iWidth)))
+                   resp((iPos-1)*length(e.d{iFile}.originalTaskParameter.displacement)*length(e.d{iFile}.visualWidth) + (iDiscrep-1)*length(e.d{iFile}.visualWidth)+iWidth, iTrial) = e.d{iFile}.task{1}{1}.randVars.calculated.est(iTrial);
                else end
            end
        end         
    end
 end
 end
-if d.stimulusType ~= 'B'
-d.displacement = unique(d.displacement)
-dists = length(d.originalTaskParameter.posDiff) * length(d.visualWidth)
-resp(1:dists,1:length(d.task{1}{1}.randVars.calculated.est)) = 1000;
-for iPos = 1:length(d.originalTaskParameter.posDiff)
-       for iWidth = 1:length(d.visualWidth)
-           for iTrial = 1:length(d.task{1}{1}.randVars.calculated.est)
-               if  (d.parameter.posDiff(iTrial) == d.originalTaskParameter.posDiff(iPos)) ...
-                   && (d.parameter.width(iTrial) == d.originalTaskParameter.width(iWidth))
-                   resp((iPos-1)*length(d.visualWidth)+iWidth, iTrial) = d.task{1}{1}.randVars.calculated.est(iTrial);
+if e.d{iFile}.stimulusType ~= 'B'
+e.d{iFile}.displacement = unique(e.d{iFile}.displacement)
+dists = length(e.d{iFile}.originalTaskParameter.posDiff) * length(e.d{iFile}.visualWidth)
+resp(1:dists,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)) = 1000;
+for iPos = 1:length(e.d{iFile}.originalTaskParameter.posDiff)
+       for iWidth = 1:length(e.d{iFile}.visualWidth)
+           for iTrial = 1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)
+               if  (e.d{iFile}.parameter.posDiff(iTrial) == e.d{iFile}.originalTaskParameter.posDiff(iPos)) ...
+                   && (e.d{iFile}.parameter.width(iTrial) == e.d{iFile}.originalTaskParameter.width(iWidth))
+                   resp((iPos-1)*length(e.d{iFile}.visualWidth)+iWidth, iTrial) = e.d{iFile}.task{1}{1}.randVars.calculated.est(iTrial);
                else end
            end
        end         
@@ -462,7 +478,7 @@ estAvg = []
 estSig = []
 %pull and graph estimates at each offset
 if e.d{iFile}.stimulusType(1) == 'B' %%bimodal data
-for iGraph = 4:(dists-3)
+for iGraph = 7:(dists-6)
     i = length(e.d{iFile}.originalTaskParameter.displacement)*length(e.d{iFile}.originalTaskParameter.width);
     k = [resp(iGraph-(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-2*shift];
     j = find(k < 101);
@@ -477,6 +493,7 @@ for iGraph = 4:(dists-3)
     conditions(1,1:dists) = repmat(e.d{iFile}.originalTaskParameter.width, 1, (length(e.d{iFile}.originalTaskParameter.posDiff)*length(e.d{iFile}.originalTaskParameter.displacement)));
     %AV discrepancy
     conditions(2,1:dists) = repmat(repelem(e.d{iFile}.originalTaskParameter.displacement, length(e.d{iFile}.originalTaskParameter.width)), 1, length(e.d{iFile}.originalTaskParameter.posDiff));
+    conditions(2,1:dists) = conditions(2,1:dists)*(.5/e.d{iFile}.task{1}{1}.parameter.rightCue)
     %center offset
     conditions(3,1:dists) = repelem(e.d{iFile}.originalTaskParameter.posDiff, (length(e.d{iFile}.originalTaskParameter.displacement)*length(e.d{iFile}.originalTaskParameter.width)));
     conditions(3,1:dists) = conditions(3,1:dists)*(.5/e.d{iFile}.task{1}{1}.parameter.rightCue)+.50
@@ -491,19 +508,19 @@ for iGraph = 4:(dists-3)
     xlabel('Offset estimate')
     ylabel('Number of Judgements')
     hold on
-    L1 = scatter(.5+((conditions(3,iGraph)+conditions(2,iGraph))/(2*e.d{iFile}.task{1}{1}.parameter.rightCue)),0,'black','DisplayName','Auditory Cue')
-    L2 = scatter(.5+((conditions(3,iGraph)-conditions(2,iGraph))/(2*e.d{iFile}.task{1}{1}.parameter.rightCue)),0,'green','DisplayName','Visual Cue')
+    L1 = scatter(conditions(3,iGraph)+conditions(2,iGraph),0,'black','DisplayName','Auditory Cue')
+    L2 = scatter(conditions(3,iGraph)-conditions(2,iGraph),0,'green','DisplayName','Visual Cue')
     %pdf
     [m,s] = normfit(estimateValues)
     pdf = normpdf((0:.005:1),m,s)
     plot((0:.005:1),pdf)
     L3 = scatter(m,0,'red','DisplayName','Estimate Average')
-    legend([L1,L2,L3], 'Auditory location','Visual location', 'Estimate Average')
+    %legend([L1,L2,L3], 'Auditory location','Visual location', 'Estimate Average')
     %qqplot
     subplot(2,2,2*iFile)
     qqplot(estimateValues);
-    [h, p, kstat] = lillietest(estimateValues);
-    titleStr = sprintf('Normal Data: %0.2f; P = %0.2f',abs(1-h),p);
+    %[h, p, kstat] = lillietest(estimateValues);
+    %titleStr = sprintf('Normal Data: %0.2f; P = %0.2f',abs(1-h),p);
     title(titleStr)
     %label axis
     posOffs = [posOffs conditions(3,iGraph)]
@@ -512,7 +529,7 @@ for iGraph = 4:(dists-3)
 end
 end
 if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
-    for iGraph = 4:(dists-3)
+    for iGraph = 7:(dists-6)
     i = length(e.d{iFile}.originalTaskParameter.width);
     k = [resp(iGraph-(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-2*shift];
     j = find(k < 101);
