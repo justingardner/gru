@@ -70,21 +70,24 @@ if e.nFiles == 0
   return
 end
 
-for iFile = 1:1  %FIX THIS LATER --------------------------------------------
-%trim files
-e.d{iFile}.parameter.displacement = e.d{iFile}.parameter.displacement(1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))
-e.d{iFile}.parameter.width = e.d{iFile}.parameter.width(1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))
-e.d{iFile}.parameter.posDiff = e.d{iFile}.parameter.posDiff(1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))
-for point = length(e.d{iFile}.task{1}{1}.randVars.calculated.est):-1:1
-    if isnan(e.d{iFile}.task{1}{1}.randVars.calculated.est(point))
-        e.d{iFile}.task{1}{1}.randVars.calculated.est(point) = []
-        e.d{iFile}.parameter.displacement(point) = []
-        e.d{iFile}.parameter.width(point) = []
-        e.d{iFile}.parameter.posDiff(point) = []
-    end
+%switch order in which we do analysis (cleaner imo)
+if e.nFiles == 3
+    temp = e.d{2}
+    e.d{2} = e.d{3}
+    e.d{3} = temp
 end
 
+for iFile = 1:e.nFiles  %FIX THIS LATER --------------------------------------------
+%trim files
+e.d{iFile}.task{1}{1}.randVars.calculated.est = e.d{iFile}.task{1}{1}.randVars.calculated.est(2:end)
+
+if iFile == 3
+        k=2
+end
+
+if e.d{iFile}.stimulusType(1) == 'B'
 e.d{iFile}.originalTaskParameter.displacement = unique(e.d{iFile}.originalTaskParameter.displacement)
+end
 
 [resp, dists] = binData(e, iFile) %organize responses
 
@@ -132,21 +135,25 @@ d.nTrials = d1.nTrials + d2.nTrials;
 % concat fields
 d.reactionTime = [d1.reactionTime d2.reactionTime];
 d.response = [d1.response d2.response];
-d.task{1}{1}.randVars.calculated.est = [d1.task{1}{1}.randVars.calculated.est d2.task{1}{1}.randVars.calculated.est]
+d.task{1}{1}.randVars.calculated.est = [d1.task{1}{1}.randVars.calculated.est d2.task{1}{1}.randVars.calculated.est(2:end)]
 d.originalTaskParameter.posDiff =  d1.originalTaskParameter.posDiff
 d.originalTaskParameter.displacement = d1.originalTaskParameter.displacement
 d.originalTaskParameter.width = d1.originalTaskParameter.width
 d.task{1}{1}.parameter.numberOffsets = d1.task{1}{1}.parameter.numberOffsets
 d.task{1}{1}.parameter.rightCue = d1.task{1}{1}.parameter.rightCue
+d.parameter.posDiff = [d1.parameter.posDiff(1:end-1) d2.parameter.posDiff]
+d.parameter.width = [d1.parameter.width(1:end-1) d2.parameter.width]
+d.parameter.displacement = [d1.parameter.displacement(1:end-1) d2.parameter.displacement]
+
 
 % copy these fileds
-copyFields = {'parameter','randVars'};
-for iField = 1:length(copyFields)
-  fieldsToConcat = fieldnames(d1.(copyFields{iField}));
-  for iConcatField = 1:length(fieldsToConcat)
-    d.(copyFields{iField}).(fieldsToConcat{iConcatField}) = [d1.(copyFields{iField}).(fieldsToConcat{iConcatField}) d2.(copyFields{iField}).(fieldsToConcat{iConcatField})];
-  end
-end
+%copyFields = {'parameter','randVars'};
+%for iField = 1:length(copyFields)
+%  fieldsToConcat = fieldnames(d1.(copyFields{iField}));
+%  for iConcatField = 1:length(fieldsToConcat)
+%    d.(copyFields{iField}).(fieldsToConcat{iConcatField}) = [d1.(copyFields{iField}).(fieldsToConcat{iConcatField}) d2.(copyFields{iField}).(fieldsToConcat{iConcatField})];
+%  end
+%end
 
 % grab fields
 grabFields = {'stimulusType','visualWidth','displacement','experimentName','nCond','condNames','isStaircase','condWidth','condDisplacement'};
