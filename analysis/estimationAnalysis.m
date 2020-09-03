@@ -76,8 +76,11 @@ if e.nFiles == 3
     e.d{2} = e.d{3}
     e.d{3} = temp
     e.d{3}.originalTaskParameter.displacement = unique(e.d{3}.originalTaskParameter.displacement)
+    numSubs = e.nFiles+length(e.d{3}.originalTaskParameter.displacement)-1
 end
-numSubs = e.nFiles+length(e.d{3}.originalTaskParameter.displacement)-1
+if e.nFiles < 3
+    numSubs = e.nFiles
+end
 numSkips = 6
 
 for iFile = 1:e.nFiles  %FIX THIS LATER --------------------------------------------
@@ -504,11 +507,13 @@ for iGraph = numSkips*length(e.d{3}.originalTaskParameter.displacement)+1:(dists
     conditions(3,1:dists) = conditions(3,1:dists)*(.5/e.d{iFile}.task{1}{1}.parameter.rightCue)+.50
     %create hist
     
-    figure(ceil((iGraph-numSkips*length(e.d{3}.originalTaskParameter.displacement))/2))
+    figure(ceil((iGraph-numSkips*length(e.d{3}.originalTaskParameter.displacement))/length(e.d{3}.originalTaskParameter.displacement)))
     subplot(2,numSubs,2*iFile-1+2*mod(iGraph-1, length(e.d{3}.originalTaskParameter.displacement)))
     hist(estimateValues,(0:(1/numBins):1))
     ylim([0 20])
-    titleStr = sprintf('Width: %0.2f AV diff: %0.2f Center offset: %0.2f',conditions(1,iGraph),conditions(2,iGraph),conditions(3,iGraph));
+    xlim([-.1 1.1])
+    [m,s] = normfit(estimateValues)
+    titleStr = sprintf('Bimodal: Discrepancy: %0.2f Position: %0.2f // N: %0.2f // Mu: %.02f Sigma: %0.2f',conditions(2,iGraph),conditions(3,iGraph),length(estimateValues),m,s);
     title(titleStr)
     xlabel('Offset estimate')
     ylabel('Number of Judgements')
@@ -516,22 +521,58 @@ for iGraph = numSkips*length(e.d{3}.originalTaskParameter.displacement)+1:(dists
     L1 = scatter(conditions(3,iGraph)+conditions(2,iGraph),0,'black','DisplayName','Auditory Cue')
     L2 = scatter(conditions(3,iGraph)-conditions(2,iGraph),0,'green','DisplayName','Visual Cue')
     %pdf
-    [m,s] = normfit(estimateValues)
     pdf = normpdf((0:.005:1),m,s)
-    plot((0:.005:1),pdf)
+    plot((0:.005:1),pdf,'red')
     L3 = scatter(m,0,'red','DisplayName','Estimate Average')
-    %legend([L1,L2,L3], 'Auditory location','Visual location', 'Estimate Average')
+    legend([L1,L2,L3], 'Auditory location','Visual location', 'Estimate Average')
     %qqplot
     subplot(2,numSubs,2*iFile++2*mod(iGraph-1, length(e.d{3}.originalTaskParameter.displacement)))
     qqplot(estimateValues);
-    %[h, p, kstat] = lillietest(estimateValues);
-    %titleStr = sprintf('Normal Data: %0.2f; P = %0.2f',abs(1-h),p);
+    [h, p, kstat] = lillietest(estimateValues);
+    titleStr = sprintf('QQ plot: P = %0.2f',p);
     title(titleStr)
     %label axis
     posOffs = [posOffs conditions(3,iGraph)]
     estAvg = [estAvg m]
     estSig = [estSig s]
 end
+figure(100)
+ subplot(3,2,2*iFile-1)
+ for x = 1:length(e.d{3}.originalTaskParameter.displacement)
+ scatter(posOffs(x:length(e.d{3}.originalTaskParameter.displacement):end),estAvg(x:length(e.d{3}.originalTaskParameter.displacement):end))
+ hold on
+ end
+ ylim([0 1])
+ titleStr = sprintf('Bimodal Estimates',e.d{iFile}.stimulusType);
+ title(titleStr)
+ xlabel('Stimulus Offset')
+ ylabel('Average Response')
+ %%%legend
+ if length(e.d{3}.originalTaskParameter.displacement) == 2
+ legend(['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(1))],['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(2))])
+ end
+ if length(e.d{3}.originalTaskParameter.displacement) == 3
+ legend(['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(1))],['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(2))],['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(2))])  
+ end
+ subplot(3,2,2*iFile)
+ for x = 1:length(e.d{3}.originalTaskParameter.displacement)
+ scatter(posOffs(x:length(e.d{3}.originalTaskParameter.displacement):end),estSig(x:length(e.d{3}.originalTaskParameter.displacement):end))
+ hold on
+ end
+ ylim([.04 .15])
+ titleStr = sprintf('Unimodal %s Variation',e.d{iFile}.stimulusType);
+ title(titleStr)
+ xlabel('Stimulus Offset')
+ ylabel('Response Standard Deviation')
+ %%%legend
+ if length(e.d{3}.originalTaskParameter.displacement) == 2
+ legend(['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(1))],['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(2))])
+ end
+ if length(e.d{3}.originalTaskParameter.displacement) == 3
+ legend(['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(1))],['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(2))],['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(2))])  
+ end
+
+
 end
 if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
     for iGraph = numSkips+1:(dists-numSkips)
@@ -558,14 +599,15 @@ if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
     subplot(2,numSubs,2*iFile-1)
     hist(estimateValues,(0:(1/numBins):1))
     ylim([0 20])
+    xlim([-.1 1.1])
     [m,s] = normfit(estimateValues)
     %title graphs
     if e.d{iFile}.stimulusType(1) == 'V'
-    titleStr = sprintf('%s: Width: %0.2f // Center offset: %0.2f // N: %0.2f // Mu: %.02f Sigma: %0.2f',e.d{iFile}.stimulusType,conditions(1,iGraph),conditions(3,iGraph),length(estimateValues),m,s);
+    titleStr = sprintf('%s: Position: %0.2f // N: %0.2f // Mu: %.02f Sigma: %0.2f',e.d{iFile}.stimulusType,conditions(3,iGraph),length(estimateValues),m,s);
     title(titleStr)
     end
     if e.d{iFile}.stimulusType(1) == 'A'
-    titleStr = sprintf('%s: Center offset: %0.2f // N: %.02f // Mu: %.02f Sigma: %0.2f',e.d{iFile}.stimulusType,conditions(3,iGraph),length(estimateValues),m,s);
+    titleStr = sprintf('%s: Position: %0.2f // N: %.02f // Mu: %.02f Sigma: %0.2f',e.d{iFile}.stimulusType,conditions(3,iGraph),length(estimateValues),m,s);
     title(titleStr)
     end
     %label axis
@@ -583,7 +625,7 @@ if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
     subplot(2,numSubs,2*iFile)
     qqplot(estimateValues);
     [h, p, kstat] = lillietest(estimateValues);
-    titleStr = sprintf('Normal Data: %0.2f; P = %0.2f',abs(1-h),p);
+    titleStr = sprintf('QQ plot: P = %0.2f',p);
     title(titleStr)
     %grab offest parameters for summary statistics
     posOffs = [posOffs conditions(3,iGraph)]
@@ -593,14 +635,14 @@ if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
     
  %summary statistic graphs
  figure(100)
- subplot(2,2,2*iFile-1)
+ subplot(3,2,2*iFile-1)
  scatter(posOffs,estAvg)
  ylim([0 1])
  titleStr = sprintf('Unimodal %s Estimates',e.d{iFile}.stimulusType);
  title(titleStr)
  xlabel('Stimulus Offset')
  ylabel('Average Response')
- subplot(2,2,2*iFile)
+ subplot(3,2,2*iFile)
  scatter(posOffs,estSig)
  ylim([.04 .15])
  titleStr = sprintf('Unimodal %s Variation',e.d{iFile}.stimulusType);
