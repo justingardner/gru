@@ -83,12 +83,8 @@ if e.nFiles < 3
 end
 numSkips = 2
 
-for iFile = 1:e.nFiles  %FIX THIS LATER --------------------------------------------
-%trim files
-e.d{iFile}.task{1}{1}.randVars.calculated.est = e.d{iFile}.task{1}{1}.randVars.calculated.est(2:end)
-
-if e.d{iFile}.stimulusType(1) == 'B'
-end
+for iFile = 1:e.nFiles
+e.d{iFile}.task{1}{1}.randVars.calculated.est = e.d{iFile}.task{1}{1}.randVars.calculated.est(2:end) %trim files (the last response (nan) is put first, but conditions are normal)
 
 [resp, dists] = binData(e, iFile) %organize responses
 
@@ -661,7 +657,7 @@ e.d{iFile}.respMatrix = ones(51-2*numSkips,250)+4; %%hardcoded for 51 offsets an
 end
 
 function [loglikes] = modelCompare(e)  %%for now, hard coded for the 2 offsets and 51 disps. Need to change when we collect a lot of data, and needs to be the same conditions.
-loglikes = [] %%first row OI
+loglikes = [] %%first row OI, 2nd OS, 3rd visual capture, 4th auditory capture
 for offset = 7:88 %2.4 delta is 3 steps so we skip 6 each direction (2 offsets). we have 94 input (51-2 each side from data building (so -4) *2).
     
     %%%%%%% optimal integration %%%%%%%
@@ -974,23 +970,42 @@ titleStr = sprintf('Auditory capture: negative log likelihoods by cue position')
 
 
 
-%%loglikehood ratios between models
+%%%%%%%%%%% loglikehood ratios between models %%%%%%%%%%%%%%%
+
 figure(102) %% optimal integration
-OIvsOS = []
+OIvsOS = [] 
 for val = 1:length(loglikes(1,1:end))
     OIvsOS = [OIvsOS loglikes(2,val)/loglikes(1,val)]
 end
 subplot(1,2,1)
-OIvOSno = scatter(e.d{3}.conditions(3,11:2:92),OIvsOS(1:2:82));
-hold on; xlim([0 1]);
-xlabel('Cue offset'); ylabel('Negative log likelihood ratio'); titleStr = sprintf('Optimal Integration Ratios: no AV discrepancy');
-legend([OIvOSno],'Optimal Switching');
-title(titleStr);
+OIvOSno = scatter(e.d{3}.conditions(3,11:2:92),OIvsOS(1:2:82)); hold on; xlim([0 1]);
+xlabel('Cue offset'); ylabel('Negative log likelihood ratio'); titleStr = sprintf('Optimal Integration Ratios: no AV discrepancy'); legend([OIvOSno],'Optimal Switching'); title(titleStr);
 subplot(1,2,2)
-OIvOSyo = scatter(e.d{3}.conditions(3,11:2:92),OIvsOS(2:2:82));
-xlim([0 1]); xlabel('Cue offset'); ylabel('Negative log likelihood ratio'); titleStr = sprintf('Optimal Integration Ratios: AV discrepancy = 6');
-legend([OIvOSyo],'Optimal Switching');
-title(titleStr)
+OIvOSyo = scatter(e.d{3}.conditions(3,11:2:92),OIvsOS(2:2:82)); hold on; xlim([0 1]);
+xlim([0 1]); xlabel('Cue offset'); ylabel('Negative log likelihood ratio'); titleStr = sprintf('Optimal Integration Ratios: AV discrepancy = 6'); legend([OIvOSyo],'Optimal Switching'); title(titleStr)
+
+OIvsVC = []
+for val = 1:length(loglikes(1,1:end))
+    OIvsVC = [OIvsVC loglikes(3,val)/loglikes(1,val)]
+end
+subplot(1,2,1)
+OIvVCno = scatter(e.d{3}.conditions(3,11:2:92),OIvsVC(1:2:82)); hold on; xlim([0 1]);
+legend([OIvVCno],'Visual Capture');
+subplot(1,2,2)
+OIvVCyo = scatter(e.d{3}.conditions(3,11:2:92),OIvsVC(2:2:82));
+legend([OIvVCyo],'Visual Capture');
+
+OIvsAC = []
+for val = 1:length(loglikes(1,1:end))
+    OIvsAC = [OIvsAC loglikes(4,val)/loglikes(1,val)]
+end
+subplot(1,2,1)
+OIvACno = scatter(e.d{3}.conditions(3,11:2:92),OIvsAC(1:2:82)); hold on; xlim([0 1]);
+legend([OIvOSno,OIvVCno,OIvACno],'Optimal Switching','Visual Capture','Auditory Capture');
+subplot(1,2,2)
+OIvACyo = scatter(e.d{3}.conditions(3,11:2:92),OIvsAC(2:2:82));
+legend([OIvOSyo,OIvVCyo,OIvACyo],'Optimal Switching','Visual Capture','Auditory Capture');
+
 
 
 figure(103) %% optimal switching
@@ -999,29 +1014,34 @@ for val = 1:length(loglikes(1,1:end))
     OSvsOI = [OSvsOI loglikes(1,val)/loglikes(2,val)]
 end
 subplot(1,2,1)
-OSvOIno = scatter(e.d{3}.conditions(3,11:2:92),OSvsOI(1:2:82));
-hold on; xlim([0 1]);
-xlabel('Cue offset'); ylabel('Negative log likelihood ratio'); titleStr = sprintf('Optimal Switching Ratios: no AV discrepancy');
-legend([OSvOIno],'Optimal Switching');
-title(titleStr);
+OSvOIno = scatter(e.d{3}.conditions(3,11:2:92),OSvsOI(1:2:82)); hold on; xlim([0 1]);
+xlabel('Cue offset'); ylabel('Negative log likelihood ratio'); titleStr = sprintf('Optimal Switching Ratios: no AV discrepancy'); legend([OSvOIno],'Optimal Integration'); title(titleStr);
 subplot(1,2,2)
-OSvOIyo = scatter(e.d{3}.conditions(3,11:2:92),OSvsOI(2:2:82));
-xlim([0 1]); xlabel('Cue offset'); ylabel('Negative log likelihood ratio'); titleStr = sprintf('Optimal Switching Ratios: AV discrepancy = 6');
-legend([OSvOIyo],'Optimal Switching');
-title(titleStr)
+OSvOIyo = scatter(e.d{3}.conditions(3,11:2:92),OSvsOI(2:2:82)); hold on; xlim([0 1]);
+xlim([0 1]); xlabel('Cue offset'); ylabel('Negative log likelihood ratio'); titleStr = sprintf('Optimal Switching Ratios: AV discrepancy = 6'); legend([OSvOIyo],'Optimal Integration'); title(titleStr)
         
+OSvsVC = []
+for val = 1:length(loglikes(1,1:end))
+    OSvsVC = [OSvsVC loglikes(3,val)/loglikes(2,val)]
+end
+subplot(1,2,1)
+OSvVCno = scatter(e.d{3}.conditions(3,11:2:92),OSvsVC(1:2:82)); hold on; xlim([0 1]);
+legend([OSvVCno],'Visual Capture');
+subplot(1,2,2)
+OSvVCyo = scatter(e.d{3}.conditions(3,11:2:92),OSvsVC(2:2:82));
+legend([OSvVCyo],'Visual Capture');
 
 
-
-
-
-
-
-
-
-
-
-
+OSvsAC = []
+for val = 1:length(loglikes(1,1:end))
+    OSvsAC = [OSvsAC loglikes(4,val)/loglikes(2,val)]
+end
+subplot(1,2,1)
+OSvACno = scatter(e.d{3}.conditions(3,11:2:92),OSvsAC(1:2:82)); hold on; xlim([0 1]);
+legend([OSvOIno,OSvVCno,OSvACno],'Optimal Integration','Visual Capture','Auditory Capture');
+subplot(1,2,2)
+OSvACyo = scatter(e.d{3}.conditions(3,11:2:92),OSvsAC(2:2:82));
+legend([OSvOIyo,OSvVCyo,OSvACyo],'Optimal Integration','Visual Capture','Auditory Capture');        
 
 
 
