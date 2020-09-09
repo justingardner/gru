@@ -72,19 +72,29 @@ end
 
 %switch order in which we do analysis (cleaner imo but can change)
 if e.nFiles == 3
-    temp = e.d{2}
-    e.d{2} = e.d{3}
-    e.d{3} = temp
+    for iFile = 1:3
+        if e.d{iFile}.stimulusType(1) == 'A'
+            a = e.d{iFile}
+        elseif e.d{iFile}.stimulusType(1) == 'V'
+            v = e.d{iFile}
+        elseif e.d{iFile}.stimulusType(1) == 'B'
+            b = e.d{iFile}
+        end
+    end
+    e.d{1} = a
+    e.d{2} = v
+    e.d{3} = b
     e.d{3}.originalTaskParameter.displacement = unique(e.d{3}.originalTaskParameter.displacement)
     numSubs = e.nFiles+length(e.d{3}.originalTaskParameter.displacement)-1
 end
+
 if e.nFiles < 3
     numSubs = e.nFiles
 end
 numSkips = 2
 
 for iFile = 1:e.nFiles
-e.d{iFile}.task{1}{1}.randVars.calculated.est = e.d{iFile}.task{1}{1}.randVars.calculated.est(2:end) %trim files (the last response (nan) is put first, but conditions are normal)
+e.d{iFile}.task{1}{1}.randVars.calculated.est = e.d{iFile}.task{1}{1}.randVars.calculated.est(2:end) %trim files (the last response (nan) is put first, but parameter isnt)
 
 [resp, dists] = binData(e, iFile) %organize responses
 
