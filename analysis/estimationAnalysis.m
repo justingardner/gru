@@ -81,7 +81,7 @@ end
 if e.nFiles < 3
     numSubs = e.nFiles
 end
-numSkips = 6
+numSkips = 2
 
 for iFile = 1:e.nFiles  %FIX THIS LATER --------------------------------------------
 %trim files
@@ -94,9 +94,11 @@ end
 
 shift = 1/(e.d{iFile}.task{1}{1}.parameter.numberOffsets-1); %graph input
 
-graphDists(resp, dists, e, shift, numBins, iFile, numSubs, numSkips)
+[e] = graphDists(resp, dists, e, shift, numBins, iFile, numSubs, numSkips)
 
 end
+
+[loglikes] = modelCompare(e)
 k=2
                
                
@@ -479,13 +481,17 @@ end
 end
 
 
-function graphDists(resp, dists, e, shift, numBins, iFile, numSubs, numSkips)
+function [e] = graphDists(resp, dists, e, shift, numBins, iFile, numSubs, numSkips)
 %initialize empty arrays for summary statistics
 posOffs = []
 estAvg = []
 estSig = []
+
 %pull and graph estimates at each offset
-if e.d{iFile}.stimulusType(1) == 'B' %%bimodal data
+
+%% bimodal data %%
+if e.d{iFile}.stimulusType(1) == 'B'
+e.d{iFile}.respMatrix = ones(length(e.d{3}.originalTaskParameter.displacement)*(51-2*numSkips),250)+4; %%hardcoded for 51 offsets and max 250 responses
 for iGraph = numSkips*length(e.d{3}.originalTaskParameter.displacement)+1:(dists-numSkips*length(e.d{3}.originalTaskParameter.displacement))
     i = length(e.d{iFile}.originalTaskParameter.displacement)*length(e.d{iFile}.originalTaskParameter.width);
     k = [resp(iGraph-(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-2*shift];
@@ -493,18 +499,20 @@ for iGraph = numSkips*length(e.d{3}.originalTaskParameter.displacement)+1:(dists
     estimateValues = ones(1,length(j));
     for iValue = 1:length(j);
         estimateValues(iValue) = k(j(iValue));
+        e.d{iFile}.respMatrix(iGraph-numSkips*length(e.d{3}.originalTaskParameter.displacement),iValue) = k(j(iValue));
     end
     
     %titles
-    conditions = ones(3,dists)
+    conditions = ones(3,dists);
     %width
     conditions(1,1:dists) = repmat(e.d{iFile}.originalTaskParameter.width, 1, (length(e.d{iFile}.originalTaskParameter.posDiff)*length(e.d{iFile}.originalTaskParameter.displacement)));
     %AV discrepancy
     conditions(2,1:dists) = repmat(repelem(e.d{iFile}.originalTaskParameter.displacement, length(e.d{iFile}.originalTaskParameter.width)), 1, length(e.d{iFile}.originalTaskParameter.posDiff));
-    conditions(2,1:dists) = conditions(2,1:dists)*(.5/e.d{iFile}.task{1}{1}.parameter.rightCue)
+    conditions(2,1:dists) = conditions(2,1:dists)*(.5/e.d{iFile}.task{1}{1}.parameter.rightCue);
     %center offset
     conditions(3,1:dists) = repelem(e.d{iFile}.originalTaskParameter.posDiff, (length(e.d{iFile}.originalTaskParameter.displacement)*length(e.d{iFile}.originalTaskParameter.width)));
-    conditions(3,1:dists) = conditions(3,1:dists)*(.5/e.d{iFile}.task{1}{1}.parameter.rightCue)+.50
+    conditions(3,1:dists) = conditions(3,1:dists)*(.5/e.d{iFile}.task{1}{1}.parameter.rightCue)+.50;
+    e.d{iFile}.conditions = conditions;
     %create hist
     
     figure(ceil((iGraph-numSkips*length(e.d{3}.originalTaskParameter.displacement))/length(e.d{3}.originalTaskParameter.displacement)))
@@ -512,7 +520,7 @@ for iGraph = numSkips*length(e.d{3}.originalTaskParameter.displacement)+1:(dists
     hist(estimateValues,(0:(1/numBins):1))
     ylim([0 20])
     xlim([-.1 1.1])
-    [m,s] = normfit(estimateValues)
+    [m,s] = normfit(estimateValues);
     titleStr = sprintf('Bimodal: Discrepancy: %0.2f Position: %0.2f // N: %0.2f // Mu: %.02f Sigma: %0.2f',conditions(2,iGraph),conditions(3,iGraph),length(estimateValues),m,s);
     title(titleStr)
     xlabel('Offset estimate')
@@ -524,7 +532,7 @@ for iGraph = numSkips*length(e.d{3}.originalTaskParameter.displacement)+1:(dists
     pdf = normpdf((0:.005:1),m,s)
     plot((0:.005:1),pdf,'red')
     L3 = scatter(m,0,'red','DisplayName','Estimate Average')
-    legend([L1,L2,L3], 'Auditory location','Visual location', 'Estimate Average')
+    legend([L1,L2,L3],'Auditory location','Visual location','Estimate Average')
     %qqplot
     subplot(2,numSubs,2*iFile++2*mod(iGraph-1, length(e.d{3}.originalTaskParameter.displacement)))
     qqplot(estimateValues);
@@ -532,9 +540,9 @@ for iGraph = numSkips*length(e.d{3}.originalTaskParameter.displacement)+1:(dists
     titleStr = sprintf('QQ plot: P = %0.2f',p);
     title(titleStr)
     %label axis
-    posOffs = [posOffs conditions(3,iGraph)]
-    estAvg = [estAvg m]
-    estSig = [estSig s]
+    posOffs = [posOffs conditions(3,iGraph)];
+    estAvg = [estAvg m];
+    estSig = [estSig s];
 end
 figure(100)
  subplot(3,2,2*iFile-1)
@@ -571,10 +579,11 @@ figure(100)
  if length(e.d{3}.originalTaskParameter.displacement) == 3
  legend(['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(1))],['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(2))],['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(2))])  
  end
-
-
 end
-if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
+
+%% unimodal data %%
+if e.d{iFile}.stimulusType(1) ~= 'B'
+e.d{iFile}.respMatrix = ones(51-2*numSkips,250)+4; %%hardcoded for 51 offsets and max 250 responses
     for iGraph = numSkips+1:(dists-numSkips)
     i = length(e.d{iFile}.originalTaskParameter.width);
     k = [resp(iGraph-(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-2*shift];
@@ -582,17 +591,17 @@ if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
     estimateValues = ones(1,length(j));
     for iValue = 1:length(j);
         estimateValues(iValue) = k(j(iValue));
+        e.d{iFile}.respMatrix(iGraph-numSkips,iValue) = k(j(iValue));
     end
     
     %titles
-    conditions = ones(3,dists)
+    conditions = ones(3,dists);
     %width
     conditions(1,1:dists) = repmat(e.d{iFile}.originalTaskParameter.width, 1, (length(e.d{iFile}.originalTaskParameter.posDiff)));
-    %AV discrepancy
-    %% conditions(2,1:dists) = repmat(repelem(d.originalTaskParameter.displacement, length(d.originalTaskParameter.width)), 1, length(d.originalTaskParameter.posDiff));
     %center offset
     conditions(3,1:dists) = repelem(e.d{iFile}.originalTaskParameter.posDiff, (length(e.d{iFile}.originalTaskParameter.width)));
-    conditions(3,1:dists) = conditions(3,1:dists)*(.5/e.d{iFile}.task{1}{1}.parameter.rightCue)+.5
+    conditions(3,1:dists) = conditions(3,1:dists)*(.5/e.d{iFile}.task{1}{1}.parameter.rightCue)+.5;
+    e.d{iFile}.conditions = conditions;
     
     %create hist
     figure(iGraph-numSkips)
@@ -600,7 +609,7 @@ if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
     hist(estimateValues,(0:(1/numBins):1))
     ylim([0 20])
     xlim([-.1 1.1])
-    [m,s] = normfit(estimateValues)
+    [m,s] = normfit(estimateValues);
     %title graphs
     if e.d{iFile}.stimulusType(1) == 'V'
     titleStr = sprintf('%s: Position: %0.2f // N: %0.2f // Mu: %.02f Sigma: %0.2f',e.d{iFile}.stimulusType,conditions(3,iGraph),length(estimateValues),m,s);
@@ -614,12 +623,12 @@ if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
     xlabel('Offset estimate')
     ylabel('Number of Judgements')
     hold on
-    L1 = scatter((conditions(3,iGraph)),0,'black','DisplayName','Stimulus Offset')
+    L1 = scatter((conditions(3,iGraph)),0,'black','DisplayName','Stimulus Offset');
     %pdf
-    [m,s] = normfit(estimateValues)
-    pdf = normpdf((0:.005:1),m,s)
+    [m,s] = normfit(estimateValues);
+    pdf = normpdf((0:.005:1),m,s);
     plot((0:.005:1),pdf)
-    L2 = scatter(m,0,'red','DisplayName','Estimate Average')
+    L2 = scatter(m,0,'red','DisplayName','Estimate Average');
     legend([L1,L2], 'Cue Location', 'Estimate Average')
     %% qq plot
     subplot(2,numSubs,2*iFile)
@@ -628,9 +637,9 @@ if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
     titleStr = sprintf('QQ plot: P = %0.2f',p);
     title(titleStr)
     %grab offest parameters for summary statistics
-    posOffs = [posOffs conditions(3,iGraph)]
-    estAvg = [estAvg m]
-    estSig = [estSig s]
+    posOffs = [posOffs conditions(3,iGraph)];
+    estAvg = [estAvg m];
+    estSig = [estSig s];
     end
     
  %summary statistic graphs
@@ -650,3 +659,370 @@ if e.d{iFile}.stimulusType(1) ~= 'B' %% unimodal data
  xlabel('Stimulus Offset')
  ylabel('Response Standard Deviation')
 end
+
+function [loglikes] = modelCompare(e)  %%for now, hard coded for the 2 offsets and 51 disps. Need to change when we collect a lot of data, and needs to be the same conditions.
+loglikes = [] %%first row OI
+for offset = 7:88 %2.4 delta is 3 steps so we skip 6 each direction (2 offsets). we have 94 input (51-2 each side from data building (so -4) *2).
+    
+    %%%%%%% optimal integration %%%%%%%
+    if mod(offset,2) %no discrepancy
+        %%unimodal inputs
+        audResp = e.d{1}.respMatrix(ceil(offset/2),1:250)
+        audResp = audResp(audResp<2)
+        [muA,sA] = normfit(audResp)
+        visResp = e.d{2}.respMatrix(ceil(offset/2),1:250)
+        visResp = visResp(visResp<2)
+        [muV,sV] = normfit(visResp)
+        %bimodal predictions
+        weightV = (sA*sA)/(sA*sA+sV*sV)
+        weightA = 1-weightV
+        oiMu = weightV*muV + weightA*muA
+        oiS = sqrt(sA*sA*sV*sV/(sA*sA+sV*sV))
+        oiDist = normpdf((0:.01:1),oiMu,oiS)/100
+        %grab bimodal responses
+        OIloglike = 0
+        biResp = e.d{3}.respMatrix(offset,1:250)
+        biResp = biResp(biResp<2)
+        %fix some reporting errors where matlab gives values >1 or 0>
+        for val = 1:length(biResp)
+            if biResp(val) < 0
+                biResp(val) = 0
+            end
+            if biResp(val) > 1
+                biResp(val) = 1
+            end
+        end
+        %calculate log likelihood
+        for val = 1:length(biResp)
+            OIloglike = OIloglike + log(oiDist(round(biResp(val)*100+1)))
+        end
+        loglikes(1,offset-6) = OIloglike
+    end
+     if ~mod(offset,2) %discrepancy
+        %%unimodal inputs
+        audResp = e.d{1}.respMatrix(ceil(offset/2)-3,1:250)
+        audResp = audResp(audResp<2)
+        [muA,sA] = normfit(audResp)
+        visResp = e.d{2}.respMatrix(ceil(offset/2)+3,1:250)
+        visResp = visResp(visResp<2)
+        [muV,sV] = normfit(visResp)
+        %bimodal predictions
+        weightV = (sA*sA)/(sA*sA+sV*sV)
+        weightA = 1-weightV
+        oiMu = weightV*muV + weightA*muA
+        oiS = sqrt(sA*sA*sV*sV/(sA*sA+sV*sV))
+        oiDist = normpdf((0:.01:1),oiMu,oiS)/100
+        %grab bimodal responses
+        OIloglike = 0
+        biResp = e.d{3}.respMatrix(offset,1:250)
+        biResp = biResp(biResp<2)
+        %fix some reporting errors where matlab gives values >1 or 0>
+        for val = 1:length(biResp)
+            if biResp(val) < 0
+                biResp(val) = 0
+            end
+            if biResp(val) > 1
+                biResp(val) = 1
+            end
+        end
+        %calc log likelihood
+        for val = 1:length(biResp)
+            OIloglike = OIloglike + log(oiDist(round(biResp(val)*100+1)))
+        end
+        loglikes(1,offset-6) = OIloglike
+     end
+     
+     %%%%%%%%%% %optimal switching %%%%%%%%%%%%
+    if mod(offset,2) %no discrepancy
+        %%unimodal inputs
+        audResp = e.d{1}.respMatrix(ceil(offset/2),1:250)
+        audResp = audResp(audResp<2)
+        [muA,sA] = normfit(audResp)
+        Adist = normpdf((0:.01:1),muA,sA)/100
+        visResp = e.d{2}.respMatrix(ceil(offset/2),1:250)
+        visResp = visResp(visResp<2)
+        [muV,sV] = normfit(visResp)
+        Vdist = normpdf((0:.01:1),muV,sV)/100
+        %bimodal predictions
+        weightV = (sA*sA)/(sA*sA+sV*sV)
+        weightA = 1-weightV
+        osDist = weightV*Vdist+weightA*Adist
+        %grab bimodal responses
+        OSloglike = 0
+        biResp = e.d{3}.respMatrix(offset,1:250)
+        biResp = biResp(biResp<2)
+         %fix some reporting errors where matlab gives values >1 or 0>
+        for val = 1:length(biResp)
+            if biResp(val) < 0
+                biResp(val) = 0
+            end
+            if biResp(val) > 1
+                biResp(val) = 1
+            end
+        end
+        %calculate log likelihood
+        for val = 1:length(biResp)
+            OSloglike = OSloglike + log(osDist(round(biResp(val)*100+1)))
+        end
+        loglikes(2,offset-6) = OSloglike
+    end
+    if ~mod(offset,2) %discrepancy
+        %%unimodal inputs
+        audResp = e.d{1}.respMatrix(ceil(offset/2)-3,1:250)
+        audResp = audResp(audResp<2)
+        [muA,sA] = normfit(audResp)
+        Adist = normpdf((0:.01:1),muA,sA)/100
+        visResp = e.d{2}.respMatrix(ceil(offset/2)+3,1:250)
+        visResp = visResp(visResp<2)
+        [muV,sV] = normfit(visResp)
+        Vdist = normpdf((0:.01:1),muV,sV)/100
+        %bimodal predictions
+        weightV = (sA*sA)/(sA*sA+sV*sV)
+        weightA = 1-weightV
+        osDist = weightV*Vdist+weightA*Adist
+        %grab bimodal responses
+        OSloglike = 0
+        biResp = e.d{3}.respMatrix(offset,1:250)
+        biResp = biResp(biResp<2)
+        %fix some reporting errors where matlab gives values >1 or 0>
+        for val = 1:length(biResp)
+            if biResp(val) < 0
+                biResp(val) = 0
+            end
+            if biResp(val) > 1
+                biResp(val) = 1
+            end
+        end
+        %calculate log likelihood
+        for val = 1:length(biResp)
+            OSloglike = OSloglike + log(osDist(round(biResp(val)*100+1)))
+        end
+        loglikes(2,offset-6) = OSloglike
+    end
+    
+    
+    %%%%%%% visual capture %%%%%%%
+    if mod(offset,2) %no discrepancy
+        %%unimodal inputs
+        audResp = e.d{1}.respMatrix(ceil(offset/2),1:250)
+        audResp = audResp(audResp<2)
+        [muA,sA] = normfit(audResp)
+        visResp = e.d{2}.respMatrix(ceil(offset/2),1:250)
+        visResp = visResp(visResp<2)
+        [muV,sV] = normfit(visResp)
+        %bimodal predictions
+        weightV = 1
+        weightA = 0
+        eiMu = weightV*muV + weightA*muA
+        eiS = sV
+        eiDist = normpdf((0:.01:1),eiMu,eiS)/100
+        %grab bimodal responses
+        eiloglike = 0
+        biResp = e.d{3}.respMatrix(offset,1:250)
+        biResp = biResp(biResp<2)
+        %fix some reporting errors where matlab gives values >1 or 0>
+        for val = 1:length(biResp)
+            if biResp(val) < 0
+                biResp(val) = 0
+            end
+            if biResp(val) > 1
+                biResp(val) = 1
+            end
+        end
+        %calculate log likelihood
+        for val = 1:length(biResp)
+          eiloglike = eiloglike + log(eiDist(round(biResp(val)*100+1)))
+        end
+        loglikes(3,offset-6) = eiloglike
+    end
+     if ~mod(offset,2) %discrepancy
+        %%unimodal inputs
+        audResp = e.d{1}.respMatrix(ceil(offset/2)-3,1:250)
+        audResp = audResp(audResp<2)
+        [muA,sA] = normfit(audResp)
+        visResp = e.d{2}.respMatrix(ceil(offset/2)+3,1:250)
+        visResp = visResp(visResp<2)
+        [muV,sV] = normfit(visResp)
+        %bimodal predictions
+        weightV = 1
+        weightA = 0
+        eiMu = weightV*muV + weightA*muA
+        eiS = sV
+        eiDist = normpdf((0:.01:1),eiMu,eiS)/100
+        %grab bimodal responses
+        eiloglike = 0
+        biResp = e.d{3}.respMatrix(offset,1:250)
+        biResp = biResp(biResp<2)
+        %fix some reporting errors where matlab gives values >1 or 0>
+        for val = 1:length(biResp)
+            if biResp(val) < 0
+                biResp(val) = 0
+            end
+            if biResp(val) > 1
+                biResp(val) = 1
+            end
+        end
+        %calc log likelihood
+        for val = 1:length(biResp)
+            eiloglike = eiloglike + log(eiDist(round(biResp(val)*100+1)))
+        end
+        loglikes(3,offset-6) = eiloglike
+     end
+  
+     %%%%%%%%%% auditory capture %%%%%%%%%%%%
+    if mod(offset,2) %no discrepancy
+        %%unimodal inputs
+        audResp = e.d{1}.respMatrix(ceil(offset/2),1:250)
+        audResp = audResp(audResp<2)
+        [muA,sA] = normfit(audResp)
+        visResp = e.d{2}.respMatrix(ceil(offset/2),1:250)
+        visResp = visResp(visResp<2)
+        [muV,sV] = normfit(visResp)
+        %bimodal predictions
+        weightV = 0
+        weightA = 1
+        eiMu = weightV*muV + weightA*muA
+        eiS = sA
+        eiDist = normpdf((0:.01:1),eiMu,eiS)/100
+        %grab bimodal responses
+        eiloglike = 0
+        biResp = e.d{3}.respMatrix(offset,1:250)
+        biResp = biResp(biResp<2)
+        %fix some reporting errors where matlab gives values >1 or 0>
+        for val = 1:length(biResp)
+            if biResp(val) < 0
+                biResp(val) = 0
+            end
+            if biResp(val) > 1
+                biResp(val) = 1
+            end
+        end
+        %calculate log likelihood
+        for val = 1:length(biResp)
+          eiloglike = eiloglike + log(eiDist(round(biResp(val)*100+1)))
+        end
+        loglikes(4,offset-6) = eiloglike
+    end
+     if ~mod(offset,2) %discrepancy
+        %%unimodal inputs
+        audResp = e.d{1}.respMatrix(ceil(offset/2)-3,1:250)
+        audResp = audResp(audResp<2)
+        [muA,sA] = normfit(audResp)
+        visResp = e.d{2}.respMatrix(ceil(offset/2)+3,1:250)
+        visResp = visResp(visResp<2)
+        [muV,sV] = normfit(visResp)
+        %bimodal predictions
+        weightV = 0
+        weightA = 1
+        eiMu = weightV*muV + weightA*muA
+        eiS = sA
+        eiDist = normpdf((0:.01:1),eiMu,eiS)/100
+        %grab bimodal responses
+        eiloglike = 0
+        biResp = e.d{3}.respMatrix(offset,1:250)
+        biResp = biResp(biResp<2)
+        %fix some reporting errors where matlab gives values >1 or 0>
+        for val = 1:length(biResp)
+            if biResp(val) < 0
+                biResp(val) = 0
+            end
+            if biResp(val) > 1
+                biResp(val) = 1
+            end
+        end
+        %calc log likelihood
+        for val = 1:length(biResp)
+            eiloglike = eiloglike + log(eiDist(round(biResp(val)*100+1)))
+        end
+        loglikes(4,offset-6) = eiloglike
+     end
+     
+     
+     
+end
+
+%%log likelihoods by cue position
+figure(101)
+subplot(2,2,1) %optimal integration
+OIno = scatter(e.d{3}.conditions(3,11:2:92),loglikes(1,1:2:82))
+hold on
+OIyo = scatter(e.d{3}.conditions(3,11:2:92),loglikes(1,2:2:82))
+xlim([0 1])
+legend([OIno,OIyo],'No offset','Offset')
+titleStr = sprintf('Optimal Integration: negative log likelihoods by cue position'); title(titleStr); xlabel('Cue offset'); ylabel('log likelihood');
+subplot(2,2,2) %optimal switching
+OSno = scatter(e.d{3}.conditions(3,11:2:92),loglikes(2,1:2:82))
+hold on
+OSyo = scatter(e.d{3}.conditions(3,11:2:92),loglikes(2,2:2:82))
+xlim([0 1])
+legend([OSno,OSyo],'No offset','Offset')
+titleStr = sprintf('Optimal Switching: negative log likelihoods by cue position'); title(titleStr); xlabel('Cue offset'); ylabel('log likelihood');
+subplot(2,2,3) %visual capture
+eino = scatter(e.d{3}.conditions(3,11:2:92),loglikes(3,1:2:82))
+hold on
+eiyo = scatter(e.d{3}.conditions(3,11:2:92),loglikes(3,2:2:82))
+xlim([0 1])
+legend([eino,eiyo],'No offset','Offset')
+titleStr = sprintf('Visual Capture: negative log likelihoods by cue position'); title(titleStr); xlabel('Cue offset'); ylabel('log likelihood');
+subplot(2,2,4) %Auditory capture
+esno = scatter(e.d{3}.conditions(3,11:2:92),loglikes(4,1:2:82))
+hold on
+esyo = scatter(e.d{3}.conditions(3,11:2:92),loglikes(4,2:2:82))
+xlim([0 1])
+legend([esno,esyo],'No offset','Offset')
+titleStr = sprintf('Auditory capture: negative log likelihoods by cue position'); title(titleStr); xlabel('Cue offset'); ylabel('log likelihood');
+
+
+
+%%loglikehood ratios between models
+figure(102) %% optimal integration
+OIvsOS = []
+for val = 1:length(loglikes(1,1:end))
+    OIvsOS = [OIvsOS loglikes(2,val)/loglikes(1,val)]
+end
+subplot(1,2,1)
+OIvOSno = scatter(e.d{3}.conditions(3,11:2:92),OIvsOS(1:2:82));
+hold on; xlim([0 1]);
+xlabel('Cue offset'); ylabel('Negative log likelihood ratio'); titleStr = sprintf('Optimal Integration Ratios: no AV discrepancy');
+legend([OIvOSno],'Optimal Switching');
+title(titleStr);
+subplot(1,2,2)
+OIvOSyo = scatter(e.d{3}.conditions(3,11:2:92),OIvsOS(2:2:82));
+xlim([0 1]); xlabel('Cue offset'); ylabel('Negative log likelihood ratio'); titleStr = sprintf('Optimal Integration Ratios: AV discrepancy = 6');
+legend([OIvOSyo],'Optimal Switching');
+title(titleStr)
+
+
+figure(103) %% optimal switching
+OSvsOI = []
+for val = 1:length(loglikes(1,1:end))
+    OSvsOI = [OSvsOI loglikes(1,val)/loglikes(2,val)]
+end
+subplot(1,2,1)
+OSvOIno = scatter(e.d{3}.conditions(3,11:2:92),OSvsOI(1:2:82));
+hold on; xlim([0 1]);
+xlabel('Cue offset'); ylabel('Negative log likelihood ratio'); titleStr = sprintf('Optimal Switching Ratios: no AV discrepancy');
+legend([OSvOIno],'Optimal Switching');
+title(titleStr);
+subplot(1,2,2)
+OSvOIyo = scatter(e.d{3}.conditions(3,11:2:92),OSvsOI(2:2:82));
+xlim([0 1]); xlabel('Cue offset'); ylabel('Negative log likelihood ratio'); titleStr = sprintf('Optimal Switching Ratios: AV discrepancy = 6');
+legend([OSvOIyo],'Optimal Switching');
+title(titleStr)
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
