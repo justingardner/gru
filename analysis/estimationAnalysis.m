@@ -7,8 +7,10 @@ fit = [];
 if nargin < 1, stimfileNames = [];end
 
 % parse arguments
-getArgs(varargin,{'dispFit=1','combineData=1','numBins=33'});
-
+getArgs(varargin,{'dispFit=1','combineData=1','numBins=33','Neighbors=2','numSkips=2'});
+if Neighbors>numSkips
+    disp(sprintf('Neighbors cannot be greater than number of skips!'));return;
+end
 % get filenames and path
 [e.path stimfileNames] = getStimfileNames(stimfileNames);
 if isempty(e.path),return,end
@@ -91,7 +93,6 @@ end
 if e.nFiles < 3
     numSubs = e.nFiles
 end
-numSkips = 2
 
 for iFile = 1:e.nFiles
 e.d{iFile}.task{1}{1}.randVars.calculated.est = e.d{iFile}.task{1}{1}.randVars.calculated.est(2:end) %trim files (the last response (nan) is put first, but parameter isnt)
@@ -100,11 +101,11 @@ e.d{iFile}.task{1}{1}.randVars.calculated.est = e.d{iFile}.task{1}{1}.randVars.c
 
 shift = 1/(e.d{iFile}.task{1}{1}.parameter.numberOffsets-1); %graph input
 
-[e] = graphDists(resp, dists, e, shift, numBins, iFile, numSubs, numSkips)
+[e] = graphDists(resp, dists, e, shift, numBins, iFile, numSubs, numSkips, Neighbors)
 
 end
 
-[loglikes] = modelCompare(e)
+[loglikes] = modelCompare(e,numSkips)
 k=2
                
                
@@ -487,7 +488,7 @@ end
 end
 
 
-function [e] = graphDists(resp, dists, e, shift, numBins, iFile, numSubs, numSkips)
+function [e] = graphDists(resp, dists, e, shift, numBins, iFile, numSubs, numSkips, Neighbors)
 %initialize empty arrays for summary statistics
 posOffs = []
 estAvg = []
@@ -500,7 +501,11 @@ if e.d{iFile}.stimulusType(1) == 'B'
 e.d{iFile}.respMatrix = ones(length(e.d{3}.originalTaskParameter.displacement)*(51-2*numSkips),250)+4; %%hardcoded for 51 offsets and max 250 responses
 for iGraph = numSkips*length(e.d{3}.originalTaskParameter.displacement)+1:(dists-numSkips*length(e.d{3}.originalTaskParameter.displacement))
     i = length(e.d{iFile}.originalTaskParameter.displacement)*length(e.d{iFile}.originalTaskParameter.width);
-    k = [resp(iGraph-(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-2*shift];
+    k = [];
+    for neighbor = Neighbors:(-1):(-Neighbors);
+        k = [k resp(iGraph-(neighbor*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+neighbor*shift];
+    end
+    %k = [resp(iGraph-(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-2*shift];
     j = find(k < 101);
     estimateValues = ones(1,length(j));
     for iValue = 1:length(j);
@@ -532,12 +537,12 @@ for iGraph = numSkips*length(e.d{3}.originalTaskParameter.displacement)+1:(dists
     xlabel('Offset estimate')
     ylabel('Number of Judgements')
     hold on
-    L1 = scatter(conditions(3,iGraph)+conditions(2,iGraph),0,'black','DisplayName','Auditory Cue')
-    L2 = scatter(conditions(3,iGraph)-conditions(2,iGraph),0,'green','DisplayName','Visual Cue')
+    L1 = scatter(conditions(3,iGraph)+conditions(2,iGraph),0,'black','DisplayName','Auditory Cue');
+    L2 = scatter(conditions(3,iGraph)-conditions(2,iGraph),0,'green','DisplayName','Visual Cue');
     %pdf
     pdf = normpdf((0:.005:1),m,s)
     plot((0:.005:1),pdf,'red')
-    L3 = scatter(m,0,'red','DisplayName','Estimate Average')
+    L3 = scatter(m,0,'red','DisplayName','Estimate Average');
     legend([L1,L2,L3],'Auditory location','Visual location','Estimate Average')
     %qqplot
     subplot(2,numSubs,2*iFile++2*mod(iGraph-1, length(e.d{3}.originalTaskParameter.displacement)))
@@ -553,7 +558,7 @@ end
 figure(100)
  subplot(3,2,2*iFile-1)
  for x = 1:length(e.d{3}.originalTaskParameter.displacement)
- scatter(posOffs(x:length(e.d{3}.originalTaskParameter.displacement):end),estAvg(x:length(e.d{3}.originalTaskParameter.displacement):end))
+ scatter(posOffs(x:length(e.d{3}.originalTaskParameter.displacement):end),estAvg(x:length(e.d{3}.originalTaskParameter.displacement):end));
  hold on
  end
  ylim([0 1])
@@ -592,7 +597,10 @@ if e.d{iFile}.stimulusType(1) ~= 'B'
 e.d{iFile}.respMatrix = ones(51-2*numSkips,250)+4; %%hardcoded for 51 offsets and max 250 responses
     for iGraph = numSkips+1:(dists-numSkips)
     i = length(e.d{iFile}.originalTaskParameter.width);
-    k = [resp(iGraph-(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+2*shift resp(iGraph-i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+shift resp(iGraph,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est)) resp(iGraph+i,1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-shift resp(iGraph+(2*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))-2*shift];
+    k = [];
+    for neighbor = Neighbors:(-1):(-Neighbors);
+        k = [k resp(iGraph-(neighbor*i),1:length(e.d{iFile}.task{1}{1}.randVars.calculated.est))+neighbor*shift];
+    end
     j = find(k < 101);
     estimateValues = ones(1,length(j));
     for iValue = 1:length(j);
@@ -666,9 +674,9 @@ e.d{iFile}.respMatrix = ones(51-2*numSkips,250)+4; %%hardcoded for 51 offsets an
  ylabel('Response Standard Deviation')
 end
 
-function [loglikes] = modelCompare(e)  %%for now, hard coded for the 2 offsets and 51 disps. Need to change when we collect a lot of data, and needs to be the same conditions.
+function [loglikes] = modelCompare(e,numSkips)  %%for now, hard coded for the 2 offsets and 51 disps. Need to change when we collect a lot of data, and needs to be the same conditions.
 loglikes = [] %%first row OI, 2nd OS, 3rd visual capture, 4th auditory capture
-for offset = 7:88 %2.4 delta is 3 steps so we skip 6 each direction (2 offsets). we have 94 input (51-2 each side from data building (so -4) *2).
+for offset = 7:(102-numSkips*4-6) %hard coded for delta=2.4 with 51 offsets:: 51*2=102 total conditions, take 4 off for each skip (2 deltas each side) and 6 (2.4/50) each side. if you change the discrepnacy, need to change all the 6's.
     
     %%%%%%% optimal integration %%%%%%%
     if mod(offset,2) %no discrepancy
@@ -950,30 +958,30 @@ end
 %%log likelihoods by cue position
 figure(101)
 subplot(2,2,1) %optimal integration
-OIno = scatter(e.d{3}.conditions(3,11:2:92),loglikes(1,1:2:82))
+OIno = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(1,1:2:(102-numSkips*4-6-6)))
 hold on
-OIyo = scatter(e.d{3}.conditions(3,11:2:92),loglikes(1,2:2:82))
+OIyo = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(1,2:2:(102-numSkips*4-6-6)))
 xlim([0 1])
 legend([OIno,OIyo],'No offset','Offset')
 titleStr = sprintf('Optimal Integration: negative log likelihoods by cue position'); title(titleStr); xlabel('Cue offset'); ylabel('log likelihood');
 subplot(2,2,2) %optimal switching
-OSno = scatter(e.d{3}.conditions(3,11:2:92),loglikes(2,1:2:82))
+OSno = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(2,1:2:(102-numSkips*4-6-6)))
 hold on
-OSyo = scatter(e.d{3}.conditions(3,11:2:92),loglikes(2,2:2:82))
+OSyo = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(2,2:2:(102-numSkips*4-6-6)))
 xlim([0 1])
 legend([OSno,OSyo],'No offset','Offset')
 titleStr = sprintf('Optimal Switching: negative log likelihoods by cue position'); title(titleStr); xlabel('Cue offset'); ylabel('log likelihood');
 subplot(2,2,3) %visual capture
-eino = scatter(e.d{3}.conditions(3,11:2:92),loglikes(3,1:2:82))
+eino = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(3,1:2:(102-numSkips*4-6-6)))
 hold on
-eiyo = scatter(e.d{3}.conditions(3,11:2:92),loglikes(3,2:2:82))
+eiyo = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(3,2:2:(102-numSkips*4-6-6)))
 xlim([0 1])
 legend([eino,eiyo],'No offset','Offset')
 titleStr = sprintf('Visual Capture: negative log likelihoods by cue position'); title(titleStr); xlabel('Cue offset'); ylabel('log likelihood');
 subplot(2,2,4) %Auditory capture
-esno = scatter(e.d{3}.conditions(3,11:2:92),loglikes(4,1:2:82))
+esno = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(4,1:2:(102-numSkips*4-6-6)))
 hold on
-esyo = scatter(e.d{3}.conditions(3,11:2:92),loglikes(4,2:2:82))
+esyo = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(4,2:2:(102-numSkips*4-6-6)))
 xlim([0 1])
 legend([esno,esyo],'No offset','Offset')
 titleStr = sprintf('Auditory capture: negative log likelihoods by cue position'); title(titleStr); xlabel('Cue offset'); ylabel('log likelihood');
@@ -985,35 +993,35 @@ titleStr = sprintf('Auditory capture: negative log likelihoods by cue position')
 figure(102) %% optimal integration
 OIvsOS = [] 
 for val = 1:length(loglikes(1,1:end))
-    OIvsOS = [OIvsOS loglikes(2,val)/loglikes(1,val)]
+    OIvsOS = [OIvsOS loglikes(1,val)-loglikes(2,val)]
 end
 subplot(1,2,1)
-OIvOSno = scatter(e.d{3}.conditions(3,11:2:92),OIvsOS(1:2:82)); hold on; xlim([0 1]);
+OIvOSno = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),OIvsOS(1:2:(102-numSkips*4-6-6))); hold on; xlim([0 1]);
 xlabel('Cue offset'); ylabel('Negative log likelihood ratio'); titleStr = sprintf('Optimal Integration Ratios: no AV discrepancy'); legend([OIvOSno],'Optimal Switching'); title(titleStr);
 subplot(1,2,2)
-OIvOSyo = scatter(e.d{3}.conditions(3,11:2:92),OIvsOS(2:2:82)); hold on; xlim([0 1]);
+OIvOSyo = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),OIvsOS(2:2:(102-numSkips*4-6-6))); hold on; xlim([0 1]);
 xlim([0 1]); xlabel('Cue offset'); ylabel('Negative log likelihood ratio'); titleStr = sprintf('Optimal Integration Ratios: AV discrepancy = 6'); legend([OIvOSyo],'Optimal Switching'); title(titleStr)
 
 OIvsVC = []
 for val = 1:length(loglikes(1,1:end))
-    OIvsVC = [OIvsVC loglikes(3,val)/loglikes(1,val)]
+    OIvsVC = [OIvsVC loglikes(1,val)-loglikes(3,val)]
 end
 subplot(1,2,1)
-OIvVCno = scatter(e.d{3}.conditions(3,11:2:92),OIvsVC(1:2:82)); hold on; xlim([0 1]);
+OIvVCno = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),OIvsVC(1:2:(102-numSkips*4-6-6))); hold on; xlim([0 1]);
 legend([OIvVCno],'Visual Capture');
 subplot(1,2,2)
-OIvVCyo = scatter(e.d{3}.conditions(3,11:2:92),OIvsVC(2:2:82));
+OIvVCyo = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),OIvsVC(2:2:(102-numSkips*4-6-6)));
 legend([OIvVCyo],'Visual Capture');
 
 OIvsAC = []
 for val = 1:length(loglikes(1,1:end))
-    OIvsAC = [OIvsAC loglikes(4,val)/loglikes(1,val)]
+    OIvsAC = [OIvsAC loglikes(1,val)-loglikes(4,val)]
 end
 subplot(1,2,1)
-OIvACno = scatter(e.d{3}.conditions(3,11:2:92),OIvsAC(1:2:82)); hold on; xlim([0 1]);
+OIvACno = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),OIvsAC(1:2:(102-numSkips*4-6-6))); hold on; xlim([0 1]);
 legend([OIvOSno,OIvVCno,OIvACno],'Optimal Switching','Visual Capture','Auditory Capture');
 subplot(1,2,2)
-OIvACyo = scatter(e.d{3}.conditions(3,11:2:92),OIvsAC(2:2:82));
+OIvACyo = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),OIvsAC(2:2:(102-numSkips*4-6-6)));
 legend([OIvOSyo,OIvVCyo,OIvACyo],'Optimal Switching','Visual Capture','Auditory Capture');
 
 
@@ -1021,36 +1029,36 @@ legend([OIvOSyo,OIvVCyo,OIvACyo],'Optimal Switching','Visual Capture','Auditory 
 figure(103) %% optimal switching
 OSvsOI = []
 for val = 1:length(loglikes(1,1:end))
-    OSvsOI = [OSvsOI loglikes(1,val)/loglikes(2,val)]
+    OSvsOI = [OSvsOI loglikes(2,val)-loglikes(1,val)]
 end
 subplot(1,2,1)
-OSvOIno = scatter(e.d{3}.conditions(3,11:2:92),OSvsOI(1:2:82)); hold on; xlim([0 1]);
+OSvOIno = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),OSvsOI(1:2:(102-numSkips*4-6-6))); hold on; xlim([0 1]);
 xlabel('Cue offset'); ylabel('Negative log likelihood ratio'); titleStr = sprintf('Optimal Switching Ratios: no AV discrepancy'); legend([OSvOIno],'Optimal Integration'); title(titleStr);
 subplot(1,2,2)
-OSvOIyo = scatter(e.d{3}.conditions(3,11:2:92),OSvsOI(2:2:82)); hold on; xlim([0 1]);
+OSvOIyo = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),OSvsOI(2:2:(102-numSkips*4-6-6))); hold on; xlim([0 1]);
 xlim([0 1]); xlabel('Cue offset'); ylabel('Negative log likelihood ratio'); titleStr = sprintf('Optimal Switching Ratios: AV discrepancy = 6'); legend([OSvOIyo],'Optimal Integration'); title(titleStr)
         
 OSvsVC = []
 for val = 1:length(loglikes(1,1:end))
-    OSvsVC = [OSvsVC loglikes(3,val)/loglikes(2,val)]
+    OSvsVC = [OSvsVC loglikes(2,val)-loglikes(3,val)]
 end
 subplot(1,2,1)
-OSvVCno = scatter(e.d{3}.conditions(3,11:2:92),OSvsVC(1:2:82)); hold on; xlim([0 1]);
+OSvVCno = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),OSvsVC(1:2:(102-numSkips*4-6-6))); hold on; xlim([0 1]);
 legend([OSvVCno],'Visual Capture');
 subplot(1,2,2)
-OSvVCyo = scatter(e.d{3}.conditions(3,11:2:92),OSvsVC(2:2:82));
+OSvVCyo = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),OSvsVC(2:2:(102-numSkips*4-6-6)));
 legend([OSvVCyo],'Visual Capture');
 
 
 OSvsAC = []
 for val = 1:length(loglikes(1,1:end))
-    OSvsAC = [OSvsAC loglikes(4,val)/loglikes(2,val)]
+    OSvsAC = [OSvsAC loglikes(2,val)-loglikes(4,val)]
 end
 subplot(1,2,1)
-OSvACno = scatter(e.d{3}.conditions(3,11:2:92),OSvsAC(1:2:82)); hold on; xlim([0 1]);
+OSvACno = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),OSvsAC(1:2:(102-numSkips*4-6-6))); hold on; xlim([0 1]);
 legend([OSvOIno,OSvVCno,OSvACno],'Optimal Integration','Visual Capture','Auditory Capture');
 subplot(1,2,2)
-OSvACyo = scatter(e.d{3}.conditions(3,11:2:92),OSvsAC(2:2:82));
+OSvACyo = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),OSvsAC(2:2:(102-numSkips*4-6-6)));
 legend([OSvOIyo,OSvVCyo,OSvACyo],'Optimal Integration','Visual Capture','Auditory Capture');        
 
 
