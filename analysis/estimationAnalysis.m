@@ -7,10 +7,7 @@ fit = [];
 if nargin < 1, stimfileNames = [];end
 
 % parse arguments
-getArgs(varargin,{'dispFit=1','combineData=1','numBins=33','Neighbors=2','numSkips=2'});
-if Neighbors>numSkips
-    disp(sprintf('Neighbors cannot be greater than number of skips!'));return;
-end
+getArgs(varargin,{'dispFit=1','combineData=1','numBins=33','Neighbors=3','pNorm=.02','dispGraphs=1'});
 % get filenames and path
 [e.path stimfileNames] = getStimfileNames(stimfileNames);
 if isempty(e.path),return,end
@@ -89,11 +86,12 @@ if e.nFiles == 3
     e.d{3}.originalTaskParameter.displacement = unique(e.d{3}.originalTaskParameter.displacement)
     numSubs = e.nFiles+length(e.d{3}.originalTaskParameter.displacement)-1
 end
-
 if e.nFiles < 3
     numSubs = e.nFiles
 end
+numSkips = Neighbors
 
+%% bin the data and graph responses in each condition %%
 for iFile = 1:e.nFiles
 e.d{iFile}.task{1}{1}.randVars.calculated.est = e.d{iFile}.task{1}{1}.randVars.calculated.est(2:end) %trim files (the last response (nan) is put first, but parameter isnt)
 
@@ -101,11 +99,13 @@ e.d{iFile}.task{1}{1}.randVars.calculated.est = e.d{iFile}.task{1}{1}.randVars.c
 
 shift = 1/(e.d{iFile}.task{1}{1}.parameter.numberOffsets-1); %graph input
 
-[e] = graphDists(resp, dists, e, shift, numBins, iFile, numSubs, numSkips, Neighbors)
+[e] = graphDists(resp, dists, e, shift, numBins, iFile, numSubs, numSkips, Neighbors, pNorm)
 
 end
 
+%% calculate and graph log likelihood fits of models
 [loglikes] = modelCompare(e,numSkips)
+graphLikelihoods(loglikes,numSkips,e,pNorm)
 k=2
                
                
@@ -488,7 +488,7 @@ end
 end
 
 
-function [e] = graphDists(resp, dists, e, shift, numBins, iFile, numSubs, numSkips, Neighbors)
+function [e] = graphDists(resp, dists, e, shift, numBins, iFile, numSubs, numSkips, Neighbors, pNorm)
 %initialize empty arrays for summary statistics
 posOffs = []
 estAvg = []
@@ -499,6 +499,7 @@ estSig = []
 %% bimodal data %%
 if e.d{iFile}.stimulusType(1) == 'B'
 e.d{iFile}.respMatrix = ones(length(e.d{3}.originalTaskParameter.displacement)*(51-2*numSkips),250)+4; %%hardcoded for 51 offsets and max 250 responses
+e.d{iFile}.normality = []
 for iGraph = numSkips*length(e.d{3}.originalTaskParameter.displacement)+1:(dists-numSkips*length(e.d{3}.originalTaskParameter.displacement))
     i = length(e.d{iFile}.originalTaskParameter.displacement)*length(e.d{iFile}.originalTaskParameter.width);
     k = [];
@@ -548,6 +549,7 @@ for iGraph = numSkips*length(e.d{3}.originalTaskParameter.displacement)+1:(dists
     subplot(2,numSubs,2*iFile++2*mod(iGraph-1, length(e.d{3}.originalTaskParameter.displacement)))
     qqplot(estimateValues);
     [h, p, kstat] = lillietest(estimateValues);
+    e.d{iFile}.normality = [e.d{iFile}.normality p]
     titleStr = sprintf('QQ plot: P = %0.2f',p);
     title(titleStr)
     %label axis
@@ -556,6 +558,22 @@ for iGraph = numSkips*length(e.d{3}.originalTaskParameter.displacement)+1:(dists
     estSig = [estSig s];
 end
 figure(100)
+
+ for val = 1:2:length(posOffs) %only plot normal data - HARD CODED for 2 discrepancies and 2.4 offset
+     if (e.d{1}.normality(ceil(val/2)) < pNorm) || (e.d{2}.normality(ceil(val/2)) < pNorm)
+         estAvg(val) = NaN
+         estSig(val) = NaN
+         posOff(val) = NaN
+     end
+ end    
+  for val = 8:2:(length(posOffs)-6) %only plot normal data
+     if (e.d{1}.normality(ceil(val/2)-3) < pNorm) || (e.d{2}.normality(ceil(val/2)+3) < pNorm)
+         estAvg(val) = NaN
+         estSig(val) = NaN
+         posOff(val) = NaN
+     end
+ end   
+ 
  subplot(3,2,2*iFile-1)
  for x = 1:length(e.d{3}.originalTaskParameter.displacement)
  scatter(posOffs(x:length(e.d{3}.originalTaskParameter.displacement):end),estAvg(x:length(e.d{3}.originalTaskParameter.displacement):end));
@@ -595,6 +613,7 @@ end
 %% unimodal data %%
 if e.d{iFile}.stimulusType(1) ~= 'B'
 e.d{iFile}.respMatrix = ones(51-2*numSkips,250)+4; %%hardcoded for 51 offsets and max 250 responses
+e.d{iFile}.normality = []
     for iGraph = numSkips+1:(dists-numSkips)
     i = length(e.d{iFile}.originalTaskParameter.width);
     k = [];
@@ -648,6 +667,7 @@ e.d{iFile}.respMatrix = ones(51-2*numSkips,250)+4; %%hardcoded for 51 offsets an
     subplot(2,numSubs,2*iFile)
     qqplot(estimateValues);
     [h, p, kstat] = lillietest(estimateValues);
+    e.d{iFile}.normality = [e.d{iFile}.normality p]
     titleStr = sprintf('QQ plot: P = %0.2f',p);
     title(titleStr)
     %grab offest parameters for summary statistics
@@ -658,6 +678,13 @@ e.d{iFile}.respMatrix = ones(51-2*numSkips,250)+4; %%hardcoded for 51 offsets an
     
  %summary statistic graphs
  figure(100)
+ for val = 1:length(posOffs) %only plot normal data
+     if e.d{iFile}.normality(val) < pNorm
+         estAvg(val) = NaN
+         estSig(val) = NaN
+         posOff(val) = NaN
+     end
+ end       
  subplot(3,2,2*iFile-1)
  scatter(posOffs,estAvg)
  ylim([0 1])
@@ -955,7 +982,28 @@ for offset = 7:(102-numSkips*4-6) %hard coded for delta=2.4 with 51 offsets:: 51
      
 end
 
+
+function graphLikelihoods(loglikes,numSkips,e,pNorm)
 %%log likelihoods by cue position
+
+%%filter by normality
+for model = 1:4 % change to number of models
+    for val = 1:2:(102-numSkips*4-6-6)
+        if (e.d{1}.normality(ceil(val/2)+3) < pNorm) || (e.d{2}.normality(ceil(val/2)+3) < pNorm)
+            loglikes(model,val) = NaN
+            conditions(3,ceil(val/2)+numSkips+3) = NaN
+        end
+    end
+end     
+for model = 1:4 % change to number of models
+    for val = 2:2:(102-numSkips*4-6-6)
+        if (e.d{1}.normality(ceil(val/2)) < pNorm) || (e.d{2}.normality(ceil(val/2)+6) < pNorm)
+            loglikes(model,val) = NaN
+            conditions(3,ceil(val/2)+numSkips+3) = NaN
+        end
+    end
+end     
+
 figure(101)
 subplot(2,2,1) %optimal integration
 OIno = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(1,1:2:(102-numSkips*4-6-6)))
@@ -987,9 +1035,7 @@ legend([esno,esyo],'No offset','Offset')
 titleStr = sprintf('Auditory capture: negative log likelihoods by cue position'); title(titleStr); xlabel('Cue offset'); ylabel('log likelihood');
 
 
-
 %%%%%%%%%%% loglikehood ratios between models %%%%%%%%%%%%%%%
-
 figure(102) %% optimal integration
 OIvsOS = [] 
 for val = 1:length(loglikes(1,1:end))
