@@ -1,4 +1,5 @@
-function e = estimationAnalysis(stimfileNames,varargin)
+
+ function e = estimationAnalysis(stimfileNames,varargin)
 
 % default return argument
 fit = [];
@@ -7,7 +8,7 @@ fit = [];
 if nargin < 1, stimfileNames = [];end
 
 % parse arguments
-getArgs(varargin,{'dispFit=1','combineData=1','numBins=33','Neighbors=3','pNorm=.02','dispGraphs=1'});
+getArgs(varargin,{'dispFit=1','combineData=1','numBins=100','Neighbors=2','pNorm=0','dispGraphs=1'});
 % get filenames and path
 [e.path stimfileNames] = getStimfileNames(stimfileNames);
 if isempty(e.path),return,end
@@ -96,7 +97,10 @@ for iFile = 1:e.nFiles
 e.d{iFile}.task{1}{1}.randVars.calculated.est = e.d{iFile}.task{1}{1}.randVars.calculated.est(2:end) %trim files (the last response (nan) is put first, but parameter isnt)
 
 [resp, dists] = binData(e, iFile) %organize responses
-
+for val = 1:length(resp);
+    if (resp(val) > 1) && (resp(val) < 2); resp(val) = 1; end
+    if resp(val) < 0; resp(vap) = 0; end
+end
 shift = 1/(e.d{iFile}.task{1}{1}.parameter.numberOffsets-1); %graph input
 
 [e] = graphDists(resp, dists, e, shift, numBins, iFile, numSubs, numSkips, Neighbors, pNorm)
@@ -109,6 +113,9 @@ graphLikelihoods(loglikes,numSkips,e,pNorm)
 k=2
                
                
+
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %    combineStimfiles    %        
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -529,8 +536,8 @@ for iGraph = numSkips*length(e.d{3}.originalTaskParameter.displacement)+1:(dists
     
     figure(ceil((iGraph-numSkips*length(e.d{3}.originalTaskParameter.displacement))/length(e.d{3}.originalTaskParameter.displacement)))
     subplot(2,numSubs,2*iFile-1+2*mod(iGraph-1, length(e.d{3}.originalTaskParameter.displacement)))
-    hist(estimateValues,(0:(1/numBins):1))
-    ylim([0 20])
+    hist(estimateValues,(0:(1/numBins):1.02))
+    %ylim([0 20])
     xlim([-.1 1.1])
     [m,s] = normfit(estimateValues);
     titleStr = sprintf('Bimodal: Discrepancy: %0.2f Position: %0.2f // N: %0.2f // Mu: %.02f Sigma: %0.2f',conditions(2,iGraph),conditions(3,iGraph),length(estimateValues),m,s);
@@ -538,11 +545,11 @@ for iGraph = numSkips*length(e.d{3}.originalTaskParameter.displacement)+1:(dists
     xlabel('Offset estimate')
     ylabel('Number of Judgements')
     hold on
-    L1 = scatter(conditions(3,iGraph)+conditions(2,iGraph),0,'black','DisplayName','Auditory Cue');
-    L2 = scatter(conditions(3,iGraph)-conditions(2,iGraph),0,'green','DisplayName','Visual Cue');
+    L1 = scatter(conditions(3,iGraph)-conditions(2,iGraph),0,'black','DisplayName','Auditory Cue');
+    L2 = scatter(conditions(3,iGraph)+conditions(2,iGraph),0,'green','DisplayName','Visual Cue');
     %pdf
     pdf = normpdf((0:.005:1),m,s)
-    plot((0:.005:1),pdf,'red')
+    %plot((0:.005:1),pdf,'red')
     L3 = scatter(m,0,'red','DisplayName','Estimate Average');
     legend([L1,L2,L3],'Auditory location','Visual location','Estimate Average')
     %qqplot
@@ -586,17 +593,17 @@ figure(100)
  ylabel('Average Response')
  %%%legend
  if length(e.d{3}.originalTaskParameter.displacement) == 2
- legend(['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(1))],['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(2))])
+ leg1 = legend(['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(1))],['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(2))])
  end
  if length(e.d{3}.originalTaskParameter.displacement) == 3
- legend(['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(1))],['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(2))],['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(2))])  
+ leg1 = legend(['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(1))],['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(2))],['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(2))])  
  end
  subplot(3,2,2*iFile)
  for x = 1:length(e.d{3}.originalTaskParameter.displacement)
  scatter(posOffs(x:length(e.d{3}.originalTaskParameter.displacement):end),estSig(x:length(e.d{3}.originalTaskParameter.displacement):end))
  hold on
  end
- ylim([.04 .15])
+ %ylim([.04 .15])
  titleStr = sprintf('Unimodal %s Variation',e.d{iFile}.stimulusType);
  title(titleStr)
  xlabel('Stimulus Offset')
@@ -640,7 +647,7 @@ e.d{iFile}.normality = []
     figure(iGraph-numSkips)
     subplot(2,numSubs,2*iFile-1)
     hist(estimateValues,(0:(1/numBins):1))
-    ylim([0 20])
+    %ylim([0 20])
     xlim([-.1 1.1])
     [m,s] = normfit(estimateValues);
     %title graphs
@@ -703,7 +710,7 @@ end
 
 function [loglikes] = modelCompare(e,numSkips)  %%for now, hard coded for the 2 offsets and 51 disps. Need to change when we collect a lot of data, and needs to be the same conditions.
 loglikes = [] %%first row OI, 2nd OS, 3rd visual capture, 4th auditory capture
-for offset = 7:(102-numSkips*4-6) %hard coded for delta=2.4 with 51 offsets:: 51*2=102 total conditions, take 4 off for each skip (2 deltas each side) and 6 (2.4/50) each side. if you change the discrepnacy, need to change all the 6's.
+for offset = 7:(102-numSkips*4-6) %hard coded for delta=2.4 with 51 offsets:: 51*2=102 total conditions, take 4 off for each skip (2 deltas each side) and 6 (2.4/50) each side. if you change the discrepnacy, need to change all the 6's. change number of discreps, change 4.
     
     %%%%%%% optimal integration %%%%%%%
     if mod(offset,2) %no discrepancy
@@ -738,6 +745,7 @@ for offset = 7:(102-numSkips*4-6) %hard coded for delta=2.4 with 51 offsets:: 51
             OIloglike = OIloglike + log(oiDist(round(biResp(val)*100+1)))
         end
         loglikes(1,offset-6) = OIloglike
+        figure(ceil(offset/2)); subplot(2,4,5); OIn = plot(0:.01:1,oiDist*100,'cyan'); % graph model prediction at appropriate condition, all hardcoded rn for number of conditions
     end
      if ~mod(offset,2) %discrepancy
         %%unimodal inputs
@@ -771,6 +779,7 @@ for offset = 7:(102-numSkips*4-6) %hard coded for delta=2.4 with 51 offsets:: 51
             OIloglike = OIloglike + log(oiDist(round(biResp(val)*100+1)))
         end
         loglikes(1,offset-6) = OIloglike
+        figure(ceil(offset/2)); subplot(2,4,7); OIy = plot(0:.01:1,oiDist*100,'cyan'); % graph model prediction at appropriate condition
      end
      
      %%%%%%%%%% %optimal switching %%%%%%%%%%%%
@@ -806,6 +815,7 @@ for offset = 7:(102-numSkips*4-6) %hard coded for delta=2.4 with 51 offsets:: 51
             OSloglike = OSloglike + log(osDist(round(biResp(val)*100+1)))
         end
         loglikes(2,offset-6) = OSloglike
+        figure(ceil(offset/2)); subplot(2,4,5); OSn = plot(0:.01:1,osDist*100,'magenta'); % graph model prediction at appropriate condition
     end
     if ~mod(offset,2) %discrepancy
         %%unimodal inputs
@@ -839,6 +849,7 @@ for offset = 7:(102-numSkips*4-6) %hard coded for delta=2.4 with 51 offsets:: 51
             OSloglike = OSloglike + log(osDist(round(biResp(val)*100+1)))
         end
         loglikes(2,offset-6) = OSloglike
+        figure(ceil(offset/2)); subplot(2,4,7); OSy = plot(0:.01:1,osDist*100,'magenta'); % graph model prediction at appropriate condition
     end
     
     
@@ -854,11 +865,11 @@ for offset = 7:(102-numSkips*4-6) %hard coded for delta=2.4 with 51 offsets:: 51
         %bimodal predictions
         weightV = 1
         weightA = 0
-        eiMu = weightV*muV + weightA*muA
-        eiS = sV
-        eiDist = normpdf((0:.01:1),eiMu,eiS)/100
+        vcMu = weightV*muV + weightA*muA
+        vcS = sV
+        vcDist = normpdf((0:.01:1),vcMu,vcS)/100
         %grab bimodal responses
-        eiloglike = 0
+        vcloglike = 0
         biResp = e.d{3}.respMatrix(offset,1:250)
         biResp = biResp(biResp<2)
         %fix some reporting errors where matlab gives values >1 or 0>
@@ -872,9 +883,10 @@ for offset = 7:(102-numSkips*4-6) %hard coded for delta=2.4 with 51 offsets:: 51
         end
         %calculate log likelihood
         for val = 1:length(biResp)
-          eiloglike = eiloglike + log(eiDist(round(biResp(val)*100+1)))
+          vcloglike = vcloglike + log(vcDist(round(biResp(val)*100+1)))
         end
-        loglikes(3,offset-6) = eiloglike
+        loglikes(3,offset-6) = vcloglike
+        figure(ceil(offset/2)); subplot(2,4,5); VCn = plot(0:.01:1,vcDist*100,'green'); % graph model prediction at appropriate condition
     end
      if ~mod(offset,2) %discrepancy
         %%unimodal inputs
@@ -887,11 +899,11 @@ for offset = 7:(102-numSkips*4-6) %hard coded for delta=2.4 with 51 offsets:: 51
         %bimodal predictions
         weightV = 1
         weightA = 0
-        eiMu = weightV*muV + weightA*muA
-        eiS = sV
-        eiDist = normpdf((0:.01:1),eiMu,eiS)/100
+        vcMu = weightV*muV + weightA*muA
+        vcS = sV
+        vcDist = normpdf((0:.01:1),vcMu,vcS)/100
         %grab bimodal responses
-        eiloglike = 0
+        vcloglike = 0
         biResp = e.d{3}.respMatrix(offset,1:250)
         biResp = biResp(biResp<2)
         %fix some reporting errors where matlab gives values >1 or 0>
@@ -905,9 +917,10 @@ for offset = 7:(102-numSkips*4-6) %hard coded for delta=2.4 with 51 offsets:: 51
         end
         %calc log likelihood
         for val = 1:length(biResp)
-            eiloglike = eiloglike + log(eiDist(round(biResp(val)*100+1)))
+            vcloglike = vcloglike + log(vcDist(round(biResp(val)*100+1)))
         end
-        loglikes(3,offset-6) = eiloglike
+        loglikes(3,offset-6) = vcloglike
+        figure(ceil(offset/2)); subplot(2,4,7); VCy = plot(0:.01:1,vcDist*100,'green'); % graph model prediction at appropriate condition
      end
   
      %%%%%%%%%% auditory capture %%%%%%%%%%%%
@@ -922,11 +935,11 @@ for offset = 7:(102-numSkips*4-6) %hard coded for delta=2.4 with 51 offsets:: 51
         %bimodal predictions
         weightV = 0
         weightA = 1
-        eiMu = weightV*muV + weightA*muA
-        eiS = sA
-        eiDist = normpdf((0:.01:1),eiMu,eiS)/100
+        acMu = weightV*muV + weightA*muA
+        acS = sA
+        acDist = normpdf((0:.01:1),acMu,acS)/100
         %grab bimodal responses
-        eiloglike = 0
+        acloglike = 0
         biResp = e.d{3}.respMatrix(offset,1:250)
         biResp = biResp(biResp<2)
         %fix some reporting errors where matlab gives values >1 or 0>
@@ -940,9 +953,11 @@ for offset = 7:(102-numSkips*4-6) %hard coded for delta=2.4 with 51 offsets:: 51
         end
         %calculate log likelihood
         for val = 1:length(biResp)
-          eiloglike = eiloglike + log(eiDist(round(biResp(val)*100+1)))
+          acloglike = acloglike + log(acDist(round(biResp(val)*100+1)))
         end
-        loglikes(4,offset-6) = eiloglike
+        loglikes(4,offset-6) = acloglike
+        figure(ceil(offset/2)); subplot(2,4,5); ACn = plot(0:.01:1,acDist*100,'black'); % graph model prediction at appropriate condition
+        leg2 = legend([OIn,OSn,VCn,ACn],'Optimal Integration','Optimal Switching','Visual Capture','Auditory Capture')
     end
      if ~mod(offset,2) %discrepancy
         %%unimodal inputs
@@ -955,11 +970,11 @@ for offset = 7:(102-numSkips*4-6) %hard coded for delta=2.4 with 51 offsets:: 51
         %bimodal predictions
         weightV = 0
         weightA = 1
-        eiMu = weightV*muV + weightA*muA
-        eiS = sA
-        eiDist = normpdf((0:.01:1),eiMu,eiS)/100
+        acMu = weightV*muV + weightA*muA
+        acS = sA
+        acDist = normpdf((0:.01:1),acMu,acS)/100
         %grab bimodal responses
-        eiloglike = 0
+        acloglike = 0
         biResp = e.d{3}.respMatrix(offset,1:250)
         biResp = biResp(biResp<2)
         %fix some reporting errors where matlab gives values >1 or 0>
@@ -973,13 +988,13 @@ for offset = 7:(102-numSkips*4-6) %hard coded for delta=2.4 with 51 offsets:: 51
         end
         %calc log likelihood
         for val = 1:length(biResp)
-            eiloglike = eiloglike + log(eiDist(round(biResp(val)*100+1)))
+            acloglike = acloglike + log(acDist(round(biResp(val)*100+1)))
         end
-        loglikes(4,offset-6) = eiloglike
+        loglikes(4,offset-6) = acloglike
+        figure(ceil(offset/2)); subplot(2,4,7); ACy = plot(0:.01:1,acDist*100,'black'); % graph model prediction at appropriate condition
+        leg2 = legend([OIy,OSy,VCy,ACy],'Optimal Integration','Optimal Switching','Visual Capture','Auditory Capture')
      end
-     
-     
-     
+
 end
 
 
@@ -1010,28 +1025,28 @@ OIno = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglik
 hold on
 OIyo = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(1,2:2:(102-numSkips*4-6-6)))
 xlim([0 1])
-legend([OIno,OIyo],'No offset','Offset')
+legend([OIno,OIyo],'Discrepancy','No Discrepancy')
 titleStr = sprintf('Optimal Integration: negative log likelihoods by cue position'); title(titleStr); xlabel('Cue offset'); ylabel('log likelihood');
 subplot(2,2,2) %optimal switching
 OSno = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(2,1:2:(102-numSkips*4-6-6)))
 hold on
 OSyo = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(2,2:2:(102-numSkips*4-6-6)))
 xlim([0 1])
-legend([OSno,OSyo],'No offset','Offset')
+legend([OSno,OSyo],'Discrepancy','No Discrepancy')
 titleStr = sprintf('Optimal Switching: negative log likelihoods by cue position'); title(titleStr); xlabel('Cue offset'); ylabel('log likelihood');
 subplot(2,2,3) %visual capture
-eino = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(3,1:2:(102-numSkips*4-6-6)))
+vcno = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(3,1:2:(102-numSkips*4-6-6)))
 hold on
-eiyo = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(3,2:2:(102-numSkips*4-6-6)))
+vcyo = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(3,2:2:(102-numSkips*4-6-6)))
 xlim([0 1])
-legend([eino,eiyo],'No offset','Offset')
+legend([vcno,vcyo],'Discrepancy','No Discrepancy')
 titleStr = sprintf('Visual Capture: negative log likelihoods by cue position'); title(titleStr); xlabel('Cue offset'); ylabel('log likelihood');
 subplot(2,2,4) %Auditory capture
-esno = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(4,1:2:(102-numSkips*4-6-6)))
+acno = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(4,1:2:(102-numSkips*4-6-6)))
 hold on
-esyo = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(4,2:2:(102-numSkips*4-6-6)))
+acyo = scatter(e.d{3}.conditions(3,(1+numSkips*2+6):2:(102-numSkips*2-6)),loglikes(4,2:2:(102-numSkips*4-6-6)))
 xlim([0 1])
-legend([esno,esyo],'No offset','Offset')
+legend([acno,acyo],'Discrepancy','No Discrepancy')
 titleStr = sprintf('Auditory capture: negative log likelihoods by cue position'); title(titleStr); xlabel('Cue offset'); ylabel('log likelihood');
 
 
