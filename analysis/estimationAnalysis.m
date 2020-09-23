@@ -615,6 +615,23 @@ figure(100)
  if length(e.d{3}.originalTaskParameter.displacement) == 3
  legend(['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(1))],['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(2))],['Discrepancy: ' num2str(e.d{3}.originalTaskParameter.displacement(2))])  
  end
+
+ figure(99)
+ subplot(1,3,iFile)
+ hold on
+ bimodalbias = estAvg-posOffs
+ a = scatter(posOffs(1:2:end),bimodalbias(1:2:end)) %hard coded
+ ylim([ -.2 .2])
+ b = scatter(posOffs(2:2:end),bimodalbias(2:2:end))
+ hold on
+ plot([0 1],[0 0],'k')
+ plot([.5 .5],[-.2 .2],'k')
+ xlabel('Stimulus Offset')
+ ylabel('Estimate Bias')
+ legend([a,b],'No discrepancy','.06 discrepancy')
+ titleStr = sprintf('Bimodal Bias',e.d{iFile}.stimulusType);
+ title(titleStr)
+ 
 end
 
 %% unimodal data %%
@@ -706,6 +723,19 @@ e.d{iFile}.normality = []
  title(titleStr)
  xlabel('Stimulus Offset')
  ylabel('Response Standard Deviation')
+ 
+ figure(99)
+ hold on
+ subplot(1,3,iFile)
+ scatter(posOffs,(estAvg-posOffs))
+ ylim([ -.2 .2])
+ hold on
+ plot([0 1],[0 0],'k')
+ plot([.5 .5],[-.2 .2],'k')
+ xlabel('Stimulus Offset')
+ ylabel('Estimate Bias')
+ titleStr = sprintf('Unimodal %s Bias',e.d{iFile}.stimulusType);
+ title(titleStr)
 end
 
 function [loglikes] = modelCompare(e,numSkips)  %%for now, hard coded for the 2 offsets and 51 disps. Need to change when we collect a lot of data, and needs to be the same conditions.
