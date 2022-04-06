@@ -3,7 +3,7 @@
 %        $Id:$ 
 %      usage: dofmricni
 %         by: justin gardner
-%       date: 03/17/2015
+%       date: 03/17/2015s
 %    purpose: do initial processing stream for Stanford data brought down
 %             from NIMS. Based on dofmrigru code.
 %
@@ -74,10 +74,12 @@ s.teHigher = 40;
 % gunzip, FSL and other unix commands
 [tf s] = checkCommands(s);
 if ~tf,return,end
+disp('checkCommands done');
 
 % set motionComp defaults
 [tf s] = setMotionCompDefaults(s);
 if ~tf,return,end
+disp('setMotionCompDefaults done');
 
 % check to see if we are to use downloaded data or not
 % if this is set (usually not) then we will check
@@ -85,8 +87,10 @@ if ~tf,return,end
 % to he CNI computer
 if isequal(s.useLocalData,0)
   % choose which directory to download from cni
-  if s.flywheel
-    s = getFlywheelDir(s);
+  if s.flywheel==1 || s.flywheel==2
+    s = getFlywheelDir2(s);
+%   elseif s.flywheel
+%     s = getFlywheelDir(s);
   else
     s = getCNIDir(s);
   end
@@ -1589,6 +1593,90 @@ for i = 1:length(stimfileList);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%
+%    getFlywheelDir - using Matlab CLI    %
+%%%%%%%%%%%%%%%%%%%%%%%%
+function s = getFlywheelDir2(s)
+
+% tell user what is going on
+dispHeader;
+dispHeader('Querying Flywheel using fw CLI');
+dispHeader;
+
+fwAPIKey = mglGetParam('fwAPIKey');
+if isempty(fwAPIKey)
+  disp('No Flywheel API Key set. Use mglSetParams("fwAPIKey", YOUR_API_KEY) to set.');
+  keyboard
+end
+fw = flywheel.Client(fwAPIKey);
+allProjects = fw.projects();
+
+studyNames = cellfun(@(x) x.label, allProjects, 'un', 0);
+
+emptySessions = [];
+for pi = 1:length(allProjects)
+  proj = allProjects{pi};
+  subjects = proj.subjects();
+  sessions = proj.sessions();
+  if length(sessions)==0
+    emptySessions = [emptySessions pi];
+    expFullNames{pi} = {};
+    sessionFullNames{pi} = {};
+  else
+    expFullNames{pi} = cellfun(@(x) x.label, subjects, 'un', 0);
+    sessionFullNames{pi} = cellfun(@(x) x.label, sessions, 'un', 0);
+  end
+end
+studyNames(emptySessions) = [];
+expFullNames(emptySessions) = [];
+sessionFullNames(emptySessions) = [];
+allProjects(emptySessions) = [];
+
+% Now set up variables to have the default list be from all studies
+mrParams = {{'chooseNum',1,'minmax',[1 length(studyNames)],'incdec=[-1 1]'},...
+	    {'studyName',studyNames,'type=string','Name of studies','group=chooseNum','editable=0'},...
+	    {'expName',expFullNames,'Name of scan','group=chooseNum'},...
+        {'sessName',sessionFullNames,'Name of session','group=chooseNum'}};
+params = mrParamsDialog(mrParams);
+if isempty(params),return,end
+studyName = params.studyName{params.chooseNum};
+expName = params.expName{params.chooseNum};
+sessionName = params.sessName{params.chooseNum};
+
+% get subjectID
+s.subjectID = gruSubjectNum2ID(expName);
+
+% convert back expname to not have data and subjectID
+expName = s.subjectID;
+
+% set cniDir
+s.cniDir = fullfile(studyName,expName,sessionName);
+disp(sprintf('(dofmricni:getFlywheelDir) Directory chosen is: %s',s.cniDir))
+
+% set the directory to which we resync data
+toDir = mlrReplaceTilde(fullfile(s.localDataDir,'temp/dofmricni'));
+if ~isdir(toDir)
+  try
+    mkdir(toDir);
+  catch
+    mrWarnDlg(sprintf('(dofmricni) Cannot make directory %s. Either you do not have permissions, or perhaps you have a line to a drive that is not currently mounted?',toDir));
+    return
+  end
+end
+s.localDir = fullfile(toDir,s.subjectID);
+
+% Save the project and session structure into s.
+my_proj = allProjects{params.chooseNum};
+sessions = my_proj.sessions();
+for si = 1:length(sessions)
+  if strcmp(sessions{si}.label, params.sessName{params.chooseNum});
+    my_sess = sessions{si};
+  end
+end
+s.project = my_proj;
+s.session = my_sess;
+s.fw = fw;
+
+%%%%%%%%%%%%%%%%%%%%%%%%
 %    getFlywheelDir    %
 %%%%%%%%%%%%%%%%%%%%%%%%
 function s = getFlywheelDir(s)
@@ -1605,10 +1693,11 @@ if ~isequal(status,0)
   disp(sprintf('(dofmricni;getFlywheelDir) You may need to login to fw'));
   return
 end
+disp('fw ls done');
 
 % parse the results
 studyNames = textscan(fwListing,'%s %s');
-if length(studyNames) == 2,studyNames = studyNames{2};else,studyNames = {};end
+if length(studyNames) == 2,studyNames = studyNames{2}(strcmp(studyNames{1}, 'admin'));else,studyNames = {};end
 
 % check that we found something
 if isempty(studyNames)
@@ -1633,7 +1722,6 @@ for iStudy = 1:length(studyNames)
       sessionFullNames{iStudy}{iExp} = sprintf('%s',removeEscapeCodes(sessionNamesParse{5}{1}));
     end
   end
-  
 end
 
 % Now set up variables to have the default list be from all studies
@@ -1678,7 +1766,7 @@ if ~isempty(s)
     % strip off weird pre-code escape characters
     if s(1) == 27
       % remove pre escape code
-      s = s(8:end);
+      s = s(11:end);
     end
 
     if ~isempty(find(s==27))
@@ -1812,10 +1900,12 @@ tf = false;
 % download whole direcotry
 cd(fileparts(s.localDir));
 dispHeader('(dofmricni:getFlywheelData) Downloading data from flywheel - this may take several minutes');
-status = system(sprintf('%s download -f -e pfile %s',s.commands.fw,fullfile(s.PI,s.cniDir)));
+%command = sprintf('%s download -f -e pfile %s',s.commands.fw,fullfile(s.PI,s.cniDir));
+%status = system(command)
+tarfileName = setext(getLastDir(s.cniDir),'tar');
+s.fw.downloadTar(s.session, tarfileName, 'excludeTypes', {'pfile'});
 
 % check to see if the tar file downloaded properly
-tarfileName = setext(getLastDir(s.cniDir),'tar');
 if ~isfile(tarfileName)
   disp(sprintf('(dofmricni:getFlywheelData) Tarfile %s did not get downloaded properly from fw',tarfileName));
   return
@@ -2282,7 +2372,7 @@ end
 if triggerEverySlice
   calibrationTriggers = nSlices*s.removeInitialVols;
 else
-  calibrationTriggers = boldScan.mux*s.removeInitialVols;
+  calibrationTriggers = mux*s.removeInitialVols;
 end
 
 % now check to see if it matches
@@ -2293,7 +2383,7 @@ if missingIgnoredVols ~= 0
   if triggerEverySlice
     dispConOrLog(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to nSlices*initialVolumes %ix%i=%i but was set to %i',nSlices,s.removeInitialVols,calibrationTriggers,stimfileInfo.ignoredInitialVols),justDisplay);
   else
-    dispConOrLog(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to mux*initialVolumes %ix%i=%i, but was set to %i',boldScan.mux,s.removeInitialVols,calibrationTriggers,stimfileInfo.ignoredInitialVols),justDisplay);
+    dispConOrLog(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to mux*initialVolumes %ix%i=%i, but was set to %i',mux,s.removeInitialVols,calibrationTriggers,stimfileInfo.ignoredInitialVols),justDisplay);
   end
 end
 

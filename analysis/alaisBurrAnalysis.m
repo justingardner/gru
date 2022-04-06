@@ -309,6 +309,7 @@ for iCond = 1:d.nCond
   d.fit(iCond) = fitCumulativeGaussian(d.cond(iCond).uniquePosDiff,d.cond(iCond).correctBinned);
 end
  
+<<<<<<< HEAD
 %%%%%%%%%%%%%%%%%%%%
 %    bootstrap     %
 %%%%%%%%%%%%%%%%%%%%
@@ -347,6 +348,8 @@ d.bootstrap(iCond).meanMax = avg(round(.95*length(avg))); d.bootstrap(iCond).mea
 d.bootstrap(iCond).stdMax = dev(round(.95*length(dev))); d.bootstrap(iCond).stdMin = dev(round(.05*length(dev)));
 end
 
+=======
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %    loadStimfile    %
 %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -575,9 +578,15 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %     calcModelThresholds    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+<<<<<<< HEAD
 function [mle,suboptimal,SCS,SCSdiscrepant,scsSubVisW,scsSubAudW] = calcModelThresholds(whichWidth,vSTD,vPSE,aSTD,aPSE,bPSE,delta)
  
 % calculate the MLE threshold
+=======
+function [mle,suboptimal,SCS,scsSubVisW,scsSubAudW] = calcModelThresholds(whichWidth,vSTD,vPSE,aSTD,aPSE,bPSE,delta)
+ 
+% calculate the MLE threshold 
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
 mle = sqrt((vSTD(whichWidth)*vSTD(whichWidth)*aSTD*aSTD)/(vSTD(whichWidth)*vSTD(whichWidth)+aSTD*aSTD))
  
 % calculate weights for SCS/suboptimal models using conflict condition
@@ -589,12 +598,17 @@ suboptimal = sqrt(scsSubVisW*vSTD(whichWidth)^2+(scsSubAudW*aSTD)^2)
  
 % SCS threshold
 SCS = sqrt((scsSubVisW*(vSTD(whichWidth)*vSTD(whichWidth)))+(scsSubAudW*(aSTD*aSTD))+scsSubVisW*scsSubAudW*(vPSE(whichWidth)-aPSE)^2)
+<<<<<<< HEAD
 SCSdiscrepant = sqrt((scsSubVisW*(vSTD(whichWidth)*vSTD(whichWidth)))+(scsSubAudW*(aSTD*aSTD))+scsSubVisW*scsSubAudW*(vPSE(whichWidth)-aPSE)^2+scsSubVisW*scsSubAudW*((10)^2))
+=======
+ 
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
  
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %   graphModelThresholds   %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % graph thresholds for unimodals, each bimodal conflict condition, and model-predicted thresholds
+<<<<<<< HEAD
 function graphModelThresholds(aSTD,vSTD,mle,SCS,SCSdiscrepant,suboptimal,bSTD,widthArray,whichWidth,visID,bID,audID,e,aErr,vErr,bErr)
  
 % formalize bar graph inputs -- this is all hard coded for 3 deltas!!!!
@@ -603,6 +617,13 @@ bSTDdiscrep = (bSTD(whichWidth)+bSTD(whichWidth+length(vSTD)+length(vSTD)))/2
 graphStats = [vSTD(whichWidth) aSTD avgbSTD bSTDdiscrep mle suboptimal SCS SCSdiscrepant];
 errhigh = [vErr.stdHigh(whichWidth) aErr.stdHigh bErr.stdHigh(whichWidth+length(vSTD)) (bErr.stdHigh(whichWidth)+bErr.stdHigh(whichWidth+length(vSTD)+length(vSTD)))/2 graphStats(5) graphStats(6) graphStats(7) graphStats(8)]-graphStats
 errlow = [vErr.stdLow(whichWidth) aErr.stdLow bErr.stdLow(whichWidth+length(vSTD)) (bErr.stdLow(whichWidth)+bErr.stdLow(whichWidth+length(vSTD)+length(vSTD)))/2 graphStats(5) graphStats(6) graphStats(7) graphStats(8)]-graphStats
+=======
+function graphModelThresholds(aSTD,vSTD,mle,SCS,suboptimal,bSTD,widthArray,whichWidth,visID,bID,audID,e,aErr,vErr,bErr)
+ 
+% formalize bar graph inputs
+avgbSTD = (bSTD(whichWidth)+bSTD(whichWidth+length(vSTD))+bSTD(whichWidth+length(vSTD)+length(vSTD)))/3
+graphStats = [vSTD(whichWidth) aSTD avgbSTD mle suboptimal SCS];
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
 graphWidth = widthArray(whichWidth);
  
 % initiate figure
@@ -617,8 +638,9 @@ subplot(1,4,1)
 bar([1 2 3 4 5 6 7 8],graphStats); hold on;
 er = errorbar([1 2 3 4 5 6 7 8],graphStats,errhigh,errlow);er.LineStyle='none';
 hold on
-
+ 
 % show error bars, taken from covar matrix (bimodal averaged)
+<<<<<<< HEAD
 %avgBerr = sqrt(((bErr(2,whichWidth*2))^2 + (bErr(2,(2*length(vSTD)+whichWidth*2)))^2 + (bErr(2,(3*length(vSTD)+whichWidth*2)))^2)/3)
 %errorbar(graphStats,[vErr(2,(whichWidth*2)) aErr(2,2) avgBerr 0 0 0 0],'.')
  
@@ -636,6 +658,24 @@ set(gca,'XTickLabel',{'V','A','Bn','Bd','OI','SI','SCS','SCSd'})
 ylabel('Threshold (Visual Degrees)')
 xlabel('Observed Data/Model Predictions')
 
+=======
+avgBerr = sqrt(((bErr(2,whichWidth*2))^2 + (bErr(2,(2*length(vSTD)+whichWidth*2)))^2 + (bErr(2,(3*length(vSTD)+whichWidth*2)))^2)/3)
+errorbar(graphStats,[vErr(2,(whichWidth*2)) aErr(2,2) avgBerr 0 0 0],'.')
+ 
+% calculate p values for model predictions
+[mleH mleP] = ztest(mle,avgbSTD,avgBerr,'tail','both')
+[subH subP] = ztest(suboptimal,avgbSTD,avgBerr,'tail','both')
+[scsH scsP] = ztest(SCS,avgbSTD,avgBerr,'tail','both')
+format shortE
+text(3.55,mle+.2,[num2str(mleP)],'fontsize',7)
+text(4.55,suboptimal+.2,[num2str(subP)],'fontsize',7)
+text(5.55,SCS+.2,[num2str(scsP)],'fontsize',7)
+ 
+% label
+set(gca,'XTickLabel',{'V','A','Bimodal','OI','SI','SCS'})
+ylabel('Threshold (Visual Degrees)')
+xlabel('Observed Data/Model Predictions')
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
 intString = 'Threshold Comparison, Width: %g'
 graphTitle = sprintf(intString,graphWidth)
 title(graphTitle)
@@ -649,7 +689,11 @@ dispPsychometricFunction(e.d{visID},[whichWidth])
 subplot(1,4,3)
 dispPsychometricFunction(e.d{bID},[1])
  
+<<<<<<< HEAD
 % display bimodal curves (indexed as ??? for some reason)
+=======
+% display bimodal curves (indexed as bimodal for some reason)
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
 subplot(1,4,4)
 dispPsychometricFunction(e.d{audID},[(whichWidth) (whichWidth+length(vSTD)) (whichWidth+2*length(vSTD))])
  
@@ -719,8 +763,13 @@ plot([-5 0 5],[-5 0 5],['--','cyan'])
  
 % label and title
 title('Observed PSEs by width')
+<<<<<<< HEAD
 xlabel('Audio-Visual Discrepancy (visual degrees)')
 ylabel('Observed PSE (visual degrees from center)')
+=======
+xlabel('Audio-Visual discrepancy (delta)')
+ylabel('Observed PSE')
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
  
 % create legend (again, only for 5> conditions) (iterated poorly, will clean this up at some point)
 if length(vPSE) == 1
@@ -1145,8 +1194,13 @@ subplot(1,2,2)
 y1 = [bPSE(1) bPSE(1+length(vPSE)) bPSE(1+2*length(vPSE))];
 s1 = scatter(deltaArray-.5,y1,200,getSmoothColor(2,10,hot),'filled');
 hold on
+<<<<<<< HEAD
 %j = errorbar(deltaArray-.5,y1,[bErr(1,1) bErr(1,1+2*length(vPSE)) bErr(1,1+4*length(vPSE))],'.');
 %j.Color = 'black'
+=======
+j = errorbar(deltaArray-.5,y1,[bErr(1,1) bErr(1,1+2*length(vPSE)) bErr(1,1+4*length(vPSE))],'.');
+j.Color = 'black'
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
 hold on
 plot(deltaArray,p111,'color',getSmoothColor(2,10,hot));
 hold on
@@ -1158,8 +1212,13 @@ if length(vPSE) > 1
     y2 = [bPSE(2) bPSE(2+length(vPSE)) bPSE(2+2*length(vPSE))];
     s2 = scatter(deltaArray-.166,y2,200,getSmoothColor(4,10,hot),'filled');
     hold on
+<<<<<<< HEAD
     %j = errorbar(deltaArray-.166,y2,[bErr(1,3) bErr(1,3+2*length(vPSE)) bErr(1,3+4*length(vPSE))],'.');
     %j.Color = 'black'
+=======
+    j = errorbar(deltaArray-.166,y2,[bErr(1,3) bErr(1,3+2*length(vPSE)) bErr(1,3+4*length(vPSE))],'.');
+    j.Color = 'black'
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
     hold on
     plot(deltaArray-.166,p222,'color',getSmoothColor(4,10,hot));
     hold on
@@ -1231,11 +1290,19 @@ for i = 1:perms
     randFits = fitCumulativeGaussian(e.d{audID}.cond.uniquePosDiff,cbRand);
     r2RandAUD(i) = randFits.r2;
 end
+<<<<<<< HEAD
 %figure(13);
 %histogram(r2RandAUD);
 audR2Percent = sum(r2RandAUD < r2Aud)/perms;
 %str = sprintf('Auditory, r2 = %g, percentile = %g',r2Aud,audR2Percent);
 %title(str);
+=======
+figure(13);
+histogram(r2RandAUD);
+audR2Percent = sum(r2RandAUD < r2Aud)/perms;
+str = sprintf('Auditory, r2 = %g, percentile = %g',r2Aud,audR2Percent);
+title(str);
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
  
 %visual
 r2RandVIS = ones(length(e.d{visID}.visualWidth),perms);
@@ -1247,11 +1314,19 @@ for k = 1:length(e.d{visID}.visualWidth)
         randFits = fitCumulativeGaussian(e.d{visID}.cond(k).uniquePosDiff,cbRand);
         r2RandVIS(k,i) = randFits.r2;
     end
+<<<<<<< HEAD
 %figure(13+k)
 %%histogram(r2RandVIS(k,1:perms));
 visR2Percent(k) = sum(r2RandVIS(k,1:perms) < r2VIS(k))/perms;
 %str = sprintf('Visual width: %g, r2 = %g, percentile = %g',e.d{visID}.visualWidth(k),r2VIS(k),visR2Percent(k));
 %title(str);
+=======
+figure(13+k)
+histogram(r2RandVIS(k,1:perms));
+visR2Percent(k) = sum(r2RandVIS(k,1:perms) < r2VIS(k))/perms;
+str = sprintf('Visual width: %g, r2 = %g, percentile = %g',e.d{visID}.visualWidth(k),r2VIS(k),visR2Percent(k));
+title(str);
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
 end
  
 %bimodal
@@ -1264,6 +1339,7 @@ for k = 1:length(e.d{bID}.condWidth);
         randFits = fitCumulativeGaussian(e.d{bID}.cond(k).uniquePosDiff, cbRand);
         r2RandB(k,i) = randFits.r2;
     end
+<<<<<<< HEAD
 %figure (17+k)
 %histogram(r2RandB(k,1:perms));
 bR2Percent(k) = sum(r2RandB(k,1:perms) < r2B(k))/perms;
@@ -1964,3 +2040,12 @@ subplot(1,2,2);hold on,scatter(ones(1,12),OIstdDiff);scatter(ones(1,12)+1,SIstdD
 ylabel('Observed std - Model predicted std');set(gca,'XTickLabel',{'','Optimal Integration','Suboptimal Integration','Switching','Visual Capture','Auditory Capture',''});set(gca,'XTickLabelRotation',20);title('Observed vs model-simulated Std differences');
 
 k=2
+=======
+figure (17+k)
+histogram(r2RandB(k,1:perms));
+bR2Percent(k) = sum(r2RandB(k,1:perms) < r2B(k))/perms;
+str = sprintf('Bimodal width: %g, discrepancy: %g, r2 = %g, percentile = %g',e.d{bID}.condWidth(k),e.d{bID}.condDisplacement(k),r2B(k),bR2Percent(k))
+title(str);
+end
+
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
