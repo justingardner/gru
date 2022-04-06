@@ -87,10 +87,10 @@ disp('setMotionCompDefaults done');
 % to he CNI computer
 if isequal(s.useLocalData,0)
   % choose which directory to download from cni
-  if s.flywheel==2
+  if s.flywheel==1 || s.flywheel==2
     s = getFlywheelDir2(s);
-  elseif s.flywheel
-    s = getFlywheelDir(s);
+%   elseif s.flywheel
+%     s = getFlywheelDir(s);
   else
     s = getCNIDir(s);
   end
@@ -2372,7 +2372,7 @@ end
 if triggerEverySlice
   calibrationTriggers = nSlices*s.removeInitialVols;
 else
-  calibrationTriggers = boldScan.mux*s.removeInitialVols;
+  calibrationTriggers = mux*s.removeInitialVols;
 end
 
 % now check to see if it matches
@@ -2383,7 +2383,7 @@ if missingIgnoredVols ~= 0
   if triggerEverySlice
     dispConOrLog(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to nSlices*initialVolumes %ix%i=%i but was set to %i',nSlices,s.removeInitialVols,calibrationTriggers,stimfileInfo.ignoredInitialVols),justDisplay);
   else
-    dispConOrLog(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to mux*initialVolumes %ix%i=%i, but was set to %i',boldScan.mux,s.removeInitialVols,calibrationTriggers,stimfileInfo.ignoredInitialVols),justDisplay);
+    dispConOrLog(sprintf('(dofmricni) !!! ignoredInitialVols should have been set to mux*initialVolumes %ix%i=%i, but was set to %i',mux,s.removeInitialVols,calibrationTriggers,stimfileInfo.ignoredInitialVols),justDisplay);
   end
 end
 
