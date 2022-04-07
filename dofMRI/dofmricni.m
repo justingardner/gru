@@ -1518,11 +1518,11 @@ end
 
 % check if we are logged in to flywheel
 if s.flywheel
-  [status fwstatus] = system(sprintf('%s status',s.commands.fw));
-  if ~isempty(strfind(fwstatus,'You are not currently logged in'))
-    disp(sprintf('(dofmricni:checkCommands) You are not logged into flywheel. You should do: fw login APIkey - where APIKey is from your profile page on cni.flywheel.io'));
-    retval = false;
-  end
+%  [status fwstatus] = system(sprintf('%s status',s.commands.fw));
+%  if ~isempty(strfind(fwstatus,'You are not currently logged in'))
+%    disp(sprintf('(dofmricni:checkCommands) You are not logged into flywheel. You should do: fw login APIkey - where APIKey is from your profile page on cni.flywheel.io'));
+%    retval = false;
+%  end
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
