@@ -1488,9 +1488,9 @@ commandNames = {'tar','gunzip'};
 helpFlag = {'-h','-h'};
 if s.flywheel
   % add flywheel
-  preferredCommandNames{end+1} = '/usr/bin/fw';
-  commandNames{end+1} = 'fw';
-  helpFlag{end+1} = '-h';
+  %preferredCommandNames{end+1} = '/usr/bin/fw';
+  %commandNames{end+1} = 'fw';
+  %helpFlag{end+1} = '-h';
   % add unzip
   preferredCommandNames{end+1} = '/usr/bin/unzip';
   commandNames{end+1} = 'unzip';
