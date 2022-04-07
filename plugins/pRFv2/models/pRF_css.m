@@ -1,16 +1,14 @@
-% pRF_exp.m
+% pRF_css.m
 %
 %        $Id:$ 
-%      usage: pRF_exp(varargin)
+%      usage: pRF_css(varargin)
 %         by: akshay jagadeesh
 %       date: 09/01/16
-%    purpose: Model file to specify a new rftype
+%    purpose: Compressive spatial summation model (Kay et al)
 %
 %             
-%
-%     This model template is set up for the standard Gaussian model.
 
-function output = pRF_exp(varargin)
+function output = pRF_css(varargin)
 
 if nargin < 2
   disp(sprintf('Not enough arguments'));
@@ -20,7 +18,7 @@ if nargin < 2
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%pRF_exp(command, fitParams, rfModel, hrf, i)%%%%%
+%%%%pRF_css(command, fitParams, rfModel, hrf, i)%%%%%
 %%%%          Called from getModelResidual               %%%%%
 if strcmp(varargin{1}, 'getModelResponse')
 
@@ -33,10 +31,10 @@ if strcmp(varargin{1}, 'getModelResponse')
   nFrames = fitParams.concatInfo.runTransition(i,2);
   thisModelResponse = convolveModelWithStimulus(rfModel,fitParams.stim{i},nFrames);
   
-  % FOR GAUSSIAN-EXP ONLY: include exponent non-linearity
-  if strcmp(fitParams.rfType, 'gaussian-exp')
+  % FOR GAUSSIAN-css ONLY: include cssonent non-linearity
+  if strcmp(fitParams.rfType, 'gaussian-css')
     if ~isnan(thisModelResponse)
-      thisModelResponse = power(thisModelResponse, p.exp);
+      thisModelResponse = power(thisModelResponse, p.css);
     end
   end
 
@@ -53,14 +51,14 @@ if strcmp(varargin{1}, 'getModelResponse')
 %end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%pRF_exp(command, fitParams)%%%%%
+%%%%pRF_css(command, fitParams)%%%%%
 %%%%    Called from setFitParams %%%%%
 
 elseif strcmp(varargin{1}, 'setParams')
 
   fitParams = varargin{2};
 
-  fitParams.paramNames = {'x','y','rfWidth','exp'};
+  fitParams.paramNames = {'x','y','rfWidth','css'};
   fitParams.paramDescriptions = {'RF x position','RF y position','RF width (std of gaussian)', 'Spatial summation exponent'};
   fitParams.paramIncDec = [1 1 1 1];
   fitParams.paramMin = [-inf -inf 0 0];
@@ -89,7 +87,7 @@ elseif strcmp(varargin{1}, 'getFitParams')
   p.x = params(1);
   p.y = params(2);
   p.std = params(3);
-  p.exp = params(4);
+  p.css = params(4);
   % use a fixed single gaussian
   p.canonical.type = 'gamma';
   p.canonical.lengthInSeconds = 25;
