@@ -193,82 +193,64 @@ for scanNum = params.scanNum
   % on many machines without enough memory that will crash it so keeping
   % this preliminary value in for now.
 
-  %% Split data into chunks, compute
-  if 0 %params.pRFFit.splitData
-    overlays = struct();
-    overlays.r2 = r2;
-    overlays.polarAngle = polarAngle;
-    overlays.eccentricity = eccentricity;
-    overlays.rfHalfWidth = rfHalfWidth;
-    overlays.pRFAnal = pRFAnal;
-    splits = pRFSplit(v, scanNum, params, x,y,z,n, fit, overlays);
-    % Run the splits through the controller
-    prf = pRFController(splits,params); % prf contains a field finished, which is a cell of all the splits and their run information (if needed)
-    % Merge
-    [rawParams, r, overlays, pRFAnal] = pRFMergeSplits(params.saveName, 1);
-    r2 = overlays(1); polarAngle = overlays(2); eccentricity = overlays(3);
-    rfHalfWidth = overlays(4);
-    %%% Finally clean up everything
-  else
-    blockSize = 240;
+  blockSize = 240;
 
-    tic;
-    % break into blocks of voxels to go easy on memory
-    % if blockSize = n then this just does on block at a time.
-    for blockStart = 1:blockSize:n
+  tic;
+  % break into blocks of voxels to go easy on memory
+  % if blockSize = n then this just does on block at a time.
+  for blockStart = 1:blockSize:n
 
-      % display information about what we are doing
-      % get blockEnd
-      blockEnd = min(blockStart + blockSize-1,n);
-      blockSize = blockEnd-blockStart+1;
-      
-      % load ROI
-      loadROI = makeEmptyROI(v,'scanNum',scanNum,'groupNum',params.groupName);
-      loadROI.coords(1,1:blockSize) = x(blockStart:blockEnd);
-      loadROI.coords(2,1:blockSize) = y(blockStart:blockEnd);
-      loadROI.coords(3,1:blockSize) = z(blockStart:blockEnd);
-      % load all time series for block, we do this to pass into pRFFit. Generally
-      % the purpose here is that if we run on distributed computing, we
-      % can't load each voxel's time series one at a time. If this is
-      % too large for memory then you can comment this out and not
-      % pass it into pRFFit and pRFFit will load the tSeries itself
-      loadROI = loadROITSeries(v,loadROI,scanNum,params.groupName,'keepNAN',true);
-      % reorder x,y,z coordinates since they can get scrambled in loadROITSeries
-      x(blockStart:blockEnd) = loadROI.scanCoords(1,1:blockSize);
-      y(blockStart:blockEnd) = loadROI.scanCoords(2,1:blockSize);
-      z(blockStart:blockEnd) = loadROI.scanCoords(3,1:blockSize);
-      % keep the linear coords
-      pRFAnal.d{scanNum}.linearCoords = [pRFAnal.d{scanNum}.linearCoords sub2ind(scanDims,x(blockStart:blockEnd),y(blockStart:blockEnd),z(blockStart:blockEnd))];
+    % display information about what we are doing
+    % get blockEnd
+    blockEnd = min(blockStart + blockSize-1,n);
+    blockSize = blockEnd-blockStart+1;
+    
+    % load ROI
+    loadROI = makeEmptyROI(v,'scanNum',scanNum,'groupNum',params.groupName);
+    loadROI.coords(1,1:blockSize) = x(blockStart:blockEnd);
+    loadROI.coords(2,1:blockSize) = y(blockStart:blockEnd);
+    loadROI.coords(3,1:blockSize) = z(blockStart:blockEnd);
+    % load all time series for block, we do this to pass into pRFFit. Generally
+    % the purpose here is that if we run on distributed computing, we
+    % can't load each voxel's time series one at a time. If this is
+    % too large for memory then you can comment this out and not
+    % pass it into pRFFit and pRFFit will load the tSeries itself
+    loadROI = loadROITSeries(v,loadROI,scanNum,params.groupName,'keepNAN',true);
+    % reorder x,y,z coordinates since they can get scrambled in loadROITSeries
+    x(blockStart:blockEnd) = loadROI.scanCoords(1,1:blockSize);
+    y(blockStart:blockEnd) = loadROI.scanCoords(2,1:blockSize);
+    z(blockStart:blockEnd) = loadROI.scanCoords(3,1:blockSize);
+    % keep the linear coords
+    pRFAnal.d{scanNum}.linearCoords = [pRFAnal.d{scanNum}.linearCoords sub2ind(scanDims,x(blockStart:blockEnd),y(blockStart:blockEnd),z(blockStart:blockEnd))];
 
-      if blockStart ~= 1
-        % display time update
-        dispHeader(sprintf('(pRF) %0.1f%% done in %s (Estimated time remaining: %s)',100*blockStart/n,mlrDispElapsedTime(toc),mlrDispElapsedTime((toc*n/blockStart) - toc)));
+    if blockStart ~= 1
+      % display time update
+      dispHeader(sprintf('(pRF) %0.1f%% done in %s (Estimated time remaining: %s)',100*blockStart/n,mlrDispElapsedTime(toc),mlrDispElapsedTime((toc*n/blockStart) - toc)));
+    end
+
+    % now loop over each voxel
+    parfor i = blockStart:blockEnd
+      fit = pRFFit(v,scanNum,x(i),y(i),z(i),'stim',stim,'concatInfo',concatInfo,'prefit',prefit,'fitTypeParams',params.pRFFit,'dispIndex',i,'dispN',n,'tSeries',loadROI.tSeries(i-blockStart+1,:)','framePeriod',framePeriod,'junkFrames',junkFrames,'paramsInfo',paramsInfo);
+      if ~isempty(fit)
+        % keep data, note that we are keeping temporarily in
+        % a vector here so that parfor won't complain
+        % then afterwords we put it into the actual overlay struct
+        thisr2(i) = fit.r2;
+        thisPolarAngle(i) = fit.polarAngle;
+        thisEccentricity(i) = fit.eccentricity;
+        thisRfHalfWidth(i) = fit.std;
+        % keep parameters
+        rawParams(:,i) = fit.params(:);
+        r(i,:) = fit.r;
       end
+    end
 
-      % now loop over each voxel
-      parfor i = blockStart:blockEnd
-        fit = pRFFit(v,scanNum,x(i),y(i),z(i),'stim',stim,'concatInfo',concatInfo,'prefit',prefit,'fitTypeParams',params.pRFFit,'dispIndex',i,'dispN',n,'tSeries',loadROI.tSeries(i-blockStart+1,:)','framePeriod',framePeriod,'junkFrames',junkFrames,'paramsInfo',paramsInfo);
-        if ~isempty(fit)
-          % keep data, note that we are keeping temporarily in
-          % a vector here so that parfor won't complain
-          % then afterwords we put it into the actual overlay struct
-          thisr2(i) = fit.r2;
-          thisPolarAngle(i) = fit.polarAngle;
-          thisEccentricity(i) = fit.eccentricity;
-          thisRfHalfWidth(i) = fit.std;
-          % keep parameters
-          rawParams(:,i) = fit.params(:);
-          r(i,:) = fit.r;
-        end
-      end
-
-      % set overlays
-      for i = 1:n
-        r2.data{scanNum}(x(i),y(i),z(i)) = thisr2(i);
-        polarAngle.data{scanNum}(x(i),y(i),z(i)) = thisPolarAngle(i);
-        eccentricity.data{scanNum}(x(i),y(i),z(i)) = thisEccentricity(i);
-        rfHalfWidth.data{scanNum}(x(i),y(i),z(i)) = thisRfHalfWidth(i);
-      end
+    % set overlays
+    for i = 1:n
+      r2.data{scanNum}(x(i),y(i),z(i)) = thisr2(i);
+      polarAngle.data{scanNum}(x(i),y(i),z(i)) = thisPolarAngle(i);
+      eccentricity.data{scanNum}(x(i),y(i),z(i)) = thisEccentricity(i);
+      rfHalfWidth.data{scanNum}(x(i),y(i),z(i)) = thisRfHalfWidth(i);
     end
     % display time update
     dispHeader;
