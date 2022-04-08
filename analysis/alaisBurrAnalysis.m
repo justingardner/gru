@@ -14,7 +14,7 @@ fit = [];
 if nargin < 1, stimfileNames = [];end
  
 % parse arguments
-getArgs(varargin,{'dispFit=1','combineData=1'});
+getArgs(varargin,{'dispFit=1','combineData=1','numBootDraws=1000','numBootSamples=20'});
  
 % get filenames and path
 [e.path stimfileNames] = getStimfileNames(stimfileNames);
@@ -30,7 +30,7 @@ e.auditoryStaircase = {};
 for iFile = 1:length(stimfileNames)
   % display what is happening
   dispHeader(sprintf('(alaisBurrAnalysis) Analyzing file (%i/%i): %s        ',iFile,length(stimfileNames),stimfileNames{iFile}));
-  
+ 
   % load and parse the stimfile
   d = loadStimfile(fullfile(e.path,stimfileNames{iFile}));
  
@@ -76,6 +76,7 @@ for iFile = 1:e.nFiles
   if ~e.d{iFile}.isStaircase
     % fit psychometric function
     e.d{iFile} = fitPsychometricFunction(e.d{iFile});
+    e.d{iFile} = bootstrap(e.d{iFile},numBootDraws,numBootSamples);
   end
 end
  
@@ -121,11 +122,10 @@ if dispFit
  
 %bar graph of model comparison
 for whichWidth = 1:length(vPSE)
-    [mle, suboptimal, SCS, scsSubVisW, scsSubAudW] = calcModelThresholds(whichWidth,vSTD,vPSE,aSTD,aPSE,bPSE,delta)
+    [mle, suboptimal, SCS, SCSdiscrepant, scsSubVisW, scsSubAudW] = calcModelThresholds(whichWidth,vSTD,vPSE,aSTD,aPSE,bPSE,delta)
     % bar graph of different model predictions
-    graphModelThresholds(aSTD,vSTD,mle,SCS,suboptimal,bSTD,widthArray,whichWidth,visID,audID,bID,e,aErr,vErr,bErr)
+    graphModelThresholds(aSTD,vSTD,mle,SCS,SCSdiscrepant,suboptimal,bSTD,widthArray,whichWidth,visID,audID,bID,e,aErr,vErr,bErr)
 end
- 
 % graph observered PSEs
 figure(4+length(vPSE))
 nplots = 3
@@ -136,7 +136,10 @@ graphPredictedPSE(scsSubVisW,scsSubAudW,aSTD,vSTD,deltaArray,widthArray,vPSE,aPS
 graphNoShiftPredictedPSE(aSTD,vSTD,deltaArray,widthArray,vPSE,aPSE,bPSE,bErr)
  
 end
- 
+
+[VClogLike VClogLikeDisc AClogLike AClogLikeDisc SSlogLike SSlogLikeDisc SIlogLike SIlogLikeDisc OIlogLike OIlogLikeDisc NulllogLike] = logLikelihoods(aSTD,vSTD,mle,SCS,SCSdiscrepant,suboptimal,bSTD,widthArray,visID,audID,bID,e,scsSubVisW,scsSubAudW,aPSE,vPSE,bPSE)
+
+k=2
  
  
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -220,7 +223,7 @@ else
   % display the psychometric functions all together
   dispPsychometricFunction(d,1:d.nCond);
 end
-  
+ 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    display a psychometric function    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -243,7 +246,7 @@ titleStr = d.stimulusType;
 for iCond = 1:length(whichConds)
   % plot fit
   plot(d.fit(whichConds(iCond)).fitX,d.fit(whichConds(iCond)).fitY*100,'-','Color',fitColors{iCond});hold on
-  
+ 
   % plot in percentile
   myerrorbar(d.cond(whichConds(iCond)).uniquePosDiff,100*d.cond(whichConds(iCond)).correctBinned,'yError',100*d.cond(whichConds(iCond)).correctBinnedError,'Symbol','o','MarkerFaceColor',dataColors{iCond});
   xlabel('Probe Offset (visual degrees)');
@@ -270,7 +273,7 @@ if length(whichConds) > 1
   hLegend = mylegend({d.condNames{whichConds}},dataColors);
   set(hLegend,'Location','northwest');
 end
-  
+ 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    fitPsychometricFunction    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -306,6 +309,47 @@ for iCond = 1:d.nCond
   d.fit(iCond) = fitCumulativeGaussian(d.cond(iCond).uniquePosDiff,d.cond(iCond).correctBinned);
 end
  
+<<<<<<< HEAD
+%%%%%%%%%%%%%%%%%%%%
+%    bootstrap     %
+%%%%%%%%%%%%%%%%%%%%
+function d = bootstrap(d,numBootDraws,numBootSamples)
+for iCond = 1:d.nCond
+    dev = []; avg = [];
+for repeat = 1:numBootSamples
+    correct = []; posDiff = [];
+    trialNums = d.condTrialNums{iCond};
+    d.cond(iCond).uniquePosDiff = unique(d.cond(iCond).posDiff);
+    for sample = 1:numBootDraws
+        index = round(rand(1)*(length(trialNums)-2)+1);
+        correct = [correct d.parameter.centerWhich(d.condTrialNums{iCond}(index)) == d.response(d.condTrialNums{iCond}(index))];
+        posDiff = [posDiff d.cond(iCond).posDiff(index)];
+    end
+   
+    for iVal = 1:length(d.cond(iCond).uniquePosDiff);
+    % get the trials with the setting of posDiff
+    whichTrials = find(posDiff == d.cond(iCond).uniquePosDiff(iVal));
+    % compute how many trials
+    nTrials = length(whichTrials);
+    % compute correct
+    d.cond(iCond).correctBinned(iVal) = sum(correct(whichTrials))/nTrials;
+    % compute ste
+    d.cond(iCond).correctBinnedError(iVal) = d.cond(iCond).correctBinned(iVal)*(1-d.cond(iCond).correctBinned(iVal))/sqrt(nTrials);
+    % remember nTrials
+    d.cond(iCond).nTrials(iVal) = nTrials;
+  end
+   
+    bootstrap = fitCumulativeGaussian(d.cond(iCond).uniquePosDiff,d.cond(iCond).correctBinned);
+    dev = [dev bootstrap.std];
+    avg = [avg bootstrap.mean];
+end
+avg = sort(avg);dev = sort(dev);
+d.bootstrap(iCond).meanMax = avg(round(.95*length(avg))); d.bootstrap(iCond).meanMin = avg(round(.05*length(avg)));
+d.bootstrap(iCond).stdMax = dev(round(.95*length(dev))); d.bootstrap(iCond).stdMin = dev(round(.05*length(dev)));
+end
+
+=======
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %    loadStimfile    %
 %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -482,34 +526,46 @@ function [aPSE,aSTD,vPSE,vSTD,bPSE,bSTD,delta,widthArray,deltaArray,visID,audID,
  
 % extract data from every d (type) file
 for iFile = 1:e.nFiles
-    
+   
     % grab auditory PSE/STD
     if strcmp(e.d{iFile}.stimulusType,'Auditory')
         aPSE = e.d{iFile}.fit.mean;
         aSTD = e.d{iFile}.fit.std;
         aErr = e.d{iFile}.fit.covar;
+        aErr.stdLow = e.d{iFile}.bootstrap.stdMin
+        aErr.stdHigh = e.d{iFile}.bootstrap.stdMax
+        aErr.meanLow = e.d{iFile}.bootstrap.meanMin
+        aErr.meanHigh = e.d{iFile}.bootstrap.meanMax
         % save id of auditory file for later
         audID = iFile
     end
-    
+   
     % grab visual PSEs/STDs
     if strcmp(e.d{iFile}.stimulusType,'Visual')
         % returns array of values ordered by ascending visual width
         vPSE = [e.d{iFile}.fit.mean];
         vSTD = [e.d{iFile}.fit.std];
         vErr = [e.d{iFile}.fit.covar];
+        vErr.stdLow = [e.d{iFile}.bootstrap.stdMin]
+        vErr.stdHigh = [e.d{iFile}.bootstrap.stdMax]
+        vErr.meanLow = [e.d{iFile}.bootstrap.meanMin]
+        vErr.meanHigh = [e.d{iFile}.bootstrap.meanMax]
         % save array of widths for later usage
         widthArray = e.d{iFile}.visualWidth
         % save id of visual file for later
         visID = iFile
     end
-    
+   
     % grab bimodal PSEs/STDs
     if strcmp(e.d{iFile}.stimulusType,'Bimodal')
         % returns array ordered by ascending visual width within ascending ordering by delta
         bPSE = [e.d{iFile}.fit.mean];
         bSTD = [e.d{iFile}.fit.std];
         bErr = [e.d{iFile}.fit.covar];
+        bErr.stdLow = [e.d{iFile}.bootstrap.stdMin]
+        bErr.stdHigh = [e.d{iFile}.bootstrap.stdMax]
+        bErr.meanLow = [e.d{iFile}.bootstrap.meanMin]
+        bErr.meanHigh = [e.d{iFile}.bootstrap.meanMax]
         % grab delta value and array (assumes only 3 discrepansies)
         delta = max(e.d{iFile}.displacement)
         deltaArray = [e.d{iFile}.displacement]
@@ -522,9 +578,15 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %     calcModelThresholds    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+<<<<<<< HEAD
+function [mle,suboptimal,SCS,SCSdiscrepant,scsSubVisW,scsSubAudW] = calcModelThresholds(whichWidth,vSTD,vPSE,aSTD,aPSE,bPSE,delta)
+ 
+% calculate the MLE threshold
+=======
 function [mle,suboptimal,SCS,scsSubVisW,scsSubAudW] = calcModelThresholds(whichWidth,vSTD,vPSE,aSTD,aPSE,bPSE,delta)
  
 % calculate the MLE threshold 
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
 mle = sqrt((vSTD(whichWidth)*vSTD(whichWidth)*aSTD*aSTD)/(vSTD(whichWidth)*vSTD(whichWidth)+aSTD*aSTD))
  
 % calculate weights for SCS/suboptimal models using conflict condition
@@ -536,17 +598,32 @@ suboptimal = sqrt(scsSubVisW*vSTD(whichWidth)^2+(scsSubAudW*aSTD)^2)
  
 % SCS threshold
 SCS = sqrt((scsSubVisW*(vSTD(whichWidth)*vSTD(whichWidth)))+(scsSubAudW*(aSTD*aSTD))+scsSubVisW*scsSubAudW*(vPSE(whichWidth)-aPSE)^2)
+<<<<<<< HEAD
+SCSdiscrepant = sqrt((scsSubVisW*(vSTD(whichWidth)*vSTD(whichWidth)))+(scsSubAudW*(aSTD*aSTD))+scsSubVisW*scsSubAudW*(vPSE(whichWidth)-aPSE)^2+scsSubVisW*scsSubAudW*((10)^2))
+=======
  
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
  
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %   graphModelThresholds   %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % graph thresholds for unimodals, each bimodal conflict condition, and model-predicted thresholds
+<<<<<<< HEAD
+function graphModelThresholds(aSTD,vSTD,mle,SCS,SCSdiscrepant,suboptimal,bSTD,widthArray,whichWidth,visID,bID,audID,e,aErr,vErr,bErr)
+ 
+% formalize bar graph inputs -- this is all hard coded for 3 deltas!!!!
+avgbSTD = bSTD(whichWidth+length(vSTD))
+bSTDdiscrep = (bSTD(whichWidth)+bSTD(whichWidth+length(vSTD)+length(vSTD)))/2
+graphStats = [vSTD(whichWidth) aSTD avgbSTD bSTDdiscrep mle suboptimal SCS SCSdiscrepant];
+errhigh = [vErr.stdHigh(whichWidth) aErr.stdHigh bErr.stdHigh(whichWidth+length(vSTD)) (bErr.stdHigh(whichWidth)+bErr.stdHigh(whichWidth+length(vSTD)+length(vSTD)))/2 graphStats(5) graphStats(6) graphStats(7) graphStats(8)]-graphStats
+errlow = [vErr.stdLow(whichWidth) aErr.stdLow bErr.stdLow(whichWidth+length(vSTD)) (bErr.stdLow(whichWidth)+bErr.stdLow(whichWidth+length(vSTD)+length(vSTD)))/2 graphStats(5) graphStats(6) graphStats(7) graphStats(8)]-graphStats
+=======
 function graphModelThresholds(aSTD,vSTD,mle,SCS,suboptimal,bSTD,widthArray,whichWidth,visID,bID,audID,e,aErr,vErr,bErr)
  
 % formalize bar graph inputs
 avgbSTD = (bSTD(whichWidth)+bSTD(whichWidth+length(vSTD))+bSTD(whichWidth+length(vSTD)+length(vSTD)))/3
 graphStats = [vSTD(whichWidth) aSTD avgbSTD mle suboptimal SCS];
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
 graphWidth = widthArray(whichWidth);
  
 % initiate figure
@@ -558,10 +635,30 @@ title(conditionTitle)
 subplot(1,4,1)
  
 % call bar graph
-bar(graphStats);
+bar([1 2 3 4 5 6 7 8],graphStats); hold on;
+er = errorbar([1 2 3 4 5 6 7 8],graphStats,errhigh,errlow);er.LineStyle='none';
 hold on
  
 % show error bars, taken from covar matrix (bimodal averaged)
+<<<<<<< HEAD
+%avgBerr = sqrt(((bErr(2,whichWidth*2))^2 + (bErr(2,(2*length(vSTD)+whichWidth*2)))^2 + (bErr(2,(3*length(vSTD)+whichWidth*2)))^2)/3)
+%errorbar(graphStats,[vErr(2,(whichWidth*2)) aErr(2,2) avgBerr 0 0 0 0],'.')
+ 
+% calculate p values for model predictions
+%[mleH mleP] = ztest(mle,avgbSTD,avgBerr,'tail','both')
+%[subH subP] = ztest(suboptimal,avgbSTD,avgBerr,'tail','both')
+%[scsH scsP] = ztest(SCS,avgbSTD,avgBerr,'tail','both')
+%format shortE
+%text(3.55,mle+.2,[num2str(mleP)],'fontsize',7)
+%text(4.55,suboptimal+.2,[num2str(subP)],'fontsize',7)
+%text(5.55,SCS+.2,[num2str(scsP)],'fontsize',7)
+ 
+% label
+set(gca,'XTickLabel',{'V','A','Bn','Bd','OI','SI','SCS','SCSd'})
+ylabel('Threshold (Visual Degrees)')
+xlabel('Observed Data/Model Predictions')
+
+=======
 avgBerr = sqrt(((bErr(2,whichWidth*2))^2 + (bErr(2,(2*length(vSTD)+whichWidth*2)))^2 + (bErr(2,(3*length(vSTD)+whichWidth*2)))^2)/3)
 errorbar(graphStats,[vErr(2,(whichWidth*2)) aErr(2,2) avgBerr 0 0 0],'.')
  
@@ -578,6 +675,7 @@ text(5.55,SCS+.2,[num2str(scsP)],'fontsize',7)
 set(gca,'XTickLabel',{'V','A','Bimodal','OI','SI','SCS'})
 ylabel('Threshold (Visual Degrees)')
 xlabel('Observed Data/Model Predictions')
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
 intString = 'Threshold Comparison, Width: %g'
 graphTitle = sprintf(intString,graphWidth)
 title(graphTitle)
@@ -591,7 +689,11 @@ dispPsychometricFunction(e.d{visID},[whichWidth])
 subplot(1,4,3)
 dispPsychometricFunction(e.d{bID},[1])
  
+<<<<<<< HEAD
+% display bimodal curves (indexed as ??? for some reason)
+=======
 % display bimodal curves (indexed as bimodal for some reason)
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
 subplot(1,4,4)
 dispPsychometricFunction(e.d{audID},[(whichWidth) (whichWidth+length(vSTD)) (whichWidth+2*length(vSTD))])
  
@@ -606,8 +708,8 @@ subplot(1,3,1)
 y1 = [bPSE(1) bPSE(1+length(vPSE)) bPSE(1+2*length(vPSE))];
 s1 = scatter(deltaArray-.5,y1,200,getSmoothColor(2,10,hot),'filled')
 hold on
-j = errorbar(deltaArray-.5,y1,[bErr(1,1) bErr(1,1+2*length(vPSE)) bErr(1,1+4*length(vPSE))],'.')
-j.Color = 'black'
+%j = errorbar(deltaArray-.5,y1,[bErr(1,1) bErr(1,1+2*length(vPSE)) bErr(1,1+4*length(vPSE))],'.')
+%j.Color = 'black'
 hold on
 p = polyval(polyfit(deltaArray,y1,1),deltaArray);
 plot(deltaArray-.5,p,'color',getSmoothColor(2,10,hot))
@@ -620,8 +722,8 @@ if length(vPSE) > 1
     y2 = [bPSE(2) bPSE(2+length(vPSE)) bPSE(2+2*length(vPSE))]
     s2 = scatter(deltaArray-.166,y2,200,getSmoothColor(4,10,hot),'filled')
     hold on
-    j = errorbar(deltaArray-.166,y2,[bErr(1,3) bErr(1,3+2*length(vPSE)) bErr(1,3+4*length(vPSE))],'.')
-    j.Color = 'black'
+    %j = errorbar(deltaArray-.166,y2,[bErr(1,3) bErr(1,3+2*length(vPSE)) bErr(1,3+4*length(vPSE))],'.')
+    %j.Color = 'black'
     hold on
     p2 = polyval(polyfit(deltaArray,y2,1),deltaArray);
     plot(deltaArray-.166,p2,'color',getSmoothColor(4,10,hot))
@@ -633,8 +735,8 @@ if length(vPSE) > 2
     y3 = [bPSE(3) bPSE(3+length(vPSE)) bPSE(3+2*length(vPSE))]
     s3 = scatter(deltaArray+.166,y3,200,getSmoothColor(6,10,hot),'filled')
     hold on
-    j = errorbar(deltaArray+.166,y3,[bErr(1,5) bErr(1,5+2*length(vPSE)) bErr(1,5+4*length(vPSE))],'.')
-    j.Color = 'black'
+    %j = errorbar(deltaArray+.166,y3,[bErr(1,5) bErr(1,5+2*length(vPSE)) bErr(1,5+4*length(vPSE))],'.')
+    %j.Color = 'black'
     hold on
     p3 = polyval(polyfit(deltaArray,y3,1),deltaArray);
     plot(deltaArray+.166,p3,'color',getSmoothColor(6,10,hot))
@@ -646,8 +748,8 @@ if length(vPSE) > 3
     y4 = [bPSE(4) bPSE(4+length(vPSE)) bPSE(4+2*length(vPSE))]
     s4 = scatter(deltaArray+.5,y4,200,getSmoothColor(7,10,hot),'filled')
     hold on
-    j = errorbar(deltaArray+.5,y4,[bErr(1,7) bErr(1,7+2*length(vPSE)) bErr(1,7+4*length(vPSE))],'.')
-    j.Color = 'black'
+    %j = errorbar(deltaArray+.5,y4,[bErr(1,7) bErr(1,7+2*length(vPSE)) bErr(1,7+4*length(vPSE))],'.')
+    %j.Color = 'black'
     hold on
     p4 = polyval(polyfit(deltaArray,y4,1),deltaArray);
     plot(deltaArray+.5,p4,'color',getSmoothColor(7,10,hot))
@@ -661,8 +763,13 @@ plot([-5 0 5],[-5 0 5],['--','cyan'])
  
 % label and title
 title('Observed PSEs by width')
+<<<<<<< HEAD
+xlabel('Audio-Visual Discrepancy (visual degrees)')
+ylabel('Observed PSE (visual degrees from center)')
+=======
 xlabel('Audio-Visual discrepancy (delta)')
 ylabel('Observed PSE')
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
  
 % create legend (again, only for 5> conditions) (iterated poorly, will clean this up at some point)
 if length(vPSE) == 1
@@ -694,7 +801,7 @@ hold on
 p11 = polyval(polyfit(deltaArray-.5,y11,1),deltaArray);
 plot(deltaArray-.5,p11,'color',getSmoothColor(2,10,hot))
 hold on
-intString = string('width: %g; slope: %g; Vweight: %g')
+intString = string('Width: %g; Slope: %g; Vweight: %g')
 t11 = sprintf(intString,widthArray(1),(p11(3)-p11(1))/2,mleVw)
  
 % adding lines for each width condition (only works if 5> different width conditions)
@@ -1004,7 +1111,9 @@ subplot(1,2,1)
 y1 = [bPSE(1) bPSE(1+length(vPSE)) bPSE(1+2*length(vPSE))];
 s1 = scatter(deltaArray-.5,y1,200,getSmoothColor(2,10,hot),'filled')
 hold on
-j = errorbar(deltaArray-.5,y1,[bErr(1,1) bErr(1,1+2*length(vPSE)) bErr(1,1+4*length(vPSE))],'.')
+pselow = y1-[bErr.meanLow(1) bErr.meanLow(1+length(vPSE)) bErr.meanLow(1+2*length(vPSE))]
+psehigh = y1-[bErr.meanHigh(1) bErr.meanHigh(1+length(vPSE)) bErr.meanHigh(1+2*length(vPSE))]
+j = errorbar(deltaArray-.5,y1,pselow,psehigh,'.')
 j.Color = 'black'
 hold on
 plot(deltaArray-.5,p11,'color',getSmoothColor(2,10,hot))
@@ -1017,7 +1126,9 @@ if length(vPSE) > 1
     y2 = [bPSE(2) bPSE(2+length(vPSE)) bPSE(2+2*length(vPSE))]
     s2 = scatter(deltaArray-.166,y2,200,getSmoothColor(4,10,hot),'filled')
     hold on
-    j = errorbar(deltaArray-.166,y2,[bErr(1,3) bErr(1,3+2*length(vPSE)) bErr(1,3+4*length(vPSE))],'.')
+    pselow = y2-[bErr.meanLow(2) bErr.meanLow(2+length(vPSE)) bErr.meanLow(2+2*length(vPSE))]
+    psehigh = y2-[bErr.meanHigh(2) bErr.meanHigh(2+length(vPSE)) bErr.meanHigh(2+2*length(vPSE))]
+    j = errorbar(deltaArray-.166,y2,pselow,psehigh,'.')
     j.Color = 'black'
     hold on
     plot(deltaArray-.166,p22,'color',getSmoothColor(4,10,hot))
@@ -1029,7 +1140,9 @@ if length(vPSE) > 2
     y3 = [bPSE(3) bPSE(3+length(vPSE)) bPSE(3+2*length(vPSE))]
     s3 = scatter(deltaArray+.166,y3,200,getSmoothColor(6,10,hot),'filled')
     hold on
-    j = errorbar(deltaArray+.166,y3,[bErr(1,5) bErr(1,5+2*length(vPSE)) bErr(1,5+4*length(vPSE))],'.')
+    pselow = y3-[bErr.meanLow(3) bErr.meanLow(3+length(vPSE)) bErr.meanLow(3+2*length(vPSE))]
+    psehigh = y3-[bErr.meanHigh(3) bErr.meanHigh(3+length(vPSE)) bErr.meanHigh(3+2*length(vPSE))]
+    j = errorbar(deltaArray+.166,y3,pselow,psehigh,'.')
     j.Color = 'black'
     hold on
     plot(deltaArray+.166,p33,'color',getSmoothColor(6,10,hot))
@@ -1041,7 +1154,9 @@ if length(vPSE) > 3
     y4 = [bPSE(4) bPSE(4+length(vPSE)) bPSE(4+2*length(vPSE))]
     s4 = scatter(deltaArray+.5,y4,200,getSmoothColor(7,10,hot),'filled')
     hold on
-    j = errorbar(deltaArray+.5,y4,[bErr(1,7) bErr(1,7+2*length(vPSE)) bErr(1,7+4*length(vPSE))],'.')
+    pselow = y4-[bErr.meanLow(4) bErr.meanLow(4+length(vPSE)) bErr.meanLow(4+2*length(vPSE))]
+    psehigh = y4-[bErr.meanHigh(4) bErr.meanHigh(4+length(vPSE)) bErr.meanHigh(4+2*length(vPSE))]
+    j = errorbar(deltaArray+.5,y4,pselow,psehigh,'.')
     j.Color = 'black'
     hold on
     plot(deltaArray+.5,p44,'color',getSmoothColor(7,10,hot))
@@ -1079,8 +1194,13 @@ subplot(1,2,2)
 y1 = [bPSE(1) bPSE(1+length(vPSE)) bPSE(1+2*length(vPSE))];
 s1 = scatter(deltaArray-.5,y1,200,getSmoothColor(2,10,hot),'filled');
 hold on
+<<<<<<< HEAD
+%j = errorbar(deltaArray-.5,y1,[bErr(1,1) bErr(1,1+2*length(vPSE)) bErr(1,1+4*length(vPSE))],'.');
+%j.Color = 'black'
+=======
 j = errorbar(deltaArray-.5,y1,[bErr(1,1) bErr(1,1+2*length(vPSE)) bErr(1,1+4*length(vPSE))],'.');
 j.Color = 'black'
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
 hold on
 plot(deltaArray,p111,'color',getSmoothColor(2,10,hot));
 hold on
@@ -1092,8 +1212,13 @@ if length(vPSE) > 1
     y2 = [bPSE(2) bPSE(2+length(vPSE)) bPSE(2+2*length(vPSE))];
     s2 = scatter(deltaArray-.166,y2,200,getSmoothColor(4,10,hot),'filled');
     hold on
+<<<<<<< HEAD
+    %j = errorbar(deltaArray-.166,y2,[bErr(1,3) bErr(1,3+2*length(vPSE)) bErr(1,3+4*length(vPSE))],'.');
+    %j.Color = 'black'
+=======
     j = errorbar(deltaArray-.166,y2,[bErr(1,3) bErr(1,3+2*length(vPSE)) bErr(1,3+4*length(vPSE))],'.');
     j.Color = 'black'
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
     hold on
     plot(deltaArray-.166,p222,'color',getSmoothColor(4,10,hot));
     hold on
@@ -1104,8 +1229,8 @@ if length(vPSE) > 2
     y3 = [bPSE(3) bPSE(3+length(vPSE)) bPSE(3+2*length(vPSE))];
     s3 = scatter(deltaArray+.166,y3,200,getSmoothColor(6,10,hot),'filled');
     hold on
-    j = errorbar(deltaArray+.166,y3,[bErr(1,5) bErr(1,5+2*length(vPSE)) bErr(1,5+4*length(vPSE))],'.')
-    j.Color = 'black'
+    %j = errorbar(deltaArray+.166,y3,[bErr(1,5) bErr(1,5+2*length(vPSE)) bErr(1,5+4*length(vPSE))],'.')
+    %j.Color = 'black'
     hold on
     plot(deltaArray+.166,p333,'color',getSmoothColor(6,10,hot));
     hold on
@@ -1116,8 +1241,8 @@ if length(vPSE) > 3
     y4 = [bPSE(4) bPSE(4+length(vPSE)) bPSE(4+2*length(vPSE))];
     s4 = scatter(deltaArray+.5,y4,200,getSmoothColor(7,10,hot),'filled');
     hold on
-    j = errorbar(deltaArray+.5,y4,[bErr(1,7) bErr(1,7+2*length(vPSE)) bErr(1,7+4*length(vPSE))],'.')
-    j.Color = 'black'
+    %j = errorbar(deltaArray+.5,y4,[bErr(1,7) bErr(1,7+2*length(vPSE)) bErr(1,7+4*length(vPSE))],'.')
+    %j.Color = 'black'
     hold on
     plot(deltaArray+.5,p444,'color',getSmoothColor(7,10,hot));
     intString = string('width: %g; slope: %g');
@@ -1165,11 +1290,19 @@ for i = 1:perms
     randFits = fitCumulativeGaussian(e.d{audID}.cond.uniquePosDiff,cbRand);
     r2RandAUD(i) = randFits.r2;
 end
+<<<<<<< HEAD
+%figure(13);
+%histogram(r2RandAUD);
+audR2Percent = sum(r2RandAUD < r2Aud)/perms;
+%str = sprintf('Auditory, r2 = %g, percentile = %g',r2Aud,audR2Percent);
+%title(str);
+=======
 figure(13);
 histogram(r2RandAUD);
 audR2Percent = sum(r2RandAUD < r2Aud)/perms;
 str = sprintf('Auditory, r2 = %g, percentile = %g',r2Aud,audR2Percent);
 title(str);
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
  
 %visual
 r2RandVIS = ones(length(e.d{visID}.visualWidth),perms);
@@ -1181,11 +1314,19 @@ for k = 1:length(e.d{visID}.visualWidth)
         randFits = fitCumulativeGaussian(e.d{visID}.cond(k).uniquePosDiff,cbRand);
         r2RandVIS(k,i) = randFits.r2;
     end
+<<<<<<< HEAD
+%figure(13+k)
+%%histogram(r2RandVIS(k,1:perms));
+visR2Percent(k) = sum(r2RandVIS(k,1:perms) < r2VIS(k))/perms;
+%str = sprintf('Visual width: %g, r2 = %g, percentile = %g',e.d{visID}.visualWidth(k),r2VIS(k),visR2Percent(k));
+%title(str);
+=======
 figure(13+k)
 histogram(r2RandVIS(k,1:perms));
 visR2Percent(k) = sum(r2RandVIS(k,1:perms) < r2VIS(k))/perms;
 str = sprintf('Visual width: %g, r2 = %g, percentile = %g',e.d{visID}.visualWidth(k),r2VIS(k),visR2Percent(k));
 title(str);
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
 end
  
 %bimodal
@@ -1198,6 +1339,708 @@ for k = 1:length(e.d{bID}.condWidth);
         randFits = fitCumulativeGaussian(e.d{bID}.cond(k).uniquePosDiff, cbRand);
         r2RandB(k,i) = randFits.r2;
     end
+<<<<<<< HEAD
+%figure (17+k)
+%histogram(r2RandB(k,1:perms));
+bR2Percent(k) = sum(r2RandB(k,1:perms) < r2B(k))/perms;
+%str = sprintf('Bimodal width: %g, discrepancy: %g, r2 = %g, percentile = %g',e.d{bID}.condWidth(k),e.d{bID}.condDisplacement(k),r2B(k),bR2Percent(k))
+%title(str);
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%
+%%% logLikelihoods %%
+%%%%%%%%%%%%%%%%%%%%%
+function [VClogLike VClogLikeDisc AClogLike AClogLikeDisc SSlogLike SSlogLikeDisc SIlogLike SIlogLikeDisc OIlogLike OIlogLikeDisc NulllogLike] = logLikelihoods(aSTD,vSTD,mle,SCS,SCSdiscrepant,suboptimal,bSTD,widthArray,visID,audID,bID,e,scsSubVisW,scsSubAudW,aPSE,vPSE,bPSE)
+OIlogLike = 0
+for whichWidth = 1:4
+for whichOffset = 1:length(e.d{visID}.originalTaskParameter.posDiff)  
+   
+optimalSTD = sqrt(((vSTD(whichWidth)^2)*(aSTD^2))/((vSTD(whichWidth)^2)+(aSTD^2)));
+optimalWeightV = (aSTD^2)/((vSTD(whichWidth)^2)+(aSTD^2));
+optimalWeightA = 1-optimalWeightV;
+optimalPSE = optimalWeightV*e.d{visID}.originalTaskParameter.posDiff(whichOffset)+optimalWeightA*e.d{visID}.originalTaskParameter.posDiff(whichOffset);
+
+%% ROC %%
+x = [];
+y = [];
+for i = -30:.2:30;
+    if optimalPSE > 0
+        x = [x 1-normcdf(i,0,optimalSTD)];
+        y = [y 1-normcdf(i,optimalPSE,optimalSTD)];
+    elseif optimalPSE < 0
+        x = [x normcdf(i,0,optimalSTD)];
+        y = [y normcdf(i,optimalPSE,optimalSTD)];
+    end
+end
+ROCcorrect = trapz(x,y); if ROCcorrect < 0; ROCcorrect = -ROCcorrect;end;
+OIData(whichWidth,whichOffset) = ROCcorrect; if optimalPSE < 0; OIData(whichWidth,whichOffset) = 1- ROCcorrect;end;
+if e.d{visID}.originalTaskParameter.posDiff(whichOffset) == 2; oiROC = ROCcorrect;end;
+for trial = 1:length(e.d{bID}.condTrialNums{4+whichWidth})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset);
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == 1;
+            OIlogLike = OIlogLike + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == 0;
+            OIlogLike = OIlogLike + log(1-ROCcorrect);
+        end
+    end
+end
+end
+end
+
+%%%% discrepant conditions %%%%%
+OIlogLikeDisc = 0; 
+for whichWidth = 1:4
+for whichOffset = 1:length(e.d{visID}.originalTaskParameter.posDiff)  
+   
+optimalSTD = sqrt(((vSTD(whichWidth)^2)*(aSTD^2))/((vSTD(whichWidth)^2)+(aSTD^2)));
+optimalWeightV = (aSTD^2)/((vSTD(whichWidth)^2)+(aSTD^2));
+optimalWeightA = 1-optimalWeightV;
+optimalPSE = optimalWeightV*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5)+optimalWeightA*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5);
+
+%% ROC %%
+x = [];
+y = [];
+for i = -30:.2:30;
+    if optimalPSE > 0
+        x = [x 1-normcdf(i,0,optimalSTD)];
+        y = [y 1-normcdf(i,optimalPSE,optimalSTD)];
+    elseif optimalPSE < 0
+        x = [x normcdf(i,0,optimalSTD)];
+        y = [y normcdf(i,optimalPSE,optimalSTD)];
+    end
+end
+ROCcorrect = trapz(x,y); if ROCcorrect < 0; ROCcorrect = -ROCcorrect;end;
+OIDataDisc1(whichWidth,whichOffset) = ROCcorrect; if optimalPSE < 0; OIDataDisc1(whichWidth,whichOffset) = 1-ROCcorrect;end;
+for trial = 1:length(e.d{bID}.condTrialNums{whichWidth})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{whichWidth}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth}(trial)) == 1
+            OIlogLikeDisc = OIlogLikeDisc + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth}(trial)) == 0
+            OIlogLikeDisc = OIlogLikeDisc + log(1-ROCcorrect);
+        end
+    end
+end
+end
+end
+
+%% other disc %%
+for whichWidth = 1:4
+for whichOffset = 1:length(e.d{visID}.originalTaskParameter.posDiff)  
+   
+optimalSTD = sqrt(((vSTD(whichWidth)^2)*(aSTD^2))/((vSTD(whichWidth)^2)+(aSTD^2)));
+optimalWeightV = (aSTD^2)/((vSTD(whichWidth)^2)+(aSTD^2));
+optimalWeightA = 1-optimalWeightV;
+optimalPSE = optimalWeightV*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5)+optimalWeightA*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5);
+
+%% ROC %%
+x = [];
+y = [];
+for i = -30:.2:30;
+    if optimalPSE > 0
+        x = [x 1-normcdf(i,0,optimalSTD)];
+        y = [y 1-normcdf(i,optimalPSE,optimalSTD)];
+    elseif optimalPSE < 0
+        x = [x normcdf(i,0,optimalSTD)];
+        y = [y normcdf(i,optimalPSE,optimalSTD)];
+    end
+end
+ROCcorrect = trapz(x,y); if ROCcorrect < 0; ROCcorrect = -ROCcorrect;end;
+OIDataDisc2(whichWidth,whichOffset) = ROCcorrect; if optimalPSE < 0; OIDataDisc2(whichWidth,whichOffset) = 1-ROCcorrect;end;
+for trial = 1:length(e.d{bID}.condTrialNums{whichWidth+8})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == 1
+            OIlogLikeDisc = OIlogLikeDisc + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == 0
+            OIlogLikeDisc = OIlogLikeDisc + log(1-ROCcorrect);
+        end
+    end
+end
+end
+end
+OIlogLikeDisc = OIlogLikeDisc/2
+
+
+%%%%%%%%%%%%%%% suboptimal integration model %%%%%%%%%%%%%%
+SIlogLike = 0; 
+for whichWidth = 1:4
+for whichOffset = 1:length(e.d{visID}.originalTaskParameter.posDiff)  
+   
+suboptimalWeightV = (abs(((aPSE-5)-bPSE(whichWidth))/10)+abs(((aPSE+5)-bPSE(whichWidth+2*length(vPSE)))/10))/2;
+suboptimalWeightA = 1 - suboptimalWeightV;
+suboptimalSTD = sqrt((suboptimalWeightV*vSTD(whichWidth))^2+(suboptimalWeightA*aSTD)^2);
+suboptimalPSE = suboptimalWeightV*e.d{visID}.originalTaskParameter.posDiff(whichOffset)+suboptimalWeightA*e.d{visID}.originalTaskParameter.posDiff(whichOffset);
+
+
+%% ROC %%
+x = [];
+y = [];
+for i = -30:.2:30;
+    if suboptimalPSE > 0
+        x = [x 1-normcdf(i,0,suboptimalSTD)];
+        y = [y 1-normcdf(i,suboptimalPSE,suboptimalSTD)];
+    elseif suboptimalPSE < 0
+        x = [x normcdf(i,0,suboptimalSTD)];
+        y = [y normcdf(i,suboptimalPSE,suboptimalSTD)];
+    end
+end
+ROCcorrect = trapz(x,y); if ROCcorrect < 0; ROCcorrect = -ROCcorrect;end;
+SIData(whichWidth,whichOffset) = ROCcorrect; if suboptimalPSE<0;SIData(whichWidth,whichOffset) = 1-ROCcorrect;end;
+for trial = 1:length(e.d{bID}.condTrialNums{4+whichWidth})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == 1
+            SIlogLike = SIlogLike + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == 0
+            SIlogLike = SIlogLike + log(1-ROCcorrect);
+        end
+    end
+end
+end
+end
+
+%%%% discrepant conditions %%%%%
+SIlogLikeDisc = 0;
+for whichWidth = 1:4
+for whichOffset = 1:length(e.d{visID}.originalTaskParameter.posDiff)  
+   
+suboptimalWeightV = (abs(((aPSE-5)-bPSE(whichWidth))/10)+abs(((aPSE+5)-bPSE(whichWidth+2*length(vPSE)))/10))/2;
+suboptimalWeightA = 1 - suboptimalWeightV;
+suboptimalSTD = sqrt((suboptimalWeightV*vSTD(whichWidth))^2+(suboptimalWeightA*aSTD)^2);
+suboptimalPSE = suboptimalWeightV*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5)+suboptimalWeightA*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5);
+
+%% ROC %%
+x = [];
+y = [];
+for i = -30:.2:30;
+    if suboptimalPSE > 0
+        x = [x 1-normcdf(i,0,suboptimalSTD)];
+        y = [y 1-normcdf(i,suboptimalPSE,suboptimalSTD)];
+    elseif suboptimalPSE < 0
+        x = [x normcdf(i,0,suboptimalSTD)];
+        y = [y normcdf(i,suboptimalPSE,suboptimalSTD)];
+    end
+end
+ROCcorrect = trapz(x,y); if ROCcorrect < 0; ROCcorrect = -ROCcorrect;end;
+SIDataDisc1(whichWidth,whichOffset) = ROCcorrect; if suboptimalPSE < 0; SIDataDisc1(whichWidth,whichOffset) = 1-ROCcorrect;end;
+for trial = 1:length(e.d{bID}.condTrialNums{whichWidth})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{whichWidth}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth}(trial)) == 1
+            SIlogLikeDisc = SIlogLikeDisc + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth}(trial)) == 0
+            SIlogLikeDisc = SIlogLikeDisc + log(1-ROCcorrect);
+        end
+    end
+end
+end
+end
+
+%% other disc %%
+for whichWidth = 1:4
+for whichOffset = 1:length(e.d{visID}.originalTaskParameter.posDiff)  
+   
+suboptimalWeightV = (abs(((aPSE-5)-bPSE(whichWidth))/10)+abs(((aPSE+5)-bPSE(whichWidth+2*length(vPSE)))/10))/2;
+suboptimalWeightA = 1 - suboptimalWeightV;
+suboptimalSTD = sqrt((suboptimalWeightV*vSTD(whichWidth))^2+(suboptimalWeightA*aSTD)^2);
+suboptimalPSE = suboptimalWeightV*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5)+suboptimalWeightA*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5);
+
+
+%% ROC %%
+x = [];
+y = [];
+for i = -30:.2:30;
+    if suboptimalPSE > 0
+        x = [x 1-normcdf(i,0,suboptimalSTD)];
+        y = [y 1-normcdf(i,suboptimalPSE,suboptimalSTD)];
+    elseif suboptimalPSE < 0
+        x = [x normcdf(i,0,suboptimalSTD)];
+        y = [y normcdf(i,suboptimalPSE,suboptimalSTD)];
+    end
+end
+ROCcorrect = trapz(x,y); if ROCcorrect < 0; ROCcorrect = -ROCcorrect;end;
+SIDataDisc2(whichWidth,whichOffset) = ROCcorrect; if suboptimalPSE < 0; SIDataDisc2(whichWidth,whichOffset) = 1-ROCcorrect; end;
+for trial = 1:length(e.d{bID}.condTrialNums{whichWidth+8})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == 1
+            SIlogLikeDisc = SIlogLikeDisc + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == 0
+            SIlogLikeDisc = SIlogLikeDisc + log(1-ROCcorrect);
+        end
+    end
+end
+end
+end
+SIlogLikeDisc = SIlogLikeDisc/2
+
+%% stochastic switching model %%
+SSlogLike = 0; 
+for whichWidth = 1:4
+for whichOffset = 1:length(e.d{visID}.originalTaskParameter.posDiff)  
+   
+suboptimalWeightV = (abs(((aPSE-5)-bPSE(whichWidth))/10)+abs(((aPSE+5)-bPSE(whichWidth+2*length(vPSE)))/10))/2;
+suboptimalWeightA = 1 - suboptimalWeightV;
+suboptimalPSE = suboptimalWeightV*e.d{visID}.originalTaskParameter.posDiff(whichOffset)+suboptimalWeightA*e.d{visID}.originalTaskParameter.posDiff(whichOffset);
+
+%% ROC %%
+x = [];
+y = [];
+for i = -30:.2:30;
+    if suboptimalPSE > 0
+        x = [x (suboptimalWeightV*(1-normcdf(i,0,vSTD(whichWidth)))+suboptimalWeightA*(1-normcdf(i,0,aSTD)))];
+        y = [y (suboptimalWeightV*(1-normcdf(i,suboptimalPSE,vSTD(whichWidth)))+suboptimalWeightA*(1-normcdf(i,suboptimalPSE,aSTD)))];
+    elseif suboptimalPSE < 0
+        x = [x (suboptimalWeightV*(normcdf(i,0,vSTD(whichWidth)))+suboptimalWeightA*(normcdf(i,0,aSTD)))];
+        y = [y (suboptimalWeightV*(normcdf(i,suboptimalPSE,vSTD(whichWidth)))+suboptimalWeightA*(normcdf(i,suboptimalPSE,aSTD)))];
+    end
+end
+ROCcorrect = trapz(x,y); if ROCcorrect < 0; ROCcorrect = -ROCcorrect;end;
+SSData(whichWidth,whichOffset) = ROCcorrect; if suboptimalPSE<0;SSData(whichWidth,whichOffset) = 1-ROCcorrect;end;
+for trial = 1:length(e.d{bID}.condTrialNums{4+whichWidth})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == 1
+            SSlogLike = SSlogLike + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == 0
+            SSlogLike = SSlogLike + log(1-ROCcorrect);
+        end
+    end
+end
+end
+end
+
+%%%% discrepant conditions %%%%%
+SSlogLikeDisc = 0;
+for whichWidth = 1:4
+for whichOffset = 1:length(e.d{visID}.originalTaskParameter.posDiff)  
+   
+suboptimalWeightV = (abs(((aPSE-5)-bPSE(whichWidth))/10)+abs(((aPSE+5)-bPSE(whichWidth+2*length(vPSE)))/10))/2;
+suboptimalWeightA = 1 - suboptimalWeightV;
+suboptimalPSE = suboptimalWeightV*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5)+suboptimalWeightA*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5);
+
+%% ROC %%
+x = [];
+y = [];
+for i = -30:.2:30;
+    if suboptimalPSE > 0
+        x = [x (suboptimalWeightV*(1-normcdf(i,0,vSTD(whichWidth)))+suboptimalWeightA*(1-normcdf(i,0,aSTD)))];
+        y = [y (suboptimalWeightV*(1-normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5,vSTD(whichWidth)))+suboptimalWeightA*(1-normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5,aSTD)))];
+    elseif suboptimalPSE < 0
+        x = [x (suboptimalWeightV*(normcdf(i,0,vSTD(whichWidth)))+suboptimalWeightA*(normcdf(i,0,aSTD)))];
+        y = [y (suboptimalWeightV*(normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5,vSTD(whichWidth)))+suboptimalWeightA*(normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5,aSTD)))];
+    end
+end
+ROCcorrect = trapz(x,y); if ROCcorrect < 0; ROCcorrect = -ROCcorrect;end;
+SSDataDisc1(whichWidth,whichOffset) = ROCcorrect; if suboptimalPSE < 0; SSDataDisc1(whichWidth,whichOffset) = 1-ROCcorrect;end;
+for trial = 1:length(e.d{bID}.condTrialNums{whichWidth})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{whichWidth}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth}(trial)) == 1
+            SSlogLikeDisc = SSlogLikeDisc + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth}(trial)) == 0
+            SSlogLikeDisc = SSlogLikeDisc + log(1-ROCcorrect);
+        end
+    end
+end
+end
+end
+
+%% other disc %%
+for whichWidth = 1:4
+for whichOffset = 1:length(e.d{visID}.originalTaskParameter.posDiff)  
+ 
+suboptimalWeightV = (abs(((aPSE-5)-bPSE(whichWidth))/10)+abs(((aPSE+5)-bPSE(whichWidth+2*length(vPSE)))/10))/2;
+suboptimalWeightA = 1 - suboptimalWeightV;
+suboptimalPSE = suboptimalWeightV*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5)+suboptimalWeightA*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5);
+
+%% ROC %%
+x = [];
+y = [];
+for i = -30:.2:30;
+    if suboptimalPSE > 0
+        x = [x (suboptimalWeightV*(1-normcdf(i,0,vSTD(whichWidth)))+suboptimalWeightA*(1-normcdf(i,0,aSTD)))];
+        y = [y (suboptimalWeightV*(1-normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5,vSTD(whichWidth)))+suboptimalWeightA*(1-normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5,aSTD)))];
+    elseif suboptimalPSE < 0
+        x = [x (suboptimalWeightV*(normcdf(i,0,vSTD(whichWidth)))+suboptimalWeightA*(normcdf(i,0,aSTD)))];
+        y = [y (suboptimalWeightV*(normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5,vSTD(whichWidth)))+suboptimalWeightA*(normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5,aSTD)))];
+    end
+end
+ROCcorrect = trapz(x,y); if ROCcorrect < 0; ROCcorrect = -ROCcorrect;end;
+SSDataDisc2(whichWidth,whichOffset) = ROCcorrect;if suboptimalPSE<0;SSDataDisc2(whichWidth,whichOffset) = 1-ROCcorrect;end;
+for trial = 1:length(e.d{bID}.condTrialNums{whichWidth+8})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == 1
+            SSlogLikeDisc = SSlogLikeDisc + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == 0
+            SSlogLikeDisc = SSlogLikeDisc + log(1-ROCcorrect);
+        end
+    end
+end
+end
+end
+SSlogLikeDisc = SSlogLikeDisc/2
+
+
+%%%%%%%%%%%% visual capture %%%%%%%%%%%%%%%%%%%%%%%%%%
+VClogLike = 0;
+for whichWidth = 1:4
+for whichOffset = 1:length(e.d{visID}.originalTaskParameter.posDiff)  
+   
+suboptimalSTD = sqrt(((vSTD(whichWidth)^2)*(aSTD^2))/((vSTD(whichWidth)^2)+(aSTD^2)));
+suboptimalWeightV = (abs(((aPSE-5)-bPSE(whichWidth))/10)+abs(((aPSE+5)-bPSE(whichWidth+2*length(vPSE)))/10))/2;
+suboptimalWeightA = 1 - suboptimalWeightV;
+suboptimalPSE = suboptimalWeightV*e.d{visID}.originalTaskParameter.posDiff(whichOffset)+suboptimalWeightA*e.d{visID}.originalTaskParameter.posDiff(whichOffset);
+
+%% ROC %%
+x = [];
+y = [];
+for i = -30:.2:30;
+    if suboptimalPSE > 0
+        x = [x 1-normcdf(i,0,vSTD(whichWidth))];
+        y = [y 1-normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset),vSTD(whichWidth))];
+    elseif suboptimalPSE < 0
+       x = [x normcdf(i,0,vSTD(whichWidth))];
+       y = [y normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset),vSTD(whichWidth))];
+    end
+end
+ROCcorrect = trapz(x,y); if ROCcorrect < 0; ROCcorrect = -ROCcorrect;end;
+VCData(whichWidth,whichOffset) = ROCcorrect; if suboptimalPSE<0;VCData(whichWidth,whichOffset) = 1-ROCcorrect;end;
+for trial = 1:length(e.d{bID}.condTrialNums{4+whichWidth})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == 1
+            VClogLike = VClogLike + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == 0
+            VClogLike = VClogLike + log(1-ROCcorrect);
+        end
+    end
+end
+end
+end
+
+%%%% discrepant conditions %%%%%
+VClogLikeDisc = 0; 
+for whichWidth = 1:4
+for whichOffset = 1:length(e.d{visID}.originalTaskParameter.posDiff)  
+   
+suboptimalSTD = sqrt(((vSTD(whichWidth)^2)*(aSTD^2))/((vSTD(whichWidth)^2)+(aSTD^2)));
+suboptimalWeightV = (abs(((aPSE-5)-bPSE(whichWidth))/10)+abs(((aPSE+5)-bPSE(whichWidth+2*length(vPSE)))/10))/2;
+suboptimalWeightA = 1 - suboptimalWeightV;
+suboptimalPSE = suboptimalWeightV*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5)+suboptimalWeightA*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5);
+
+%% ROC %%
+x = [];
+y = [];
+for i = -30:.2:30;
+    if suboptimalPSE > 0
+        x = [x 1-normcdf(i,0,vSTD(whichWidth))];
+        y = [y 1-normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5,vSTD(whichWidth))];
+    elseif suboptimalPSE < 0
+       x = [x normcdf(i,0,vSTD(whichWidth))];
+       y = [y normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5,vSTD(whichWidth))];
+    end
+end
+ROCcorrect = trapz(x,y); if ROCcorrect < 0; ROCcorrect = -ROCcorrect;end;
+VCDataDisc1(whichWidth,whichOffset) = ROCcorrect; if suboptimalPSE<0;VCDataDisc1(whichWidth,whichOffset) = 1-ROCcorrect;end;
+for trial = 1:length(e.d{bID}.condTrialNums{whichWidth})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{whichWidth}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth}(trial)) == 1
+            VClogLikeDisc = VClogLikeDisc + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth}(trial)) == 0
+            VClogLikeDisc = VClogLikeDisc + log(1-ROCcorrect);
+        end
+    end
+end
+end
+end
+
+%% other disc %%
+for whichWidth = 1:4
+for whichOffset = 1:length(e.d{visID}.originalTaskParameter.posDiff)  
+   
+suboptimalSTD = sqrt(((vSTD(whichWidth)^2)*(aSTD^2))/((vSTD(whichWidth)^2)+(aSTD^2)));
+suboptimalWeightV = (abs(((aPSE-5)-bPSE(whichWidth))/10)+abs(((aPSE+5)-bPSE(whichWidth+2*length(vPSE)))/10))/2;
+suboptimalWeightA = 1 - suboptimalWeightV;
+suboptimalPSE = suboptimalWeightV*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5)+suboptimalWeightA*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5);
+
+%% ROC %%
+x = [];
+y = [];
+for i = -30:.2:30;
+    if suboptimalPSE > 0
+        x = [x 1-normcdf(i,0,vSTD(whichWidth))];
+        y = [y 1-normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5,vSTD(whichWidth))];
+    elseif suboptimalPSE < 0
+       x = [x normcdf(i,0,vSTD(whichWidth))];
+       y = [y normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5,vSTD(whichWidth))];
+    end
+end
+ROCcorrect = trapz(x,y); if ROCcorrect < 0; ROCcorrect = -ROCcorrect;end;
+VCDataDisc2(whichWidth,whichOffset) = ROCcorrect;if suboptimalPSE < 0;VCDataDisc2(whichWidth,whichOffset) = 1-ROCcorrect;end;
+for trial = 1:length(e.d{bID}.condTrialNums{whichWidth+8})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == 1
+            VClogLikeDisc = VClogLikeDisc + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == 0
+            VClogLikeDisc = VClogLikeDisc + log(1-ROCcorrect);
+        end
+    end
+end
+end
+end
+VClogLikeDisc = VClogLikeDisc/2
+
+
+%%%%%%%%%%%%%%%%%%%%%% auditory capture %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+AClogLike = 0;
+for whichWidth = 1:4
+for whichOffset = 1:length(e.d{visID}.originalTaskParameter.posDiff)  
+   
+suboptimalSTD = sqrt(((vSTD(whichWidth)^2)*(aSTD^2))/((vSTD(whichWidth)^2)+(aSTD^2)));
+suboptimalWeightV = (abs(((aPSE-5)-bPSE(whichWidth))/10)+abs(((aPSE+5)-bPSE(whichWidth+2*length(vPSE)))/10))/2;
+suboptimalWeightA = 1 - suboptimalWeightV;
+suboptimalPSE = suboptimalWeightV*e.d{visID}.originalTaskParameter.posDiff(whichOffset)+suboptimalWeightA*e.d{visID}.originalTaskParameter.posDiff(whichOffset);
+
+%% ROC %%
+x = [];
+y = [];
+for i = -30:.2:30;
+    if suboptimalPSE > 0
+        x = [x 1-normcdf(i,0,aSTD)];
+        y = [y 1-normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset),aSTD)];
+    elseif suboptimalPSE < 0
+       x = [x normcdf(i,0,aSTD)];
+       y = [y normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset),aSTD)];
+    end
+end
+ROCcorrect = trapz(x,y); if ROCcorrect < 0; ROCcorrect = -ROCcorrect;end;
+ACData(whichWidth,whichOffset) = ROCcorrect; if suboptimalPSE < 1;ACData(whichWidth,whichOffset) = 1-ROCcorrect;end;
+for trial = 1:length(e.d{bID}.condTrialNums{4+whichWidth})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == 1
+            AClogLike = AClogLike + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == 0
+            AClogLike = AClogLike + log(1-ROCcorrect);
+        end
+    end
+end
+end
+end
+
+%%%% discrepant conditions %%%%%
+AClogLikeDisc = 0; 
+for whichWidth = 1:4
+for whichOffset = 1:length(e.d{visID}.originalTaskParameter.posDiff)  
+   
+suboptimalSTD = sqrt(((vSTD(whichWidth)^2)*(aSTD^2))/((vSTD(whichWidth)^2)+(aSTD^2)));
+suboptimalWeightV = (abs(((aPSE-5)-bPSE(whichWidth))/10)+abs(((aPSE+5)-bPSE(whichWidth+2*length(vPSE)))/10))/2;
+suboptimalWeightA = 1 - suboptimalWeightV;
+suboptimalPSE = suboptimalWeightV*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5)+suboptimalWeightA*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5);
+
+%% ROC %%
+x = [];
+y = [];
+for i = -30:.2:30;
+    if suboptimalPSE > 0
+        x = [x 1-normcdf(i,0,aSTD)];
+        y = [y 1-normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5,aSTD)];
+    elseif suboptimalPSE < 0
+       x = [x normcdf(i,0,aSTD)];
+       y = [y normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5,aSTD)];
+    end
+end
+ROCcorrect = trapz(x,y); if ROCcorrect < 0; ROCcorrect = -ROCcorrect;end;
+ACDataDisc1(whichWidth,whichOffset) = ROCcorrect;if suboptimalPSE<0;ACDataDisc1(whichWidth,whichOffset) = 1-ROCcorrect;end;
+for trial = 1:length(e.d{bID}.condTrialNums{whichWidth})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{whichWidth}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth}(trial)) == 1
+            AClogLikeDisc = AClogLikeDisc + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth}(trial)) == 0
+            AClogLikeDisc = AClogLikeDisc + log(1-ROCcorrect);
+        end
+    end
+end
+end
+end
+
+%% other disc %%
+for whichWidth = 1:4
+for whichOffset = 1:length(e.d{visID}.originalTaskParameter.posDiff)  
+   
+suboptimalSTD = sqrt(((vSTD(whichWidth)^2)*(aSTD^2))/((vSTD(whichWidth)^2)+(aSTD^2)));
+suboptimalWeightV = (abs(((aPSE-5)-bPSE(whichWidth))/10)+abs(((aPSE+5)-bPSE(whichWidth+2*length(vPSE)))/10))/2;
+suboptimalWeightA = 1 - suboptimalWeightV;
+suboptimalPSE = suboptimalWeightV*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)-5)+suboptimalWeightA*(e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5);
+
+%% ROC %%
+x = [];
+y = [];
+for i = -30:.2:30;
+    if suboptimalPSE > 0
+        x = [x 1-normcdf(i,0,aSTD)];
+        y = [y 1-normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5,aSTD)];
+    elseif suboptimalPSE < 0
+       x = [x normcdf(i,0,aSTD)];
+       y = [y normcdf(i,e.d{visID}.originalTaskParameter.posDiff(whichOffset)+5,aSTD)];
+    end
+end
+ROCcorrect = trapz(x,y); if ROCcorrect < 0; ROCcorrect = -ROCcorrect;end;
+ACDataDisc2(whichWidth,whichOffset) = ROCcorrect;if suboptimalPSE<0;ACDataDisc2(whichWidth,whichOffset) = 1-ROCcorrect;end;
+for trial = 1:length(e.d{bID}.condTrialNums{whichWidth+8})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == 1
+            AClogLikeDisc = AClogLikeDisc + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == 0
+            AClogLikeDisc = AClogLikeDisc + log(1-ROCcorrect);
+        end
+    end
+end
+end
+end
+AClogLikeDisc = AClogLikeDisc/2
+
+
+%%%%%% null model %%%%%%%%%
+NulllogLike = 0;
+for whichWidth = 1:4
+for whichOffset = 1:length(e.d{visID}.originalTaskParameter.posDiff)  
+   
+suboptimalSTD = sqrt(((vSTD(whichWidth)^2)*(aSTD^2))/((vSTD(whichWidth)^2)+(aSTD^2)))
+suboptimalWeightV = (abs(((aPSE-5)-bPSE(whichWidth))/10)+abs(((aPSE+5)-bPSE(whichWidth+2*length(vPSE)))/10))/2
+suboptimalWeightA = 1 - suboptimalWeightV
+suboptimalPSE = suboptimalWeightV*e.d{visID}.originalTaskParameter.posDiff(whichOffset)+suboptimalWeightA*e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+
+%% ROC %%
+x = [];
+y = [];
+ROCcorrect = .5
+for trial = 1:length(e.d{bID}.condTrialNums{4+whichWidth})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == 1
+            NulllogLike = NulllogLike + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{4+whichWidth}(trial)) == 0
+            NulllogLike = NulllogLike + log(1-ROCcorrect);
+        end
+    end
+end
+for trial = 1:length(e.d{bID}.condTrialNums{whichWidth+8})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == 1
+            NulllogLike = NulllogLike + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth+8}(trial)) == 0
+            NulllogLike = NulllogLike + log(1-ROCcorrect);
+        end
+    end
+end
+for trial = 1:length(e.d{bID}.condTrialNums{whichWidth})
+    if  e.d{bID}.parameter.posDiff(e.d{bID}.condTrialNums{whichWidth}(trial)) == e.d{visID}.originalTaskParameter.posDiff(whichOffset)
+        if e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth}(trial)) == 1
+            NulllogLike = NulllogLike + log(ROCcorrect);
+        elseif e.d{bID}.randVars.correct(e.d{bID}.condTrialNums{whichWidth}(trial)) == 0
+            NulllogLike = NulllogLike + log(1-ROCcorrect);
+        end
+    end
+end
+end
+end
+NulllogLike = NulllogLike/3
+
+
+
+
+%%%%%%%%%%%%%%%%%%%% graph model likelihood comparisons %%%%%%%%%%%%%%%%%%%
+figure(50)
+vals = [-OIlogLike -SIlogLike -SSlogLike -AClogLike -VClogLike -NulllogLike; -OIlogLikeDisc -SIlogLikeDisc -SSlogLikeDisc -AClogLikeDisc -VClogLikeDisc -NulllogLike]
+bargraph = bar(vals)
+name={'Non-discrepant cues';'Discrepant cues'};
+set(gca,'xticklabel',name);ylabel('Negative log likelihood');
+k = set(bargraph, {'DisplayName'}, {'Optimal Integration','Suboptimal Integration','Stochastic Switching','Auditory Capture','Visual Capture','Null'}')
+% Legend will show names for each color
+legend(k)
+title('Model comparison')
+
+
+
+  for iCond = 1:length(vPSE)
+    dataColors{iCond} = getSmoothColor(iCond,3,'cool');
+    fitColors{iCond} = getSmoothColor(iCond,3,'cool');
+  end
+
+figure(100);subplot(1,4,1);
+pos = [-15 -11 -8 -6 -4 -2 2 4 6 8 11 15];widths = e.d{visID}.visualWidth
+
+figure(100)
+for iCond = 1:4
+    subplot(1,4,iCond);hold on;titleStr = 'Bimodal Optimal Integration Simulated Data',
+    e.d{bID}.OIfit(iCond+4) = fitCumulativeGaussian(pos,OIData(iCond,:));plot(pos,OIData(iCond,:),'o','Color',dataColors{2});plot(e.d{bID}.OIfit(iCond+4).fitX,e.d{bID}.OIfit(iCond+4).fitY,'-','Color',fitColors{2});
+    titleStr = sprintf('%s\nWidth: %0.1f; Displacement: 0; Mean: %0.2f; Std: %0.2f',titleStr,widths(iCond),e.d{bID}.OIfit(iCond+4).mean,e.d{bID}.OIfit(iCond+4).std);
+    e.d{bID}.OIfit(iCond+8) = fitCumulativeGaussian(pos,OIDataDisc1(iCond,:));plot(pos,OIDataDisc1(iCond,:),'o','Color',dataColors{3});plot(e.d{bID}.OIfit(iCond+8).fitX,e.d{bID}.OIfit(iCond+8).fitY,'-','Color',fitColors{3});
+    titleStr = sprintf('%s\nWidth: %0.1f; Displacement: -5; Mean: %0.2f; Std: %0.2f',titleStr,widths(iCond),e.d{bID}.OIfit(iCond+8).mean,e.d{bID}.OIfit(iCond+8).std);
+    e.d{bID}.OIfit(iCond) = fitCumulativeGaussian(pos,OIDataDisc2(iCond,:));plot(pos,OIDataDisc2(iCond,:),'o','Color',dataColors{1});plot(e.d{bID}.OIfit(iCond).fitX,e.d{bID}.OIfit(iCond).fitY,'-','Color',fitColors{1});
+    titleStr = sprintf('%s\nWidth: %0.1f; Displacement: 5; Mean: %0.2f; Std: %0.2f',titleStr,widths(iCond),e.d{bID}.OIfit(iCond).mean,e.d{bID}.OIfit(iCond).std);
+    xlabel('Probe Offset (Visual Degrees)');ylabel('Proportion reported Rightward');title(titleStr);
+end
+
+figure(101)
+for iCond = 1:4
+    subplot(1,4,iCond);hold on;titleStr = 'Bimodal: Suboptimal Integration Simulated Data',
+    e.d{bID}.SIfit(iCond+4) = fitCumulativeGaussian(pos,SIData(iCond,:));plot(pos,SIData(iCond,:),'o','Color',dataColors{2});plot(e.d{bID}.SIfit(iCond+4).fitX,e.d{bID}.SIfit(iCond+4).fitY,'-','Color',fitColors{2});
+    titleStr = sprintf('%s\nWidth: %0.1f; Displacement: 0; Mean: %0.2f; Std: %0.2f',titleStr,widths(iCond),e.d{bID}.SIfit(iCond+4).mean,e.d{bID}.SIfit(iCond+4).std);
+    e.d{bID}.SIfit(iCond+8) = fitCumulativeGaussian(pos,SIDataDisc1(iCond,:));plot(pos,SIDataDisc1(iCond,:),'o','Color',dataColors{3});plot(e.d{bID}.SIfit(iCond+8).fitX,e.d{bID}.SIfit(iCond+8).fitY,'-','Color',fitColors{3});
+    titleStr = sprintf('%s\nWidth: %0.1f; Displacement: -5; Mean: %0.2f; Std: %0.2f',titleStr,widths(iCond),e.d{bID}.SIfit(iCond+8).mean,e.d{bID}.SIfit(iCond+8).std);
+    e.d{bID}.SIfit(iCond) = fitCumulativeGaussian(pos,SIDataDisc2(iCond,:));plot(pos,SIDataDisc2(iCond,:),'o','Color',dataColors{1});plot(e.d{bID}.SIfit(iCond).fitX,e.d{bID}.SIfit(iCond).fitY,'-','Color',fitColors{1});
+    titleStr = sprintf('%s\nWidth: %0.1f; Displacement: 5; Mean: %0.2f; Std: %0.2f',titleStr,widths(iCond),e.d{bID}.SIfit(iCond).mean,e.d{bID}.SIfit(iCond).std);
+    xlabel('Probe Offset (Visual Degrees)');ylabel('Proportion reported Rightward');title(titleStr);
+end
+
+figure(102)
+for iCond = 1:4
+    subplot(1,4,iCond);hold on;titleStr = 'Bimodal: Stochastic Switching Simulated Data',
+    e.d{bID}.SSfit(iCond+4) = fitCumulativeGaussian(pos,SSData(iCond,:));plot(pos,SSData(iCond,:),'o','Color',dataColors{2});plot(e.d{bID}.SSfit(iCond+4).fitX,e.d{bID}.SSfit(iCond+4).fitY,'-','Color',fitColors{2});
+    titleStr = sprintf('%s\nWidth: %0.1f; Displacement: 0; Mean: %0.2f; Std: %0.2f',titleStr,widths(iCond),e.d{bID}.SSfit(iCond+4).mean,e.d{bID}.SSfit(iCond+4).std);
+    e.d{bID}.SSfit(iCond+8) = fitCumulativeGaussian(pos,SSDataDisc1(iCond,:));plot(pos,SSDataDisc1(iCond,:),'o','Color',dataColors{3});plot(e.d{bID}.SSfit(iCond+8).fitX,e.d{bID}.SSfit(iCond+8).fitY,'-','Color',fitColors{3});
+    titleStr = sprintf('%s\nWidth: %0.1f; Displacement: -5; Mean: %0.2f; Std: %0.2f',titleStr,widths(iCond),e.d{bID}.SSfit(iCond+8).mean,e.d{bID}.SSfit(iCond+8).std);
+    e.d{bID}.SSfit(iCond) = fitCumulativeGaussian(pos,SSDataDisc2(iCond,:));plot(pos,SSDataDisc2(iCond,:),'o','Color',dataColors{1});plot(e.d{bID}.SSfit(iCond).fitX,e.d{bID}.SSfit(iCond).fitY,'-','Color',fitColors{1});
+    titleStr = sprintf('%s\nWidth: %0.1f; Displacement: 5; Mean: %0.2f; Std: %0.2f',titleStr,widths(iCond),e.d{bID}.SSfit(iCond).mean,e.d{bID}.SSfit(iCond).std);
+    xlabel('Probe Offset (Visual Degrees)');ylabel('Proportion reported Rightward');title(titleStr);
+end
+
+figure(103)
+for iCond = 1:4
+    subplot(1,4,iCond);hold on;titleStr = 'Bimodal: Visual Capture Simulated Data',
+    e.d{bID}.VCfit(iCond+4) = fitCumulativeGaussian(pos,VCData(iCond,:));plot(pos,VCData(iCond,:),'o','Color',dataColors{2});plot(e.d{bID}.VCfit(iCond+4).fitX,e.d{bID}.VCfit(iCond+4).fitY,'-','Color',fitColors{2});
+    titleStr = sprintf('%s\nWidth: %0.1f; Displacement: 0; Mean: %0.2f; Std: %0.2f',titleStr,widths(iCond),e.d{bID}.VCfit(iCond+4).mean,e.d{bID}.VCfit(iCond+4).std);
+    e.d{bID}.VCfit(iCond+8) = fitCumulativeGaussian(pos,VCDataDisc1(iCond,:));plot(pos,VCDataDisc1(iCond,:),'o','Color',dataColors{3});plot(e.d{bID}.VCfit(iCond+8).fitX,e.d{bID}.VCfit(iCond+8).fitY,'-','Color',fitColors{3});
+    titleStr = sprintf('%s\nWidth: %0.1f; Displacement: -5; Mean: %0.2f; Std: %0.2f',titleStr,widths(iCond),e.d{bID}.VCfit(iCond+8).mean,e.d{bID}.VCfit(iCond+8).std);
+    e.d{bID}.VCfit(iCond) = fitCumulativeGaussian(pos,VCDataDisc2(iCond,:));plot(pos,VCDataDisc2(iCond,:),'o','Color',dataColors{1});plot(e.d{bID}.VCfit(iCond).fitX,e.d{bID}.VCfit(iCond).fitY,'-','Color',fitColors{1});
+    titleStr = sprintf('%s\nWidth: %0.1f; Displacement: 5; Mean: %0.2f; Std: %0.2f',titleStr,widths(iCond),e.d{bID}.VCfit(iCond).mean,e.d{bID}.VCfit(iCond).std);
+    xlabel('Probe Offset (Visual Degrees)');ylabel('Proportion reported Rightward');title(titleStr);
+end
+
+figure(104)
+for iCond = 1:4
+    subplot(1,4,iCond);hold on;titleStr = 'Bimodal: Auditory Capture Simulated Data',
+    e.d{bID}.ACfit(iCond+4) = fitCumulativeGaussian(pos,ACData(iCond,:));plot(pos,ACData(iCond,:),'o','Color',dataColors{2});plot(e.d{bID}.ACfit(iCond+4).fitX,e.d{bID}.ACfit(iCond+4).fitY,'-','Color',fitColors{2});
+    titleStr = sprintf('%s\nWidth: %0.1f; Displacement: 0; Mean: %0.2f; Std: %0.2f',titleStr,widths(iCond),e.d{bID}.ACfit(iCond+4).mean,e.d{bID}.ACfit(iCond+4).std);
+    e.d{bID}.ACfit(iCond+8) = fitCumulativeGaussian(pos,ACDataDisc1(iCond,:));plot(pos,ACDataDisc1(iCond,:),'o','Color',dataColors{3});plot(e.d{bID}.ACfit(iCond+8).fitX,e.d{bID}.ACfit(iCond+8).fitY,'-','Color',fitColors{3});
+    titleStr = sprintf('%s\nWidth: %0.1f; Displacement: -5; Mean: %0.2f; Std: %0.2f',titleStr,widths(iCond),e.d{bID}.ACfit(iCond+8).mean,e.d{bID}.ACfit(iCond+8).std);
+    e.d{bID}.ACfit(iCond) = fitCumulativeGaussian(pos,ACDataDisc2(iCond,:));plot(pos,ACDataDisc2(iCond,:),'o','Color',dataColors{1});plot(e.d{bID}.ACfit(iCond).fitX,e.d{bID}.ACfit(iCond).fitY,'-','Color',fitColors{1});
+    titleStr = sprintf('%s\nWidth: %0.1f; Displacement: 5; Mean: %0.2f; Std: %0.2f',titleStr,widths(iCond),e.d{bID}.ACfit(iCond).mean,e.d{bID}.ACfit(iCond).std);
+    xlabel('Probe Offset (Visual Degrees)');ylabel('Proportion reported Rightward');title(titleStr);
+end
+
+
+for i = 1:12
+    OImeanDiff(i) = e.d{bID}.fit(i).mean-e.d{bID}.OIfit(i).mean; OIstdDiff(i) = e.d{bID}.fit(i).std-e.d{bID}.OIfit(i).std;
+    SImeanDiff(i) = e.d{bID}.fit(i).mean-e.d{bID}.SIfit(i).mean; SIstdDiff(i) = e.d{bID}.fit(i).std-e.d{bID}.SIfit(i).std;
+    SSmeanDiff(i) = e.d{bID}.fit(i).mean-e.d{bID}.SSfit(i).mean; SSstdDiff(i) = e.d{bID}.fit(i).std-e.d{bID}.SSfit(i).std;
+    VCmeanDiff(i) = e.d{bID}.fit(i).mean-e.d{bID}.VCfit(i).mean; VCstdDiff(i) = e.d{bID}.fit(i).std-e.d{bID}.VCfit(i).std;
+    ACmeanDiff(i) = e.d{bID}.fit(i).mean-e.d{bID}.ACfit(i).mean; ACstdDiff(i) = e.d{bID}.fit(i).std-e.d{bID}.ACfit(i).std;
+end
+
+figure(110);
+subplot(1,2,1);hold on;scatter(ones(1,12),OImeanDiff);scatter(ones(1,12)+1,SImeanDiff);scatter(ones(1,12)+2,SSmeanDiff);scatter(ones(1,12)+3,VCmeanDiff);scatter(ones(1,12)+4,ACmeanDiff);line([0 6],[0 0],'color','black');
+ylabel('Observed Mean - Model predicted mean');set(gca,'XTickLabel',{'','Optimal Integration','Suboptimal Integration','Switching','Visual Capture','Auditory Capture',''});set(gca,'XTickLabelRotation',20);title('Observed vs model-simulated Mean differences');
+subplot(1,2,2);hold on,scatter(ones(1,12),OIstdDiff);scatter(ones(1,12)+1,SIstdDiff);scatter(ones(1,12)+2,SSstdDiff);scatter(ones(1,12)+3,VCstdDiff);scatter(ones(1,12)+4,ACstdDiff);line([0 6],[0 0],'color','black');
+ylabel('Observed std - Model predicted std');set(gca,'XTickLabel',{'','Optimal Integration','Suboptimal Integration','Switching','Visual Capture','Auditory Capture',''});set(gca,'XTickLabelRotation',20);title('Observed vs model-simulated Std differences');
+
+k=2
+=======
 figure (17+k)
 histogram(r2RandB(k,1:perms));
 bR2Percent(k) = sum(r2RandB(k,1:perms) < r2B(k))/perms;
@@ -1205,3 +2048,4 @@ str = sprintf('Bimodal width: %g, discrepancy: %g, r2 = %g, percentile = %g',e.d
 title(str);
 end
 
+>>>>>>> aed9623128271e96b7fe36968faf241ede05945f
