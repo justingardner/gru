@@ -194,7 +194,7 @@ for scanNum = params.scanNum
   % this preliminary value in for now.
 
   %% Split data into chunks, compute
-  if params.pRFFit.splitData
+  if 0 %params.pRFFit.splitData
     overlays = struct();
     overlays.r2 = r2;
     overlays.polarAngle = polarAngle;

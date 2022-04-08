@@ -252,8 +252,8 @@ end
 [fit.polarAngle fit.eccentricity] = cart2pol(fit.x,fit.y);
 
 % display
-if fitParams.verbose && strcmp(fitParams.rfType, 'gaussian-exp')
-  disp(sprintf('%s[%2.f %2.f %2.f] r2=%0.2f polarAngle=%6.1f eccentricity=%6.1f rfHalfWidth=%6.1f exp=%f',fitParams.dispstr,x,y,z,fit.r2,r2d(fit.polarAngle),fit.eccentricity,fit.std, fit.exp));
+if fitParams.verbose && strcmp(fitParams.rfType, 'gaussian-css')
+  disp(sprintf('%s[%2.f %2.f %2.f] r2=%0.2f polarAngle=%6.1f eccentricity=%6.1f rfHalfWidth=%6.1f exp=%f',fitParams.dispstr,x,y,z,fit.r2,r2d(fit.polarAngle),fit.eccentricity,fit.std, fit.css));
 elseif fitParams.verbose
   disp(sprintf('%s[%2.f %2.f %2.f] r2=%0.2f polarAngle=%6.1f eccentricity=%6.1f rfHalfWidth=%6.1f', fitParams.dispstr,x,y,z,fit.r2,r2d(fit.polarAngle),fit.eccentricity,fit.std));
 end
@@ -683,7 +683,7 @@ function rfModel = getRFModel(params,fitParams)
 rfModel = [];
 
 % now gernerate the rfModel
-if any(strcmp(fitParams.rfType,{'gaussian','gaussian-hdr', 'gaussian-exp', 'gaussian-diffs', 'gaussian-divs', 'gaussian-DoG-CSS'}))
+if any(strcmp(fitParams.rfType,{'gaussian','gaussian-hdr', 'gaussian-css', 'gaussian-diffs', 'gaussian-divs', 'gaussian-DoG-CSS'}))
   rfModel = makeRFGaussian(params,fitParams);
 else
   disp('');
@@ -707,8 +707,8 @@ switch (fitParams.rfType)
     output = pRF_diffGaussian(varargin{:});
   case 'gaussian-divs'
     output = pRF_divGaussian(varargin{:});
-  case 'gaussian-exp'
-    output = pRF_exp(varargin{:});
+  case 'gaussian-css'
+    output = pRF_css(varargin{:});
   otherwise % 'gaussian-DoG-CSS'
     testModel = @pRF_DoG_CSS; %%% Only need to change this line to specify a new model.
     output = testModel(varargin{:});
