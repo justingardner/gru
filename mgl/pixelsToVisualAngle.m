@@ -1,6 +1,8 @@
 function output = pixelsToVisualAngle(inputs, displaySize)
 %%% convert pixels to visual angle
 %%% 2022, jiwon yeon
+%%% usage
+%%%     - pixelsToVisualAngle(inputs, displaySize)
 %%% inputs 
 %%%     - [x, y] coordiantes or a vector in pixels
 %%% displaySize
