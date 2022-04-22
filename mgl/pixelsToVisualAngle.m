@@ -28,25 +28,21 @@ if isscalar(displaySize)
     displaySize = [displaySize, displaySize];
 end
 
-x_PixelsInCm = mglGetParam('xPixelsToDevice');
-y_PixelsInCm = mglGetParam('yPixelsToDevice');
-screen_distance = mglGetParam('devicePhysicalDistance');
+xPix2Deg = mglGetParam('xPixelsToDevice');
+yPix2Deg = mglGetParam('yPixelsToDevice');
 
 % convert pixels to cm
 if isscalar(inputs)
-    mean_PixelsInCm = mean([x_PixelsInCm, y_PixelsInCm]);
-    inputs_cm = inputs .* mean_PixelsInCm;
+    mean_PixelsInCm = mean([xPix2Deg, yPix2Deg]);
+    output = inputs .* mean_PixelsInCm;
 else
     % move the centers first
     inputs = [inputs(:,1) - ceil(displaySize(1)/2), ...
         inputs(:,2) - ceil(displaySize(2)/2)];
     % convert it to cm
-    inputs_cm = [inputs(:,1) .* x_PixelsInCm, ...
-        inputs(:,2) .* y_PixelsInCm];
+    output = [inputs(:,1) .* yPix2Deg, ...
+        inputs(:,2) .* xPix2Deg];
 end
-
-% convert cm to visual angle
-output = atan(inputs_cm ./ (2 * screen_distance)) .* 2 .* (180/pi);
 
 % transpose if needed
 if needTranspose

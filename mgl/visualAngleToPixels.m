@@ -28,24 +28,19 @@ else
     needTranspose = 0;
 end
 
-% get number of pixels per cm on the display
-x_nPixPerCm = mglGetParam('xDeviceToPixels');
-y_nPixPerCm = mglGetParam('yDeviceToPixels');
-screen_distance = mglGetParam('devicePhysicalDistance');
+% get number of pixels per 1 degree visual angle on the display
+xDeg2Pix = mglGetParam('xDeviceToPixels');
+yDeg2Pix = mglGetParam('yDeviceToPixels');
 
-% convert visual angle to cm
-inputs_cm = 2 .* screen_distance .* tan(inputs ./2 .* (pi/180));
-
-% change the cm values to pixels
+% change visual angle values to pixels
 if isscalar(inputs)
-    nPixPerCm = mean([x_nPixPerCm, y_nPixPerCm]);
-    output = round(inputs .* nPixPerCm);        
+    output = round(inputs .* max([xDeg2Pix,yDeg2Pix]));        
 else    
-    output = round([inputs_cm(:,1) .* x_nPixPerCm, ...
-        inputs_cm(:,2) .* y_nPixPerCm]);    
+    output = [inputs(:,1) .* yDeg2Pix, ...
+        inputs(:,2) .* xDeg2Pix];    
     % centering
-    output = [output(:,1) + ceil(displaySize(1)/2), ...
-        output(:,2) + ceil(displaySize(2)/2)];     
+    output = round([output(:,1) + floor(displaySize(1)/2), ...
+        output(:,2) + floor(displaySize(2)/2)]);     
 end
 
 if needTranspose
