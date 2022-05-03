@@ -1,5 +1,13 @@
-function collectSubjTaskParams(stimfilepath, root)
-
+function data = collectSubjTaskParams(taskName, root)
+%  collectSubjTaskParams(taskName, root)
+%
+%     Gets all stimfilles for task taskName and compiles parameters.
+%     Usage: data = collectSubjTaskParams(taskName, root);
+%
+%       e.g. 
+%               mglSetSID(350);
+%               data = collectSubjTaskParams('mglRetinotopy');
+%
 if ieNotDefined('root')
     root = '';
 end
@@ -13,19 +21,20 @@ if isempty(sid)
 end
 
 disp('*******************************************************');
-disp(sprintf('*** mlrReconAll RUNNING FOR SUBJECT %s ***',sid));
+disp(sprintf('*** mlrReconAll RUNNING FOR SUBJECT %s TASK %s ***',sid, taskName));
 disp('*******************************************************');
 
 
 %% get the files list
-files = dir(fullfile(sprintf('%s/%s*.mat',stimfilepath, root)));
+files = dir(fullfile(sprintf('~/data/%s/%s/%s*.mat',taskName, sid, root)));
 
 count = 1; 
 data = struct('response', [], 'reaction_time', [], 'resp', [], 'nTrials', 0);
 for fi = 1:length(files)
-  load(fullfile(sprintf('%s/%s',stimfilepath, files(fi).name)));
+  load(fullfile(sprintf('~/data/%s/%s/%s',taskName, sid, files(fi).name)));
   
   e = getTaskParameters(myscreen,task);
+  if iscell(e); e = e{1}; end
   if e.nTrials>1
     
     f = fields(e.parameter);
@@ -51,5 +60,4 @@ for fi = 1:length(files)
   count = count + 1;
 end
 
-disp(sprintf('SUBJECT %s: Found %i runs with a total of %i trials', sid, count, data.nTrials));
-keyboard
+disp(sprintf('SUBJECT %s: Found %i runs with a total of %i trials', sid, count, data.nTrials))
