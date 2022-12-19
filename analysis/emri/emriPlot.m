@@ -24,17 +24,19 @@ emriPlotTSeries(t, tSeries, tSeriesSte, absft, nRows, nCols, headerStr);
 
 % get the coherence/amp/ph overlays with the largest coherence value
 [co,amp,ph] = getOverlaysWithMaxCoVal(v,scan,x,y,z,roi);
-if isempty(co),return,end
 
-% get parameters for corAnal and run it
-nCycles = co.params.ncycles(viewGet(v,'curScan'));
-detrend = viewGet(v,'detrend',scan);
-spatialnorm = viewGet(v,'spatialnorm',scan);
-trigonometricFunction = viewGet(v,'trigonometricFunction',scan);
-[coVal, ampVal, phVal, corAnalTSeries] = computeCoranal(tSeries,nCycles,detrend,spatialnorm,trigonometricFunction);
+% if it was run, then add it to plot
+if ~isempty(co)
+  % get parameters for corAnal and run it
+  nCycles = co.params.ncycles(viewGet(v,'curScan'));
+  detrend = viewGet(v,'detrend',scan);
+  spatialnorm = viewGet(v,'spatialnorm',scan);
+  trigonometricFunction = viewGet(v,'trigonometricFunction',scan);
+  [coVal, ampVal, phVal, corAnalTSeries] = computeCoranal(tSeries,nCycles,detrend,spatialnorm,trigonometricFunction);
 
-% plot the cor anal
-emriPlotCorAnal(t, tSeries, tSeriesSte, absft, nCycles, coVal, ampVal, phVal, trigonometricFunction, nRows, nCols, headerStr)
+  % plot the cor anal
+  emriPlotCorAnal(t, tSeries, tSeriesSte, absft, nCycles, coVal, ampVal, phVal, trigonometricFunction, nRows, nCols, headerStr)
+end
 
 % plot auto correlation
 emriPlotAutoCorrelation(v, tSeries, nRows, nCols)
@@ -46,6 +48,7 @@ function emriPlotAutoCorrelation(v, tSeries, nRows, nCols)
 
 % plot settings
 fontSize = 14;
+markerSize = 12;
 
 % normalize time series, so that auto-correlation goes from -1 to 1
 tSeries = tSeries-mean(tSeries);
@@ -79,7 +82,7 @@ subplot(nRows,nCols,nCols*2+1:nCols*3);
 plot(shiftVal,minXCorr,'r-');hold on
 set(gca,'FontSize',fontSize);
 plot(shiftVal,maxXCorr,'r-');
-plot(shiftVal,corrSeries,'k-','LineWidth',3);
+plot(shiftVal,corrSeries,'k.-','LineWidth',1,'MarkerSize',markerSize);
 title(sprintf('Time Series auto-correlation (0 lag correlation set to nan)\n%0.1f%% outside confidence interval',outsideConfidenceInterval));
 set(gca,'XLim',[min(shiftVal) max(shiftVal)]);
 xlabel('Lag (s)');
