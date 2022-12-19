@@ -36,8 +36,55 @@ trigonometricFunction = viewGet(v,'trigonometricFunction',scan);
 % plot the cor anal
 emriPlotCorAnal(t, tSeries, tSeriesSte, absft, nCycles, coVal, ampVal, phVal, trigonometricFunction, nRows, nCols, headerStr)
 
-% plot the cross correlation
-%keyboard
+% plot auto correlation
+emriPlotAutoCorrelation(v, tSeries, nRows, nCols)
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% plot auto-correlation
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function emriPlotAutoCorrelation(v, tSeries, nRows, nCols)
+
+% plot settings
+fontSize = 14;
+
+% normalize time series, so that auto-correlation goes from -1 to 1
+tSeries = tSeries-mean(tSeries);
+tSeries = tSeries/sqrt(sum(tSeries.^2));
+corrSeries = xcorr(tSeries,tSeries);
+
+% compute the permutation analysis for null
+nPermutations = 100;
+for iRand = 1:nPermutations
+  randTSeries = tSeries(randperm(length(tSeries)));
+  xCorrRand(iRand,:) = xcorr(randTSeries,randTSeries);
+end
+xCorrRand = sort(xCorrRand);
+minXCorr = xCorrRand(round(0.025*nPermutations),:);
+maxXCorr = xCorrRand(round(0.975*nPermutations),:);
+
+% get the shift values for the x axes
+shiftVal = -length(tSeries)+1:length(tSeries)-1;
+shiftVal = shiftVal * viewGet(v,'framePeriod');
+
+% see how many values are below or above 95 % confidence intreval
+outsideConfidenceInterval = 100* sum((corrSeries' > maxXCorr) | (corrSeries' < minXCorr)) / length(corrSeries);
+
+% set the 0 lag to nan (as it is by definition equal to 1
+minXCorr(shiftVal == 0) = nan;
+maxXCorr(shiftVal == 0) = nan;
+corrSeries(shiftVal == 0) = nan;
+
+% plot the auto-correlation function
+subplot(nRows,nCols,nCols*2+1:nCols*3);
+plot(shiftVal,minXCorr,'r-');hold on
+set(gca,'FontSize',fontSize);
+plot(shiftVal,maxXCorr,'r-');
+plot(shiftVal,corrSeries,'k-','LineWidth',3);
+title(sprintf('Time Series auto-correlation (0 lag correlation set to nan)\n%0.1f%% outside confidence interval',outsideConfidenceInterval));
+set(gca,'XLim',[min(shiftVal) max(shiftVal)]);
+xlabel('Lag (s)');
+ylabel('Correlation (r)');
+mylegend({'Auto-correlation','95% confidence interval'},{'k-','r-'});
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% getPeakCorrelationValue
@@ -247,6 +294,10 @@ set(gca,'xtick',xtick);
 
 % Plot model fit
 hold on; plot(t(1:length(corAnalFit)),corAnalFit,'r-','LineWidth',1);
+
+% don't change anything if we only have a single-cycle (i.e. don't need to
+% plot the mean across cycles cause there is only one).
+if nCycles <=1, return, end
 
 % Plot single cylce
 subplot(nRows,nCols,nCols+1)
