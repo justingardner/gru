@@ -51,8 +51,14 @@ params = checkEmriParams(params);
 % set the group
 v = viewSet(v,'curGroup',params.groupName);
 
+% load the time series for preprocessing
+% TODO 
+
+% TODO: run preprocessing
+
+% run the frequency analysis
 if params.frequencyAnalysis
-  runCorAnal(v,params);
+  runCorAnal(v,params); % TODO pass the times series in
 end
 
 
