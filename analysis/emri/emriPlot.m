@@ -43,7 +43,7 @@ end
 shiftDown = any(strcmp(get(viewGet(v,'figureNumber'),'SelectionType'),'extend'));
 
 % get the peak frequency (i.e. the one with the highest frequency
-ncycles = co.params.ncycles;
+ncycles = co.params.ncycles(viewGet(v,'curScan'));;
 
 % Analysis parameters
 detrend = viewGet(v,'detrend',scan);
