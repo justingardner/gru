@@ -18,28 +18,31 @@ if isempty(tSeries),return,end
 ft = fft(tSeries-mean(tSeries));
 absft = abs(ft(1:round((length(ft)/2))));
 
-% draw the basic time series
+% plot the basic time series and FFT
 nRows = 3; nCols = 3;
 emriPlotTSeries(t, tSeries, tSeriesSte, absft, nRows, nCols, headerStr);
+
+% plot auto correlation
+emriPlotAutoCorrelation(v, tSeries, nRows, nCols)
 
 % get the coherence/amp/ph overlays with the largest coherence value
 [co,amp,ph] = getOverlaysWithMaxCoVal(v,scan,x,y,z,roi);
 
-% if it was run, then add it to plot
+% if we found one (i.e. corAnal was run)
 if ~isempty(co)
-  % get parameters for corAnal and run it
-  nCycles = co.params.ncycles(viewGet(v,'curScan'));
-  detrend = viewGet(v,'detrend',scan);
-  spatialnorm = viewGet(v,'spatialnorm',scan);
-  trigonometricFunction = viewGet(v,'trigonometricFunction',scan);
+  % get parameters for corAnal
+  corAnalParams = co.params;curScan = viewGet(v,'curScan');
+  nCycles = corAnalParams.ncycles(curScan);
+  detrend = corAnalParams.detrend{curScan};
+  spatialnorm = corAnalParams.spatialnorm{curScan};
+  trigonometricFunction = corAnalParams.trigonometricFunction{curScan};
+  % run the coranal (note that we do this because the tSeries here may be
+  % the average of an ROI for which coranal has not yet been run.
   [coVal, ampVal, phVal, corAnalTSeries] = computeCoranal(tSeries,nCycles,detrend,spatialnorm,trigonometricFunction);
 
   % plot the cor anal
   emriPlotCorAnal(t, tSeries, tSeriesSte, absft, nCycles, coVal, ampVal, phVal, trigonometricFunction, nRows, nCols, headerStr)
 end
-
-% plot auto correlation
-emriPlotAutoCorrelation(v, tSeries, nRows, nCols)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 % plot auto-correlation
@@ -83,7 +86,7 @@ plot(shiftVal,minXCorr,'r-');hold on
 set(gca,'FontSize',fontSize);
 plot(shiftVal,maxXCorr,'r-');
 plot(shiftVal,corrSeries,'k.-','LineWidth',1,'MarkerSize',markerSize);
-title(sprintf('Time Series auto-correlation (0 lag correlation set to nan)\n%0.1f%% outside confidence interval',outsideConfidenceInterval));
+title(sprintf('Time series auto-correlation (0 lag correlation set to nan)\n%0.1f%% outside 95%% confidence interval for null distribution',outsideConfidenceInterval));
 set(gca,'XLim',[min(shiftVal) max(shiftVal)]);
 xlabel('Lag (s)');
 ylabel('Correlation (r)');
@@ -161,7 +164,7 @@ if ~isempty(roi)
   roi = loadROITSeries(v,roi{1},viewGet(v,'curScan'),viewGet(v,'curGroup'));
   tSeries = mean(roi.tSeries,1)';
   tSeriesSte = std(100*roi.tSeries/mean(tSeries),1,1)'/sqrt(roi.n);
-  headerStr = sprintf('Times series from roi %s (n=%i)\n%s',roi.name,roi.n,viewGet(v,'description',viewGet(v,'curScan')));
+  headerStr = sprintf('Time series from roi %s (n=%i)\n%s',roi.name,roi.n,viewGet(v,'description',viewGet(v,'curScan')));
   roiPlot = 1;
 else
   % Load tseries from file. Error if file doesn't exist.
@@ -171,7 +174,7 @@ else
     return
   end
   [tSeries,hdr] = mlrImageReadNifti(pathStr,{x,y,z,[]});
-  headerStr = sprintf('Times series from voxel [%i %i %i]\n%s',x,y,z,viewGet(v,'description',viewGet(v,'curScan')));
+  headerStr = sprintf('Time series from voxel [%i %i %i]\n%s',x,y,z,viewGet(v,'description',viewGet(v,'curScan')));
   tSeries = squeeze(tSeries);
   tSeriesSte = nan(1,length(tSeries));
 end
@@ -184,6 +187,10 @@ tSeries = tSeries(junkframes+1:junkframes+nframes);
 tSeriesSte = tSeriesSte(junkframes+1:junkframes+nframes);
 t = t(junkframes+1:junkframes+nframes);
 
+% get percentTSeries
+meanTSeries = mean(tSeries);
+tSeries = 100*(tSeries-meanTSeries)/meanTSeries;
+tSeriesSte = 100*tSeriesSte/meanTSeries;
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %% computeCorAnalFit
@@ -201,7 +208,6 @@ nFrames = length(tSeries);
 
 % calculate mean cycle
 if rem(nFrames,nCycles)
-  disp(sprintf('(corAnalPlot) Scan has %i frames, not evenly divisible by %i cycles',nFrames,nCycles));
   % chop off the tSeries at the end. Could so something
   % fancier and add the partial cycle back into the man and ajdust
   % the ste for the number of points, but seems like overkill.
@@ -213,10 +219,6 @@ cycleLen = floor(nFrames/nCycles);
 singleCycleTSeries = tSeries(1:nFrames);
 singleCycle = mean(reshape(singleCycleTSeries,cycleLen,nCycles)');
 singleCycleSte = std(reshape(singleCycleTSeries,cycleLen,nCycles)')/sqrt(nCycles);
-
-% normalize to percent signal change with 0 mean
-singleCycle = 100*(singleCycle-mean(singleCycle));
-singleCycleSte = 100*singleCycleSte;
 
 % Create model fit
 switch (trigonometricFunction)
@@ -241,9 +243,9 @@ selectGraphWin;
 % Plot timeSeries
 subplot(nRows,nCols,1:nCols)
 if all(isnan(tSeriesSte))
-  plot(t,100*(tSeries-1),'k.-','LineWidth',1,'MarkerSize',markerSize);hold on
+  plot(t,tSeries,'k.-','LineWidth',1,'MarkerSize',markerSize);hold on
 else
-  errorbar(t,100*(tSeries-1),100*tSeriesSte,'k.-','LineWidth',1,'MarkerSize',markerSize);hold on
+  errorbar(t,tSeries,tSeriesSte,'k.-','LineWidth',1,'MarkerSize',markerSize);hold on
 end
 title(headerStr);
 xlabel('Time (s)');
@@ -290,29 +292,10 @@ headerStr = sprintf('%s\nfreq=%i cycles/scan (%0.1f cycles/sec) co=%f amp=%f ph(
 title(headerStr,'Interpreter','none');
 
 % put the ticks upon each cycle
-xtickStep = t(length(singleCycle))-t(1);
-xtick = [0:xtickStep:t(end)];
-xtick = sort(unique(xtick));
-set(gca,'xtick',xtick);
+cycleLenSec = t(length(singleCycle))-t(1);
 
 % Plot model fit
 hold on; plot(t(1:length(corAnalFit)),corAnalFit,'r-','LineWidth',1);
-
-% don't change anything if we only have a single-cycle (i.e. don't need to
-% plot the mean across cycles cause there is only one).
-if nCycles <=1, return, end
-
-% Plot single cylce
-subplot(nRows,nCols,nCols+1)
-myerrorbar(t(1:length(singleCycle)),singleCycle,'yError',singleCycleSte,'LineWidth',1,'MarkerSize',markerSize);hold on
-plot(t(1:length(singleCycle)),corAnalFit(1:length(singleCycle)),'r-','LineWidth',1.5);
-set(gca,'XLim',[t(1) t(length(singleCycle))]);
-
-% labels
-set(gca,'FontSize',fontSize);
-title('Single cycle with STE across cycles');
-xlabel('Time (s)');
-ylabel('Response amplitude (% signal change)');
 
 % Plot fft
 subplot(nRows,nCols,nCols+2:nCols*2)
@@ -324,4 +307,33 @@ plot(nCycles,signalAmp,'ro');
 plot(noiseFreq-1,absft(noiseFreq),'go');
 title(sprintf('Stimulus (red): %f Noise (Mean of green): %f CNR: %f',signalAmp,noiseAmp,snr));
 set(gca,'XLim',[0 (length(absft)-1)]);
+
+% if auto-correlation was plotted
+if nRows >= 3
+  % then draw the cycle length
+  subplot(nRows,nCols,nCols*2+1:nCols*3);
+  vline([-nCycles*cycleLenSec:cycleLenSec:nCycles*cycleLenSec],'r:');
+  mylegend({'Auto-correlation','95% confidence interval'},{'k-','r-'});
+end
+
+% Plot single cylce
+subplot(nRows,nCols,nCols+1)
+if nCycles > 1
+  % plot mean and standard error over cycles
+  myerrorbar(t(1:length(singleCycle)),singleCycle,'yError',singleCycleSte,'LineWidth',1,'MarkerSize',markerSize);hold on
+  plot(t(1:length(singleCycle)),corAnalFit(1:length(singleCycle)),'r-','LineWidth',1.5);
+  set(gca,'XLim',[t(1) t(length(singleCycle))]);
+else
+  % just replot, only one cycle
+  plot(t,tSeries,'k.-','LineWidth',1,'MarkerSize',markerSize);hold on
+  plot(t,corAnalFit,'r-','LineWidth',1.5);
+  cycleLenSec = t(end)-t(1);
+end
+    
+% labels
+set(gca,'FontSize',fontSize);
+title(sprintf('Single cycle with STE across cycles\n(cycleLen: %0.1fms)',cycleLenSec*1000));
+xlabel('Time (s)');
+ylabel('Response amplitude (% signal change)');
+
 
