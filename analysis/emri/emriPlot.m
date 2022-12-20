@@ -15,7 +15,7 @@ shiftDown = any(strcmp(get(viewGet(v,'figureNumber'),'SelectionType'),'extend'))
 if isempty(tSeries),return,end
 
 % calculate fft
-ft = fft(tSeries-mean(tSeries));
+ft = fft(tSeries);
 absft = abs(ft(1:round((length(ft)/2))));
 
 % plot the basic time series and FFT
@@ -36,6 +36,7 @@ if ~isempty(co)
   detrend = corAnalParams.detrend{curScan};
   spatialnorm = corAnalParams.spatialnorm{curScan};
   trigonometricFunction = corAnalParams.trigonometricFunction{curScan};
+  
   % run the coranal (note that we do this because the tSeries here may be
   % the average of an ROI for which coranal has not yet been run.
   [coVal, ampVal, phVal, corAnalTSeries] = computeCoranal(tSeries,nCycles,detrend,spatialnorm,trigonometricFunction);
@@ -91,6 +92,7 @@ set(gca,'XLim',[min(shiftVal) max(shiftVal)]);
 xlabel('Lag (s)');
 ylabel('Correlation (r)');
 mylegend({'Auto-correlation','95% confidence interval'},{'k-','r-'});
+grid on;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% getPeakCorrelationValue
@@ -253,6 +255,7 @@ ylabel('Response amplitude (% signal change)');
 set(gca,'xgrid','on')
 set(gca,'XLim',[min(t) max(t)]);
 set(gca,'FontSize',fontSize);
+grid on
 
 % Plot Fourier Transform
 subplot(nRows,nCols,nCols+1:2*nCols)
@@ -288,7 +291,7 @@ selectGraphWin(true);
 % Set title for time series
 subplot(nRows,nCols,1:nCols);
 headerStr = sprintf('%s\nfreq=%i cycles/scan (%0.1f cycles/sec) co=%f amp=%f ph(%s)=%f (%i deg)',...
-  headerStr,nCycles,nCycles*t(end),coVal,ampVal,trigonometricFunction,phVal,round(180*phVal/pi));
+  headerStr,nCycles,nCycles*(1/t(end)),coVal,ampVal,trigonometricFunction,phVal,round(180*phVal/pi));
 title(headerStr,'Interpreter','none');
 
 % put the ticks upon each cycle
