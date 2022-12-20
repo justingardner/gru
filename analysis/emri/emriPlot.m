@@ -7,6 +7,14 @@
 %
 function emriPlot(v,overlayNum,scan,x,y,z,roi)
 
+% display what we are doing (as this function can take a little bit to put
+% up the figure)
+if ~isempty(roi) && isfield(roi{1},'name')
+  disp(sprintf('(emriPlot) Creating plot for roi: %s',roi{1}.name));
+else
+  disp(sprintf('(emriPlot) Creating plot for voxel: [%i %i %i]',x,y,z));
+end    
+
 % see if the shift key is down on MLR fig
 shiftDown = any(strcmp(get(viewGet(v,'figureNumber'),'SelectionType'),'extend'));
 
@@ -192,7 +200,6 @@ t = t(junkframes+1:junkframes+nframes);
 % get percentTSeries
 meanTSeries = mean(tSeries);
 tSeries = 100*(tSeries-meanTSeries)/meanTSeries;
-tSeriesSte = 100*tSeriesSte/meanTSeries;
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %% computeCorAnalFit
@@ -247,7 +254,7 @@ subplot(nRows,nCols,1:nCols)
 if all(isnan(tSeriesSte))
   plot(t,tSeries,'k.-','LineWidth',1,'MarkerSize',markerSize);hold on
 else
-  errorbar(t,tSeries,tSeriesSte,'k.-','LineWidth',1,'MarkerSize',markerSize);hold on
+  myerrorbar(t,tSeries,'yError',tSeriesSte,'LineWidth',1,'MarkerSize',markerSize);hold on
 end
 title(headerStr);
 xlabel('Time (s)');
