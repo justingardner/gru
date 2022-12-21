@@ -34,7 +34,7 @@ if isempty(params)
   % put up the gui
   params = emriGUI('v',v,'groupNum',groupNum,'defaultParams',defaultParams,'scanList',scanList);
 end
-
+keyboard
 % just return parameters
 if justGetParams,d = params;return,end
 
@@ -83,7 +83,7 @@ o.interrogator = interrogatorFunction;
 o.groupName = viewGet(v,'groupName');
 o.params = params;
 o.range = overlayRange;
-co.data = cell(1,nScans);
+o.data = cell(1,nScans);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % runCorAnal
@@ -113,6 +113,7 @@ for iFreq = params.cyclesScanMin:params.cyclesScanMax
 
   % set the frequency for the analysis
   corAnalParams.ncycles(:) = iFreq;
+  corAnalParams.smoothingKernelWidth = params.smoothingKernelWidth
   
   % init overlays
   co{end+1} = initOverlay(v,nScans,'name',sprintf('%03i co',iFreq),'params',corAnalParams,'overlayRange',[0 1]);
@@ -201,7 +202,17 @@ for scanIndex=1:length(scanList)
     % Reshape the tSeries
     % ATTN: added reshapeTSeries function, since loadTSeries not longer reshapes when it loads -eli
     tSeries = reshapeTSeries(tSeries);
+
+    % Temporal filtering
+        % Make a gaussian kernel to smooth with
+        kernel = gausswin(params.smoothingKernelWidth)/sum(gausswin(params.smoothingKernelWidth));
+        
+        % Set the NaN values = 0 so you can do the filtering - 
+        tSeries(isnan(tSeries)) = 0;
     
+        % Forward/Backward kernel smoothing 
+        tSeries = filtfilt(kernel,1,tSeries);
+
     % check that junkframes and nframes settings are ok
     if size(tSeries,1) < (junkframes+nframes)
       mrErrorDlg(sprintf('(corAnal) Number of junkframes (%i) plus nframes (%i) should not be larger than number of volumes in scan %i',junkframes,nframes,size(tSeries,1)));
