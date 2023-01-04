@@ -35,10 +35,13 @@ paramsInfo{end+1} = {'saveName','emriAnal','File name to try to save as'};
 paramsInfo{end+1} = {'frequencyAnalysis',1,'type=checkbox','Compute frequency analysis'};
 paramsInfo{end+1} = {'cyclesScanMin',1,'incdec',[-1 1],'minmax',[1 inf],'Compute frequency analysis starting at this frequency','contingent=frequencyAnalysis'};
 paramsInfo{end+1} = {'cyclesScanMax',5,'incdec',[-1 1],'minmax',[1 inf],'Compute frequency analysis ending at this frequency','contingent=frequencyAnalysis'};
-paramsInfo{end+1} = {'smoothingKernelWidth',1,'incdec',[-1 1],'minmax',[1 inf],'Width of gaussian temporal smoothing kernel (in time points) - 0 for no temporal smoothing','contingent=frequencyAnalysis'};
 paramsInfo{end+1} = {'detrend',{'None','Highpass','Linear','Quadratic'},'Detrend for corAnal','contingent=frequencyAnalysis'};
 paramsInfo{end+1} = {'divideByMean',0,'type=checkbox','Divide by mean of time-series (not necessary for concatenation as this has already been done','contingent=frequencyAnalysis'};
 paramsInfo{end+1} = {'trigonometricFunction',{'Sine','Cosine'},'Sets which function phase will be used for frequency analysis','contingent=frequencyAnalysis'};
+paramsInfo{end+1} = {'temporalFiltering',0,'type=checkbox','Temporal smoothing'};
+paramsInfo{end+1} = {'boxSmoothing',0,'type=checkbox','Box filter temporal smoothing','contingent=temporalFiltering'};
+paramsInfo{end+1} = {'boxSmoothingWidth',3,'incdec',[-1 1],'minmax',[1 inf],'Size of Box smoothing filter','contingent=boxSmoothing'};
+
 
 % Get parameter values
 if defaultParams
