@@ -34,7 +34,7 @@ if isempty(params)
   % put up the gui
   params = emriGUI('v',v,'groupNum',groupNum,'defaultParams',defaultParams,'scanList',scanList);
 end
-keyboard
+
 % just return parameters
 if justGetParams,d = params;return,end
 
@@ -51,14 +51,16 @@ params = checkEmriParams(params);
 % set the group
 v = viewSet(v,'curGroup',params.groupName);
 
-% load the time series for preprocessing
-% TODO 
 
-% TODO: run preprocessing
+% filter the time series, save to use later instead of loadTSeries
+if params.temporalFiltering
+    filteredTSeries = filterTSeries(v,params);
+end
+
 
 % run the frequency analysis
 if params.frequencyAnalysis
-  runCorAnal(v,params); % TODO pass the times series in
+  runCorAnal(v,params,filteredTSeries); % TODO pass the times series in
 end
 
 
@@ -85,10 +87,59 @@ o.params = params;
 o.range = overlayRange;
 o.data = cell(1,nScans);
 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% filterTSeries
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function filteredTSeries = filterTSeries(v,params)
+
+% get params and scan list
+corAnalParams.recompute = zeros(1,viewGet(v,'nScans'));
+corAnalParams.recompute(params.scanNum) = 1;
+scanList = find(corAnalParams.recompute(:));
+
+% load the unfiltered time series for all slices and scans
+for scanIndex=1:length(scanList)
+    scanNum = scanList(scanIndex);
+    unfilteredTSeries{scanNum} = loadTSeries(v,scanNum);
+end
+
+% make the filter. add more options here.
+    
+    %box smoothing
+    if params.boxSmoothing
+    filter = ones(1,params.boxSmoothingWidth)/params.boxSmoothingWidth; %placeholder box filter.
+    end
+
+    %TODO - add other filters.
+
+% do the filtering
+for scanIndex=1:length(scanList)
+
+    scanNum = scanList(scanIndex);
+
+    % get scan dimensions
+    [scanDim1 scanDim2 nslices nframes] = size(unfilteredTSeries{scanNum});
+
+    for dim1 = 1:scanDim1
+        for dim2 = 1:scanDim2
+            for slice = 1:nslices
+
+                %get the unfiltered tSeries for the voxel at dim1, dim2 in slice+scan
+                tSeriesToFilter = unfilteredTSeries{scanNum}(dim1,dim2,slice,:);
+                %convolve with the filter you made earlier
+                filteredTSeries{scanNum}(dim1,dim2,slice,:) = conv(tSeriesToFilter(:),filter,'same');
+
+            end
+        end
+    end
+end
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % runCorAnal
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function runCorAnal(v,params)
+function runCorAnal(v,params,filteredTSeries)
 
 % get number of scans
 nScans = length(params.scanNum);
@@ -113,15 +164,14 @@ for iFreq = params.cyclesScanMin:params.cyclesScanMax
 
   % set the frequency for the analysis
   corAnalParams.ncycles(:) = iFreq;
-  corAnalParams.smoothingKernelWidth = params.smoothingKernelWidth
-  
+
   % init overlays
   co{end+1} = initOverlay(v,nScans,'name',sprintf('%03i co',iFreq),'params',corAnalParams,'overlayRange',[0 1]);
   amp{end+1} = initOverlay(v,nScans,'name',sprintf('%03i amp',iFreq),'params',corAnalParams,'overlayRange',[0 1]);
   ph{end+1} = initOverlay(v,nScans,'name',sprintf('%03i ph',iFreq),'params',corAnalParams,'overlayRange',[0 2*pi]);
 
   % Compute it (function is a copy of what is in corAnal
-  [co{end},amp{end},ph{end}] = computeCorrelationAnalysis(v,corAnalParams,co{end},amp{end},ph{end});
+  [co{end},amp{end},ph{end}] = computeCorrelationAnalysis(v,corAnalParams,filteredTSeries,co{end},amp{end},ph{end});
 
   % Fill range field for amp
   ampMin = realmax; ampMax = 0;
@@ -164,7 +214,7 @@ return;
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [co,amp,ph] = computeCorrelationAnalysis(view,params,co,amp,ph)
+function [co,amp,ph] = computeCorrelationAnalysis(view,params,filteredTSeries,co,amp,ph)
 % Required fields in params: 'recompute','ncycles','detrend','spatialnorm'
 
 % Get scanList from params.recompute field
@@ -193,25 +243,18 @@ for scanIndex=1:length(scanList)
   end
   
   nslices = viewGet(view,'nslices',scanNum);
-  for sliceNum = 1:nslices
+  for sliceNum = 1:nslices    
+    
     % Analysis parameters for this scan
     junkframes = viewGet(view,'junkframes',scanNum);
     nframes = viewGet(view,'nframes',scanNum);
-    % Load tSeries
-    tSeries = loadTSeries(view, scanNum, sliceNum);
+    
+    % Load tSeries from filtered TSeries, the way loadTSeries would do it
+    tSeries = filteredTSeries{scanNum}(:,:,sliceNum,:);
+    
     % Reshape the tSeries
     % ATTN: added reshapeTSeries function, since loadTSeries not longer reshapes when it loads -eli
     tSeries = reshapeTSeries(tSeries);
-
-    % Temporal filtering
-        % Make a gaussian kernel to smooth with
-        kernel = gausswin(params.smoothingKernelWidth)/sum(gausswin(params.smoothingKernelWidth));
-        
-        % Set the NaN values = 0 so you can do the filtering - 
-        tSeries(isnan(tSeries)) = 0;
-    
-        % Forward/Backward kernel smoothing 
-        tSeries = filtfilt(kernel,1,tSeries);
 
     % check that junkframes and nframes settings are ok
     if size(tSeries,1) < (junkframes+nframes)
