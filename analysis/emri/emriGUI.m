@@ -39,8 +39,8 @@ paramsInfo{end+1} = {'detrend',{'None','Highpass','Linear','Quadratic'},'Detrend
 paramsInfo{end+1} = {'divideByMean',0,'type=checkbox','Divide by mean of time-series (not necessary for concatenation as this has already been done','contingent=frequencyAnalysis'};
 paramsInfo{end+1} = {'trigonometricFunction',{'Sine','Cosine'},'Sets which function phase will be used for frequency analysis','contingent=frequencyAnalysis'};
 paramsInfo{end+1} = {'temporalFiltering',0,'type=checkbox','Temporal smoothing'};
-paramsInfo{end+1} = {'boxSmoothing',0,'type=checkbox','Box filter temporal smoothing','contingent=temporalFiltering'};
-paramsInfo{end+1} = {'boxSmoothingWidth',3,'incdec',[-1 1],'minmax',[1 inf],'Size of Box smoothing filter','contingent=boxSmoothing'};
+paramsInfo{end+1} = {'filter',{'None','Box','Gaussian'},'Type of smoothing filter','contingent=temporalFiltering'};
+paramsInfo{end+1} = {'filterWidth',0,'incdec',[-1 1],'minmax',[1 inf],'Size of Box smoothing filter','contingent=temporalFiltering'};
 
 
 % Get parameter values
