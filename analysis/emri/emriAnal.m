@@ -4,7 +4,7 @@ function [v params] = emriAnal(v,params,varargin)
 %         by: justin gardner (Adapted from corAnal and pRF code)
 %       date: 12/16/2022
 %    purpose: compute various analyses for DIANA sequence data
-%
+%f
 %             if you just want a default parameter structure you
 %             can do:
 % 
@@ -51,13 +51,12 @@ params = checkEmriParams(params);
 % set the group
 v = viewSet(v,'curGroup',params.groupName);
 
-
+keyboard
 % filter the time series, save to use later instead of loadTSeries
-if params.temporalFiltering
-    filteredTSeries = filterTSeries(v,params);
-end
+% if params.temporalFiltering = 0, filteredTSeries is not filtered.
+filteredTSeries = filterTSeries(v,params);
 
-
+keyboard
 % run the frequency analysis
 if params.frequencyAnalysis
   runCorAnal(v,params,filteredTSeries); % TODO pass the times series in
@@ -104,35 +103,48 @@ for scanIndex=1:length(scanList)
     unfilteredTSeries{scanNum} = loadTSeries(v,scanNum);
 end
 
-% make the filter. add more options here.
+% if the temporal filtering box was checked, filter the data
+if params.temporalFiltering
+
+    % make the filter. add more options here.  
+        %box smoothing
+        if strcmp(params.filter,'Box')
+            filter = ones(1,params.filterWidth)/params.filterWidth; %placeholder box filter.
+        end
     
-    %box smoothing
-    if params.boxSmoothing
-    filter = ones(1,params.boxSmoothingWidth)/params.boxSmoothingWidth; %placeholder box filter.
-    end
+        %gausian smoothing
+        if strcmp(params.filter,'Gaussian')
+            filterWidth = params.filterWidth*2+1;
+            filter = gausswin(filterWidth)/sum(gausswin(filterWidth));
+        end
 
-    %TODO - add other filters.
-
-% do the filtering
-for scanIndex=1:length(scanList)
-
-    scanNum = scanList(scanIndex);
-
-    % get scan dimensions
-    [scanDim1 scanDim2 nslices nframes] = size(unfilteredTSeries{scanNum});
-
-    for dim1 = 1:scanDim1
-        for dim2 = 1:scanDim2
-            for slice = 1:nslices
-
-                %get the unfiltered tSeries for the voxel at dim1, dim2 in slice+scan
-                tSeriesToFilter = unfilteredTSeries{scanNum}(dim1,dim2,slice,:);
-                %convolve with the filter you made earlier
-                filteredTSeries{scanNum}(dim1,dim2,slice,:) = conv(tSeriesToFilter(:),filter,'same');
-
+        %TODO - add other filters.
+    
+    % do the filtering
+    for scanIndex=1:length(scanList)
+    
+        scanNum = scanList(scanIndex);
+    
+        % get scan dimensions
+        [scanDim1 scanDim2 nslices nframes] = size(unfilteredTSeries{scanNum});
+    
+        for dim1 = 1:scanDim1
+            for dim2 = 1:scanDim2
+                for slice = 1:nslices
+    
+                    %get the unfiltered tSeries for the voxel at dim1, dim2 in slice+scan
+                    tSeriesToFilter = unfilteredTSeries{scanNum}(dim1,dim2,slice,:);
+                    %convolve with the filter you made earlier
+                    filteredTSeries{scanNum}(dim1,dim2,slice,:) = conv(tSeriesToFilter(:),filter,'same');
+    
+                end
             end
         end
     end
+
+% if we didn't check the filter box, return the unfiltered TSeries
+else
+    filteredTSeries = unfilteredTSeries;
 end
 
 
