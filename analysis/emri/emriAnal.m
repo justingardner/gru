@@ -51,15 +51,13 @@ params = checkEmriParams(params);
 % set the group
 v = viewSet(v,'curGroup',params.groupName);
 
-keyboard
 % filter the time series, save to use later instead of loadTSeries
-% if params.temporalFiltering = 0, filteredTSeries is not filtered.
+% if params.temporalFiltering = 0, filteredTSeries is same as unfiltered.
 filteredTSeries = filterTSeries(v,params);
 
-keyboard
 % run the frequency analysis
 if params.frequencyAnalysis
-  runCorAnal(v,params,filteredTSeries); % TODO pass the times series in
+  runCorAnal(v,params,filteredTSeries);
 end
 
 
