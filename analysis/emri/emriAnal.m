@@ -4,7 +4,7 @@ function [v params] = emriAnal(v,params,varargin)
 %         by: justin gardner (Adapted from corAnal and pRF code)
 %       date: 12/16/2022
 %    purpose: compute various analyses for DIANA sequence data
-%f
+%
 %             if you just want a default parameter structure you
 %             can do:
 % 
@@ -52,8 +52,11 @@ params = checkEmriParams(params);
 v = viewSet(v,'curGroup',params.groupName);
 
 % filter the time series, save to use later instead of loadTSeries
-% if params.temporalFiltering = 0, filteredTSeries is same as unfiltered.
-filteredTSeries = filterTSeries(v,params);
+    % if params.temporalFiltering = 0, filteredTSeries is same as unfiltered.
+    filteredTSeries = temporalFilterTSeries(v,params);
+    
+    % same thing but with spatial
+    filteredTSeries = spatialFilterTSeries(v,params,filteredTSeries)
 
 % run the frequency analysis
 if params.frequencyAnalysis
@@ -86,9 +89,9 @@ o.data = cell(1,nScans);
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% filterTSeries
+% temporalFilterTSeries
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function filteredTSeries = filterTSeries(v,params)
+function filteredTSeries = temporalFilterTSeries(v,params)
 
 % get params and scan list
 corAnalParams.recompute = zeros(1,viewGet(v,'nScans'));
@@ -106,13 +109,13 @@ if params.temporalFiltering
 
     % make the filter. add more options here.  
         %box smoothing
-        if strcmp(params.filter,'Box')
-            filter = ones(1,params.filterWidth)/params.filterWidth; %placeholder box filter.
+        if strcmp(params.temporalFilter,'Box')
+            filter = ones(1,params.temporalFilterWidth)/params.temporalFilterWidth; %placeholder box filter.
         end
     
         %gausian smoothing
-        if strcmp(params.filter,'Gaussian')
-            filterWidth = params.filterWidth*2+1;
+        if strcmp(params.temporalFilter,'Gaussian')
+            filterWidth = params.temporalFilterWidth*2+1;
             filter = gausswin(filterWidth)/sum(gausswin(filterWidth));
         end
 
@@ -124,7 +127,7 @@ if params.temporalFiltering
         scanNum = scanList(scanIndex);
     
         % get scan dimensions
-        [scanDim1 scanDim2 nslices nframes] = size(unfilteredTSeries{scanNum});
+        [scanDim1 scanDim2 nslices nTimepoints] = size(unfilteredTSeries{scanNum});
     
         for dim1 = 1:scanDim1
             for dim2 = 1:scanDim2
@@ -144,6 +147,67 @@ if params.temporalFiltering
 else
     filteredTSeries = unfilteredTSeries;
 end
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% spatialFilterTSeries
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function filteredTSeries = spatialFilterTSeries(v,params,unfilteredTSeries)
+
+% get params and scan list
+corAnalParams.recompute = zeros(1,viewGet(v,'nScans'));
+corAnalParams.recompute(params.scanNum) = 1;
+scanList = find(corAnalParams.recompute(:));
+
+% if the spatial filtering box was checked, filter the data
+if params.spatialFiltering
+
+    % make the filter. add more options here.  
+        %box smoothing
+        if strcmp(params.spatialFilter,'Box')
+            filter = ones(1,params.spatialFilterWidth); %placeholder box filter.
+            filter = filter'*filter; filter = filter/(params.spatialFilterWidth^2)
+        end
+    
+        %gausian smoothing
+        if strcmp(params.spatialFilter,'Gaussian')
+            filterWidth = params.spatialFilterWidth*2+1;
+            filter = gausswin(filterWidth);
+            filter = filter*filter';
+        end
+
+        %TODO - add other filters.
+    
+    % do the filtering
+    for scanIndex=1:length(scanList)
+    
+        scanNum = scanList(scanIndex);
+    
+        % get scan dimensions
+        [scanDim1 scanDim2 nslices nTimepoints] = size(unfilteredTSeries{scanNum});
+    
+        for slice = 1:nslices
+            for timepoint = 1:nTimepoints
+    
+                    %get the unfiltered tSeries for all voxels in slice, at timepoint
+                    tSeriesToFilter = unfilteredTSeries{scanNum}(:,:,slice,timepoint);
+                    %convolve with the 2d filter you made earlier
+                    filteredTSeries{scanNum}(:,:,slice,timepoint) = conv2(tSeriesToFilter,filter,'same');
+                    %%% NOTE -- USING 'same' GIVES YOU EDGE EFFECTS! how do we fix this? -jw 1/09/23
+    
+            end
+        end
+    end
+
+% if we didn't check the filter box, return the unfiltered TSeries
+else
+    filteredTSeries = unfilteredTSeries;
+end
+
+
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
