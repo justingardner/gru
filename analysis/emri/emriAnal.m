@@ -61,7 +61,25 @@ v = viewSet(v,'curGroup',params.groupName);
 % run the frequency analysis
 if params.frequencyAnalysis
   runCorAnal(v,params,filteredTSeries);
+return
+
+
+
+
+
+%breaks here for now - need to figure out how to import overlays or just
+%run the same analysis on the saved version of the time series.
+if params.saveFilteredTSeries
+    params.saveFilteredTSeries = 0;
+keyboard
+%run on the saved filtered tSeries
+    v = getMLRView;
+    runCorAnal(v,params,filteredTSeries);
 end
+keyboard
+end
+
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -70,7 +88,6 @@ end
 function o = initOverlay(v,nScans,varargin)
 
 getArgs(varargin,{'name=default','functionName=emriAnal','reconcileFunction=defaultReconcileParams','mergeFunction=defaultMergeParams','colormap',[],'interrogatorFunction=emriPlot','params',[],'overlayRange',[0 1]});
-
 o.name = name;
 o.function = functionName;
 o.reconcileFunction = reconcileFunction;
@@ -106,29 +123,34 @@ end
 
 % if the temporal filtering box was checked, filter the data
 if params.temporalFiltering
-
-    % make the filter. add more options here.  
-        %box smoothing
-        if strcmp(params.temporalFilter,'Box')
-            filter = ones(1,params.temporalFilterWidth)/params.temporalFilterWidth; %placeholder box filter.
-        end
     
-        %gausian smoothing
-        if strcmp(params.temporalFilter,'Gaussian')
-            filterWidth = params.temporalFilterWidth*2+1;
-            filter = gausswin(filterWidth)/sum(gausswin(filterWidth));
-        end
-
-        %TODO - add other filters.
-    
-    % do the filtering
+    % go through each scan
     for scanIndex=1:length(scanList)
     
         scanNum = scanList(scanIndex);
     
+        % make the filter based on the TR of the scan.
+            TRlength = viewGet(v,'framePeriod',scanNum);
+                    if TRlength > 1; TRlength = TRlength/1000;end %quick fix if you set the frame length wrong, like I did when building this
+            filterWidthInTRs = params.temporalFilterWidthInMs/1000/TRlength;
+  
+
+            %box smoothing
+            if strcmp(params.temporalFilter,'Box')
+                temporalFilter = ones(1,filterWidthInTRs)/filterWidthInTRs; %placeholder box filter.
+            end
+        
+            %gausian smoothing
+            if strcmp(params.temporalFilter,'Gaussian')
+                temporalFilter = normpdf([-5:5],0,filterWidthInTRs)/sum(normpdf([-5:5],0,filterWidthInTRs))
+            end
+    
+            %TODO - add other filters.
+
         % get scan dimensions
         [scanDim1 scanDim2 nslices nTimepoints] = size(unfilteredTSeries{scanNum});
     
+        % filter along temporal dimension (x,y,z,:)
         for dim1 = 1:scanDim1
             for dim2 = 1:scanDim2
                 for slice = 1:nslices
@@ -136,7 +158,7 @@ if params.temporalFiltering
                     %get the unfiltered tSeries for the voxel at dim1, dim2 in slice+scan
                     tSeriesToFilter = unfilteredTSeries{scanNum}(dim1,dim2,slice,:);
                     %convolve with the filter you made earlier
-                    filteredTSeries{scanNum}(dim1,dim2,slice,:) = conv(tSeriesToFilter(:),filter,'same');
+                    filteredTSeries{scanNum}(dim1,dim2,slice,:) = conv(tSeriesToFilter(:),temporalFilter,'same');
     
                 end
             end
@@ -190,7 +212,6 @@ if params.spatialFiltering
     
         for slice = 1:nslices
             for timepoint = 1:nTimepoints
-    
                     %get the unfiltered tSeries for all voxels in slice, at timepoint
                     tSeriesToFilter = unfilteredTSeries{scanNum}(:,:,slice,timepoint);
                     %convolve with the 2d filter you made earlier
@@ -261,7 +282,7 @@ for iFreq = params.cyclesScanMin:params.cyclesScanMax
 end
 
 % Install emriAnal in the view
-emriAnal.name = 'emriAnal';  % This can be reset by editAnalysisGUI
+emriAnal.name = params.saveName;  % This can be reset by editAnalysisGUI
 emriAnal.type = 'emriAnal';
 emriAnal.groupName = params.groupName;
 emriAnal.function = 'emriAnal';
@@ -284,7 +305,55 @@ end
 % Save it
 saveAnalysis(v,emriAnal.name);
 
-return;
+if params.saveFilteredTSeries
+%% save the filtered time series as their own group with the same overlays
+% get the nifti headers to save the new time series
+    scanList = find(corAnalParams.recompute(:));
+    for scanIndex = 1:length(scanList);
+        scanNum = scanList(scanIndex);
+        v = viewSet(v,'curScan',scanNum);
+        scanHeaders{scanIndex} = viewGet(v,'niftihdr',scanNum);
+        scanHeaders{scanIndex}.hdr_name = []; scanHeaders{scanIndex}.img_name = [];
+        scanNames{scanIndex} = viewGet(v,'figNum').Name;
+    end
+
+% save the filtered time series as a new group with the computed overlays
+    v = viewSet(v,'newGroup',emriAnal.name);
+    v = viewSet(v,'groupName',emriAnal.name);
+    
+    % save the time series
+    for scanIndex = 1:length(scanList);
+        scanNum = scanList(scanIndex);
+        v = saveNewTSeries(v,filteredTSeries{scanNum},[],scanHeaders{scanIndex});
+        keyboard
+        %rename it
+        tempFig = viewGet(v,'figNum'),tempFig.Name = scanNames{scanIndex}; v = viewSet(v,'figure',tempFig);
+    end
+
+%%% this part (adding overlays) does not currently work    
+% keyboard
+% 
+%     % add the overlays
+%     emriAnal.groupName = emriAnal.name;
+%     emriAnal.name = params.saveName;
+%    %v = viewSet(v,'newanalysis',emriAnal);
+%     for iOverlay = 1:length(co)
+%       
+%       co{iOverlay}.groupName = emriAnal.name;
+%       amp{iOverlay}.groupName = emriAnal.name;
+%       ph{iOverlay}.groupName = emriAnal.name;
+% 
+% 
+%       v = viewSet(v,'newoverlay',co{iOverlay});
+%       v = viewSet(v,'newoverlay',amp{iOverlay});
+%       v = viewSet(v,'newoverlay',ph{iOverlay});
+%     end
+%     if ~isempty(viewGet(v,'fignum'))
+%       refreshMLRDisplay(viewGet(v,'viewNum'));
+%     end
+% 
+% keyboard
+end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
