@@ -29,7 +29,7 @@ groupNames = putOnTopOfList(viewGet(v,'groupName',groupNum),viewGet(v,'groupName
 % set the parameter string
 paramsInfo = {};
 paramsInfo{end+1} = {'groupName',groupNames,'Name of group from which to do pRF analysis'};
-paramsInfo{end+1} = {'saveName','emriAnal','File name to try to save as'};
+paramsInfo{end+1} = {'saveName','emriAnal','string','File name to try to save as'};
 
 % parameters
 paramsInfo{end+1} = {'frequencyAnalysis',1,'type=checkbox','Compute frequency analysis'};
@@ -39,11 +39,13 @@ paramsInfo{end+1} = {'detrend',{'None','Highpass','Linear','Quadratic'},'Detrend
 paramsInfo{end+1} = {'divideByMean',0,'type=checkbox','Divide by mean of time-series (not necessary for concatenation as this has already been done','contingent=frequencyAnalysis'};
 paramsInfo{end+1} = {'trigonometricFunction',{'Sine','Cosine'},'Sets which function phase will be used for frequency analysis','contingent=frequencyAnalysis'};
 paramsInfo{end+1} = {'temporalFiltering',0,'type=checkbox','Temporal smoothing'};
-paramsInfo{end+1} = {'temporalFilter',{'None','Box','Gaussian'},'Type of smoothing filter','contingent=temporalFiltering'};
-paramsInfo{end+1} = {'temporalFilterWidth',0,'incdec',[-1 1],'minmax',[1 inf],'Size of Box smoothing filter','contingent=temporalFiltering'};
+paramsInfo{end+1} = {'temporalFilter',{'Box','Gaussian'},'Type of smoothing filter','contingent=temporalFiltering'};
+paramsInfo{end+1} = {'temporalFilterWidthInMs',5,'incdec',[-1 1],'minmax',[1 inf],'Size of Box smoothing filter','contingent=temporalFiltering'};
 paramsInfo{end+1} = {'spatialFiltering',0,'type=checkbox','Temporal smoothing'};
 paramsInfo{end+1} = {'spatialFilter',{'None','Box','Gaussian'},'Type of smoothing filter','contingent=spatialFiltering'};
 paramsInfo{end+1} = {'spatialFilterWidth',0,'incdec',[-1 1],'minmax',[1 inf],'Size of Box smoothing filter','contingent=spatialFiltering'};
+paramsInfo{end+1} = {'saveFilteredTSeries',0,'type=checkbox','Save the filtered time series with the same analysis overlays','contingent=frequencyAnalysis'};
+
 
 
 % Get parameter values
