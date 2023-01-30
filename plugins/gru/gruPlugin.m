@@ -33,7 +33,10 @@ switch action
 
     % add menu item for emri analysis
     mlrAdjustGUI(v,'add','menu','emriAnal','/Analysis/Correlation Analysis','Callback',@callEmriAnal,'Separator','off');
-    
+
+    % add menu to analyze overlays
+    mlrAdjustGUI(v,'add','menu','Analyze','/Edit/Overlay/Edit Overlay','Callback',@callOverlayAnalysis,'Separator','on');
+
     % This is a command that could be used to install some default colormaps
     % that will show up when you do /Edit/Overlay
     %mlrAdjustGUI(v,'add','colormap','gray');
@@ -82,6 +85,17 @@ function callEmriAnal(hObject,eventdata)
 % code-snippet to get the view from the hObject variable. Not needed for this callback.
 v = viewGet(getfield(guidata(hObject),'viewNum'),'view');
 
-% call tSenseNotch
+% call emriAnal
 emriAnal(v);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    callOVerlayAnalysis    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function callOverlayAnalysis(hObject,eventdata)
+
+% code-snippet to get the view from the hObject variable. Not needed for this callback.
+v = viewGet(getfield(guidata(hObject),'viewNum'),'view');
+
+% call overlayAnalysis
+overlayAnalysis(v);
 
