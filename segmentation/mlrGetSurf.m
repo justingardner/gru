@@ -11,9 +11,9 @@ function mlrGetSurf()
 %   mlrGetSurf()
 
 %% Search the LXC server for subjects
-s.localDataDir= '~/data/mlrAnatDB';
-s.cniComputerName = 'cnic7.stanford.edu';
-s.sunetID = mglGetParam('sunetID');
+s.localDataDir= '~/data/freesurfer';
+s.cniComputerName = 'luxardo.stanford.edu';
+s.sunetID = 'gru'; %mglGetParam('sunetID');
 
 if isempty(s.sunetID)
     warning('Using username rather than sunetID');
@@ -21,7 +21,7 @@ if isempty(s.sunetID)
 end
 
 disp(sprintf('\n\n\n\n'));
-command = sprintf('ssh %s@%s ls /data/freesurfer/subjects/',s.sunetID,s.cniComputerName);
+command = sprintf('ssh %s@%s ls /home/%s/freesurfer/subjects/',s.sunetID,s.cniComputerName, s.sunetID);
 disp(command);
 disp('Enter password: ');
 [status,result] = system(command);
@@ -35,7 +35,7 @@ end
 
 %% Check what folder we want to move
 disp('Which folder(s) do you want to copy locally: e.g. 1, or [1 2]');
-for i = 1:length(subjFolders);
+for i = 1:length(subjFolders)
     disp(sprintf('%i: %s',i,subjFolders{i}));
 end
 
@@ -61,7 +61,7 @@ s.aDBLocal = fullfile('~/data/mlrAnatDB',folder);
 s.subjectID = folder;
 
 %% 
-s.fstempPath = fullfile('/data/freesurfer/subjects/',folder);
+s.fstempPath = fullfile('~/freesurfer/subjects/',folder);
 
 %% Check if we already ran this...
 if checkForSurfFiles(s.localDataDir)
@@ -77,7 +77,7 @@ end
 
 %% Check if FreeSurfer is finished
 
-s.fstempPath = fullfile('/data/freesurfer/subjects/',folder);
+s.fstempPath = fullfile('/home/gru/freesurfer/subjects/',folder);
 s.fstempPathMRI = fullfile(s.fstempPath,'mri');
 s.fstempPathSurf = fullfile(s.fstempPath,'surf');
 
@@ -133,6 +133,9 @@ end
     mlrImportFreeSurfer('baseName',s.subjectID);
     cd(cDir);
 
+%% Move to the local data directory
+mkdir(s.localDataDir);
+movefile(s.fullLocal, s.localDataDir);
 
 %% Run Justin's import code
 
@@ -143,7 +146,7 @@ mlrAnatDBPut(s.subjNum,s.fullLocal,'freesurfer');
 %% Cleanup the server, get rid of the /data/temp/s#### and /data/freesurfer/subjects/s####
 disp(sprintf('\n\n\n\n'));
 if s_t1 && s_surf
-    if strcmp(input('Do you want to remove the folders on the LXC server? y/n: ','s'),'y')
+    if strcmp(input('Do you want to remove the folders on the Luxardo server? y/n: ','s'),'y')
 
         command1 = sprintf('ssh %s@%s rm -rf %s',s.sunetID,s.cniComputerName,s.fstempPath);
         command2 = sprintf('ssh %s@%s rm -rf %s',s.sunetID,s.cniComputerName,fullfile('/data/temp/',s.subjectID));
