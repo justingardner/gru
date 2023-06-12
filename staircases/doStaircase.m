@@ -325,7 +325,7 @@ help=[];
 getArgs(args,{'initialThreshold=[]','initialThresholdSd=[]','tGuess=[]','tGuessSd=[]','pThreshold',1/sqrt(2),'beta=3.5','delta=0.01','gamma=0.5','verbose=1','logValues=[]','help=[]'});
 
 if exist('QuestCreate') ~= 2
-  disp(sprintf('(doStaircase:initQuestStaircase) You need to install the Quest package. See: http://www.psych.nyu.edu/pelli/software.html'));
+  disp(sprintf('(doStaircase:initQuestStaircase) You need to install the Quest package. See: https://denispelli.com/software.html'));
   return
 end
 

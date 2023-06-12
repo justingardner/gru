@@ -56,7 +56,7 @@ function retval = dofmricni(varargin)
 clc;
 
 % Default arguments
-getArgs(varargin,{'PI=jlg','idWarning=true','stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','getStimFiles=true','stimComputerName=oban','stimComputerUserName=gru','username=[]','unwarp=1','minVolumes=10','removeInitialVols=2','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1','fixMuxXform=2','dicomFix=0','flywheel=1'});
+getArgs(varargin,{'PI=jlg','idWarning=true','stimfileDir=[]','numMotionComp=1','cniComputerName=cnic7.stanford.edu','localDataDir=~/data','getStimFiles=1','stimComputerName=oban','stimComputerUserName=gru','username=[]','unwarp=1','minVolumes=10','removeInitialVols=4','stimfileRemoveInitialVols=[]','calibrationNameStrings',{'CAL','pe0'},'cleanUp=1','useLocalData=0','spoofTriggers=1','fixMuxXform=1','dicomFix=0','flywheel=1'});
 
 % set up system variable (which gets passed around with important system info) - this
 % means we have to copy these variables into s.
@@ -76,7 +76,7 @@ s.teHigher = 40;
 if ~tf,return,end
 disp('checkCommands done');
 
-% set motionComp defaults
+% set  defaults
 [tf s] = setMotionCompDefaults(s);
 if ~tf,return,end
 disp('setMotionCompDefaults done');
@@ -707,6 +707,7 @@ if ~isempty(v)
 	  % round to nearest 1/1000 of a second
 	  framePeriod = round(framePeriod*1000)/1000;
 	  disp(sprintf('(dofmricni) Frame period as recorded in stimfile is: %0.3f',framePeriod));
+      
 	end
       end
     end
@@ -2466,6 +2467,7 @@ if ~justDisplay && (missingIgnoredVols || spoofTriggers)
       stimfile = removeTriggers(stimfile,2:stimfileInfo.numVols);
       % now add volumes for where events should have happened
       framePeriod = boldScan.tr/1000;
+      
       dispConOrLog(sprintf('(dofmricni) Spoofing volumes every %ss in %s',num2str(framePeriod),stimfileName));
       if isnan(framePeriod), dispConOrLog(sprintf('(dofmricni) !!! TR setting is invalid !!!'));keyboard;end
       % get all the volumes we need to add, and add them

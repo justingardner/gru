@@ -36,8 +36,8 @@ yDeg2Pix = mglGetParam('yDeviceToPixels');
 if isscalar(inputs)
     output = round(inputs .* max([xDeg2Pix,yDeg2Pix]));        
 else    
-    output = [inputs(:,1) .* yDeg2Pix, ...
-        inputs(:,2) .* xDeg2Pix];    
+    output = [inputs(:,1) .* xDeg2Pix, ...
+        inputs(:,2) .* yDeg2Pix];    
     % centering
     output = round([output(:,1) + floor(displaySize(1)/2), ...
         output(:,2) + floor(displaySize(2)/2)]);     
