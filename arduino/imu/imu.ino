@@ -1,8 +1,35 @@
-#include <Adafruit_SSD1306.h>
-#include "Arduino_BMI270_BMM150.h"
+// Arduino code for Ardunio Nano 33 BLE Sense 
+// This code sets up the Arduino to work with a SSD1306 Display
+// and a stepper motor controller. The arduino will accept commands
+// over serial and perform the following actions
+//
+// I -> Start displaying IMU data
+// i -> Stop displaying IMU data
+// C -> Start displaying color data
+// c -> Stop displaying color data
+// G -> Spin stepper motor according to current setting of numSteps and stepTime, where
+//      numSteps are the number of steps, and stepTime is the time in micro seconds per step
+// R -> Set for turn CW (Right), needs to be passed 2 two byte integer which specify
+//      the numSteps and stepTime. e.g. Rxxyy (where xx and yy are little endian integers)
+// r -> Set for turn CW (Right), same as R, but uses ascii digits encoded as 
+//      rnnnn,nnnn; where the first number is numSteps and the second number is stepTime
+//      e.g. r800,500; is right turn for 800 steps with 500 microseconds per step
+// L,l -> same as R,r but for CCW (Left) turns
 
-//#include <splash.h>
-//#include <Nano33BLE_System.h>
+////////////////////
+// Include section
+////////////////////
+#include <Adafruit_SSD1306.h>
+#include <Arduino_BMI270_BMM150.h>
+#include <Arduino_APDS9960.h>
+
+/////////////////////
+// global variables
+/////////////////////
+bool imuEnable = false;
+bool colorSensorEnable = false;
+bool runStepperMotor = false;
+bool displayUpdate = false;
 
 ////////////////////////////////////////////////////////////////
 // setup
@@ -10,25 +37,40 @@
 void setup() {
   
   // Start serial communication
-  Serial.begin(9600);
-  Serial.println("Initializing program");
+  setupSerial();
 
   // setup OLED display (see function below for parameter settings)
   setupDisplay();
 
   // setup IMU
-  //setupIMU();
+  setupIMU();
 
   //setup StepperMotor
   setupStepperMotor();
+
+  // setup light sensor
+  setupColorSensor();
 }
 
 ////////////////////////////////////////////////////////////////
 // loop function
 ////////////////////////////////////////////////////////////////
 void loop() {
-  //displayIMU();
-  spinStepperMotor();
+  // check serial for commands
+  updateSerial();
+
+  // display light sensor data
+  if (colorSensorEnable) updateColorSensor();
+
+  // display imu if called for
+  if (imuEnable) displayIMU();
+  
+  // run stepper motor if called for
+  if (runStepperMotor) spinStepperMotor();
+
+  // flush the display if necessary
+  if (displayUpdate) displayFlush();
+  displayUpdate = false;
 }
 
 //////////////////////////////////////////////////////
@@ -147,15 +189,23 @@ void setupIMU() {
   sprintf(sampleRatesDisplayBuffer, "M:%04.1f G:%04.1f A:%05.2f", IMU.magneticFieldSampleRate(), IMU.gyroscopeSampleRate(), IMU.accelerationSampleRate());
 }
 
+///////////////////
+// display IMU
+///////////////////
 void displayIMU() {
   // x, y, z values for sensor info
   float x, y, z;
 
-  // clear display
-  displayClear();
+  if (!displayUpdate) {
+    // clear display
+    displayClear();
   
-  // sample rate display
-  displayPrintln(sampleRatesDisplayBuffer);
+    // sample rate display
+    displayPrintln(sampleRatesDisplayBuffer);
+
+    // set display update
+    displayUpdate = true;
+  }
 
   // print magnetic field
   if (IMU.magneticFieldAvailable()) {
@@ -183,44 +233,208 @@ void displayIMU() {
     sprintf(accDisplayBuffer, "A:%+05.2f %+05.2f %+05.2f", x, y, z);
   }
   displayPrintln(accDisplayBuffer);
-  displayFlush();
 }
 
 //////////////////////
 // setupStepperMotor
 //////////////////////
-#define stepPin 3
 #define dirPin 2
-#define enPin 4
+#define stepPin 3
+#define enablePin 4
+
+// some variables that can be set to control the spin
+int stepDir = 1;
+int numSteps = 800;
+int stepTime = 500;
+
+////////////////////////////
+// setup the stepper motor
+////////////////////////////
 void setupStepperMotor() {
-  // Sets the two pins as Outputs
-  pinMode(enPin,OUTPUT);
-  digitalWrite(enPin,HIGH);
+  // Sets the enable pin as output and disable the motor
+  pinMode(enablePin,OUTPUT);
+  digitalWrite(enablePin,HIGH);
+  // setup step and dir pins
   pinMode(stepPin,OUTPUT); 
   pinMode(dirPin,OUTPUT);
-  digitalWrite(enPin,LOW);
+  // enable the motor
+  digitalWrite(enablePin,LOW);
 }
 
+////////////////////////////
+// spin the stepper motor
+////////////////////////////
 void spinStepperMotor() {
-  digitalWrite(dirPin,HIGH); // Enables the motor to move in a particular direction
-  displayString("Spin");
-  // Makes 200 pulses for making one full cycle rotation
-  for(int x = 0; x < 800; x++) {
-    digitalWrite(stepPin,HIGH); 
-    delayMicroseconds(700);    // by changing this time delay between the steps we can change the rotation speed
-    digitalWrite(stepPin,LOW); 
-    delayMicroseconds(700); 
-  }
-  delay(1000); // One second delay
-  displayString("Reverse Spin");
+    // Enables the motor to move in a particular direction
+  digitalWrite(dirPin, stepDir == 1 ? HIGH : LOW); 
   
-  digitalWrite(dirPin,LOW); //Changes the rotations direction
-  // Makes 400 pulses for making two full cycle rotation
-  for(int x = 0; x < 1600; x++) {
-    digitalWrite(stepPin,HIGH);
-    delayMicroseconds(500);
-    digitalWrite(stepPin,LOW);
-    delayMicroseconds(500);
+  // keep time for how long this ran
+  unsigned long startTime = micros();
+
+  // Run for set number of steps
+  for(int iStep = 0; iStep < numSteps; iStep++) {
+    digitalWrite(stepPin,HIGH); 
+    delayMicroseconds(stepTime/2);    // by changing this time delay between the steps we can change the rotation speed
+    digitalWrite(stepPin,LOW); 
+    delayMicroseconds(stepTime/2); 
   }
-  delay(1000);
+  unsigned long elapsedTime = micros() - startTime;
+  
+  // clear display and show what we have done
+  displayClear();
+  displayUpdate = true;
+  displayPrintln(dirPin == 1 ? "Right" : "Left");
+  displayPrintln("numSteps: " + String(numSteps));
+  displayPrintln("stepTime: " + String(stepTime) + " us");
+  displayPrintln("Dur: " + String(elapsedTime/1000) + " ms");
+
+  
+  // stepper motor done running
+  runStepperMotor = false;
+}
+
+////////////////////////////////
+// Serial Communications
+////////////////////////////////
+int baudRate = 9600;
+
+////////////////
+// setupSerial
+////////////////
+void setupSerial() {
+  // set baud rate
+  Serial.begin(baudRate);
+  // print that we started
+  Serial.println("Init");
+}
+
+/////////////////
+// udpateSerial
+/////////////////
+void updateSerial() {
+  // check if there are any bytes available
+  if (Serial.available() > 0) { 
+    
+    // clear screen
+    displayUpdate = true;
+    displayClear();
+
+    char command = Serial.read(); 
+    switch(command) {
+      case 'R':
+      case 'L':
+        // set the direction
+        stepDir = toupper(command) == 'L' ? 1 : -1;
+        // read one int for how many steps
+        numSteps = readIntSerial();
+        // read another int for the cycle time
+        stepTime = readIntSerial();
+        // display what we got
+        displayPrintln("Received R");
+        displayPrintln("numSteps: "+String(numSteps));
+        displayPrintln("stepTime: "+String(stepTime));
+        break;
+    case 'r':
+    case 'l':
+        // lower case signifies getting the values by ascii
+        // so the values you should be given as nnn,nnn;
+        // set the direction
+        stepDir = toupper(command) == 'L' ? 1 : -1;
+        // read one int for how many steps
+        numSteps = readIntAsciiSerial(',');
+        // read another int for the cycle time
+        stepTime = readIntAsciiSerial(';');
+        // display what we got
+        displayPrintln("Received R");
+        displayPrintln("numSteps: "+String(numSteps));
+        displayPrintln("stepTime: "+String(stepTime));
+        break;
+      // GO stepper motor
+      case 'G':
+        runStepperMotor = true;
+        break;
+      // IMU 
+      case 'I':
+        displayPrintln("IMU enabled");
+        imuEnable = true;
+        break;
+      case 'i':
+        displayPrintln("IMU disabled");
+        imuEnable = false;
+        break;
+      // Color Sensor
+      case 'C':
+        displayPrintln("Color Sensor enable");
+        colorSensorEnable = true;
+        break;
+      case 'c':
+        displayPrintln("Color Sensor disabled");
+        colorSensorEnable = false;
+        break;
+      default:
+        displayPrintln("Unrecogonized");
+        break;
+
+    }
+
+  }
+}
+
+//////////////////
+// readIntSerial
+//////////////////
+int readIntSerial() {
+  // wait for two bytes to become available
+  while (Serial.available() < 2) {}
+  
+  // read the two bytes
+  byte byte1 = Serial.read(); // Read the first byte
+  byte byte2 = Serial.read(); // Read the second byte
+
+  // turn into an int
+  int receivedInt = (byte2 << 8) | byte1;
+  return(receivedInt);
+}
+
+//////////////////
+// readIntAsciiSerial
+//////////////////
+int readIntAsciiSerial(char delimitter) {
+  // read until delimitter
+  String receivedString = Serial.readStringUntil(delimitter);
+  
+  // convert to int
+  return(receivedString.toInt());
+}
+
+/////////////////////
+// setupColorSensor
+/////////////////////
+void setupColorSensor() {
+ if (!APDS.begin()) {
+    displayString("Error initializing APDS-9960 sensor.");
+  }
+}
+
+/////////////////////
+// updateColorSensor
+/////////////////////
+String colorSensorString;
+void updateColorSensor() {
+  // see whether screen needs to be cleared
+  if (!displayUpdate) {
+    displayClear();
+    displayUpdate = true;
+  }
+  
+  // check for color
+  if (APDS.colorAvailable()) {
+    int r, g, b, a;
+    APDS.readColor(r, g, b, a);
+    // display the values
+    colorSensorString = String(r)+", "+String(g)+", "+String(b)+", "+String(a);
+  }
+  // display light sensor string
+  displayPrintln(colorSensorString);
+
 }
