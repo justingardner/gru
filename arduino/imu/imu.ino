@@ -283,7 +283,7 @@ void spinStepperMotor() {
   // clear display and show what we have done
   displayClear();
   displayUpdate = true;
-  displayPrintln(dirPin == 1 ? "Right" : "Left");
+  displayPrintln(stepDir == -1 ? "Right" : "Left");
   displayPrintln("numSteps: " + String(numSteps));
   displayPrintln("stepTime: " + String(stepTime) + " us");
   displayPrintln("Dur: " + String(elapsedTime/1000) + " ms");
@@ -330,7 +330,7 @@ void updateSerial() {
         // read another int for the cycle time
         stepTime = readIntSerial();
         // display what we got
-        displayPrintln("Received R");
+        displayPrintln("Received " + String(command));
         displayPrintln("numSteps: "+String(numSteps));
         displayPrintln("stepTime: "+String(stepTime));
         break;
@@ -345,7 +345,7 @@ void updateSerial() {
         // read another int for the cycle time
         stepTime = readIntAsciiSerial(';');
         // display what we got
-        displayPrintln("Received R");
+        displayPrintln("Received " + String(command));
         displayPrintln("numSteps: "+String(numSteps));
         displayPrintln("stepTime: "+String(stepTime));
         break;
