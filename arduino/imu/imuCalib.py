@@ -2,9 +2,18 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sun Feb 18 21:34:56 2024
-
 @author: justin
 """
+#
+# Communication with arduino devcice which controls a stepper motor
+# To run
+#
+# # initialize
+# i = imuCalib();
+# # set to do a 360 degree rotation at 180 deg/s
+# i.setRotation(360,180);
+# #go
+# i.go();
 
 import serial
 import serial.tools.list_ports
@@ -65,28 +74,48 @@ class imuCalib:
     ####################    
     # imu
     ####################
-    def imu(self):
-        if self.imuStatus:
-            # send imu command to turn off IMU display
-            self.sendCommand(b'i')            
-            self.imuStatus = False
-        else:
-            # send imu command to turn on IMU display
+    def imu(self, imuDisplay=-1):
+        # turn on
+        if imuDisplay == True:
             self.sendCommand(b'I')
             self.imuStatus = True
-            
+        # turn off
+        elif imuDisplay == False:
+            self.sendCommand(b'i')
+            self.imuStatus = False
+            # toggle status
+        else:
+            if self.imuStatus:
+                # send imu command to turn off IMU display
+                self.sendCommand(b'i')            
+                self.imuStatus = False
+            else:
+                # send imu command to turn on IMU display
+                self.sendCommand(b'I')
+                self.imuStatus = True
+                
     ####################    
     # color
     ####################
-    def color(self):
-        if self.colorStatus:
-            # send color command to turn off color display
-            self.sendCommand(b'c')
-            self.colorStatus = False
-        else:
-            # send command command to turn on color display
+    def color(self, colorDisplay=-1):
+        # turn on
+        if colorDisplay == True:
             self.sendCommand(b'C')
             self.colorStatus = True
+        # turn off
+        elif colorDisplay == False:
+            self.sendCommand(b'c')
+            self.colorStatus = False
+            # toggle status
+        else:
+            if self.colorStatus:
+                # send color command to turn off color display
+                self.sendCommand(b'c')            
+                self.colorStatus = False
+            else:
+                # send color command to turn on color display
+                self.sendCommand(b'C')
+                self.colorStatus = True
          
     ####################    
     # selectSerialPort
