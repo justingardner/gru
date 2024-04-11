@@ -1,11 +1,11 @@
 dbstop('if','error');
 
-pathNames = {'~/proj/mrTools','~/proj/mgl','~/proj/gru','~/proj/grustim','~/proj/matlab/plugins','~/proj/steeve/'};
+pathNames = {'~/proj/mrTools','~/proj/mgl','~/proj/gru','~/proj/grustim','~/proj/matlab/plugins','~/proj/motex'};
 
 addpath('~/proj/gru/mac_helpers'); % explicitly do this so we can use genpath_exclude to remove .git/.svn
 for i = 1:length(pathNames)
   if isdir(pathNames{i})
-    addpath(genpath_exclude(pathNames{i},{'.git','.svn'}));
+    addpath(genpath_exclude(pathNames{i},{'\.git','\.svn','\+flywheel','\+jsonio'}));
   end
 end
 
@@ -50,7 +50,7 @@ if exist(userStartup) == 2
   disp(sprintf('(startup) Running user specific startup: %s',userStartup));
   eval(userStartup);
 else
-  disp(sprintf('(startup) No user specific startup scrip found. If you need to, create one called: %s',userStartup));
+  disp(sprintf('(startup) No user specific startup script found. If you need to, create one called: %s',userStartup));
 end  
 
 
