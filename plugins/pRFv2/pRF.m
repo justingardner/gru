@@ -260,10 +260,49 @@ for scanNum = params.scanNum
     pRFAnal.d{scanNum}.params = rawParams;
     pRFAnal.d{scanNum}.r = r;
 
-    % get canonical, by asking for model response from the first voxel
-    fit = pRFFit(v,scanNum,x(1),y(1),z(1),'params',rawParams(:,1),'stim',stim,'concatInfo',concatInfo,'prefit',prefit,'fitTypeParams',params.pRFFit,'dispIndex',i,'dispN',n,'framePeriod',framePeriod,'junkFrames',junkFrames,'paramsInfo',paramsInfo,'getModelResponse=1');
-    pRFAnal.d{scanNum}.canonicalModel = fit.canonical;
+    % get canonical, by asking for model response from the first voxel:
+    % made less hacky - ak: 04/2024
+    global canonIdx
+    try % test whether the canonIdx voxel is valid
+        if isempty(canonIdx)
+            canonIdx = [1 1 1];
+        end
+        fprintf('\n(pRF) Attempting to obtain canonical from voxel [%d %d %d].',x(canonIdx(1)),y(canonIdx(2)),z(canonIdx(3)))
+        fit = pRFFit(v,scanNum,x(canonIdx(1)),y(canonIdx(2)),z(canonIdx(3)),'params',rawParams(:,1),'stim',stim,'concatInfo',concatInfo,'prefit',prefit,'fitTypeParams',params.pRFFit,'dispIndex',i,'dispN',n,'framePeriod',framePeriod,'junkFrames',junkFrames,'paramsInfo',paramsInfo,'getModelResponse',1);
+        if ~isempty(fit)
+            fprintf('\n(pRF) Using valid voxel: [%d %d %d].\n',x(canonIdx(1)),y(canonIdx(2)),z(canonIdx(3)))
+        end
+        pRFAnal.d{scanNum}.canonicalModel = fit.canonical;
 
+    catch % if not, find a valid voxel
+        fprintf('\n(pRF) Current voxel invalid [%d %d %d], attempting to find valid voxel...',x(canonIdx(1)),y(canonIdx(2)),z(canonIdx(3)))
+        while(canonIdx(3) < length(z))
+            while(canonIdx(2) < length(y))
+                while(canonIdx(1) < length(x))
+                    fit = pRFFit(v,scanNum,x(canonIdx(1)),y(canonIdx(2)),z(canonIdx(3)),'params',rawParams(:,1),'stim',stim,'concatInfo',concatInfo,'prefit',prefit,'fitTypeParams',params.pRFFit,'dispIndex',i,'dispN',n,'framePeriod',framePeriod,'junkFrames',junkFrames,'paramsInfo',paramsInfo,'getModelResponse',1);
+                    canonIdx(1) = canonIdx(1) + 1;
+                    if ~isempty(fit)
+                        fprintf('\n(pRF) Valid voxel found: [%d %d %d]! Using for the rest of the analysis...\n',x(canonIdx(1)),y(canonIdx(2)),z(canonIdx(3)))
+                        break
+                    end
+                end
+                fit = pRFFit(v,scanNum,x(canonIdx(1)),y(canonIdx(2)),z(canonIdx(3)),'params',rawParams(:,1),'stim',stim,'concatInfo',concatInfo,'prefit',prefit,'fitTypeParams',params.pRFFit,'dispIndex',i,'dispN',n,'framePeriod',framePeriod,'junkFrames',junkFrames,'paramsInfo',paramsInfo,'getModelResponse',1);
+                canonIdx(2) = canonIdx(2) + 1;
+                if ~isempty(fit)
+                    fprintf('\n(pRF) Valid voxel found: [%d %d %d]! Using for the rest of the analysis...\n',x(canonIdx(1)),y(canonIdx(2)),z(canonIdx(3)))
+                    break
+                end
+            end
+            fit = pRFFit(v,scanNum,x(canonIdx(1)),y(canonIdx(2)),z(canonIdx(3)),'params',rawParams(:,1),'stim',stim,'concatInfo',concatInfo,'prefit',prefit,'fitTypeParams',params.pRFFit,'dispIndex',i,'dispN',n,'framePeriod',framePeriod,'junkFrames',junkFrames,'paramsInfo',paramsInfo,'getModelResponse',1);
+            canonIdx(3) = canonIdx(3) + 1;
+            if ~isempty(fit)
+                fprintf('\n(pRF) Valid voxel found: [%d %d %d]! Using for the rest of the analysis...\n',x(canonIdx(1)),y(canonIdx(2)),z(canonIdx(3)))
+                break
+            end
+        end
+        pRFAnal.d{scanNum}.canonicalModel = fit.canonical;
+    end
+    
     iScan = find(params.scanNum == scanNum);
     thisParams.scanNum = params.scanNum(iScan);
     r2.params{scanNum} = thisParams;
