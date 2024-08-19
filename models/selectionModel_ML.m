@@ -3249,32 +3249,27 @@ end
 CRF1 = m.CRF1;
 CRF2 = m.CRF2;
 
-% set defaults
-CRF.focal.sameCuedUncued = false;
-CRF.distributed.sameCuedUncued = true;
+% different conditions that all experiments have
+cueConditions = {'cued','uncued'};
 
-% weight the focal cue data
-CRF.focal.cued.data.c = CRF1.focal.cued.data.c;
-CRF.focal.cued.data.r = (CRF1.focal.cued.data.r) * weight + (CRF2.focal.cued.data.r) * (1-weight);
-
-% compute the standard error by summing the weighted variances and dividing
-% by sqrt(2)
-CRF.focal.cued.data.rste = sqrt(((CRF1.focal.cued.data.rste) * weight).^2 + ((CRF2.focal.cued.data.rste) * (1-weight)).^2)/sqrt(2);
-
-
-% weight the focal uncued data
-CRF.focal.uncued.data.c = CRF1.focal.uncued.data.c;
-CRF.focal.uncued.data.r = (CRF1.focal.uncued.data.r) * weight + (CRF2.focal.uncued.data.r) * (1-weight);
-CRF.focal.uncued.data.rste = sqrt(((CRF1.focal.uncued.data.rste) * weight).^2 + ((CRF2.focal.uncued.data.rste) * (1-weight)).^2)/sqrt(2);
-
-% weight the distributed data
-CRF.distributed.cued.data.c = CRF1.distributed.cued.data.c;
-CRF.distributed.cued.data.r = (CRF1.distributed.cued.data.r) * weight + (CRF2.distributed.cued.data.r) * (1-weight);
-CRF.distributed.cued.data.rste = sqrt(((CRF1.distributed.cued.data.rste) * weight).^2 + ((CRF2.distributed.cued.data.rste) * (1-weight)).^2)/sqrt(2);
-
-CRF.distributed.uncued.data.c = CRF1.distributed.uncued.data.c;
-CRF.distributed.uncued.data.r = (CRF1.distributed.uncued.data.r) * weight + (CRF2.distributed.uncued.data.r) * (1-weight);
-CRF.distributed.uncued.data.rste = sqrt(((CRF1.distributed.uncued.data.rste) * weight).^2 + ((CRF2.distributed.uncued.data.rste) * (1-weight)).^2)/sqrt(2);
+% cycle over all conditions
+for iCond = 1:m.numConditions
+  % get this condition
+  thisCond = m.conditions{iCond};
+  % start by copying over full structure from CRF1 (should be the same as
+  % CRF2 except for the r and rste fields which we will compute below)
+  CRF.(thisCond) = CRF1.(thisCond);
+  % for both cued and uncued data...
+  for iCueCondition = 1:length(cueConditions)
+    % get this cueCondition
+    thisCueCond = cueConditions{iCueCondition};
+    % take a weighted average of the response
+    CRF.(thisCond).(thisCueCond).data.r = (CRF1.(thisCond).(thisCueCond).data.r) * weight + (CRF2.(thisCond).(thisCueCond).data.r) * (1-weight);
+    % weight the standard errors, by summing the weighted variances and
+    % dividing by sqrt(2)
+    CRF.(thisCond).(thisCueCond).data.rste = sqrt(((CRF1.(thisCond).(thisCueCond).data.rste) * weight).^2 + ((CRF2.(thisCond).(thisCueCond).data.rste) * (1-weight)).^2)/sqrt(2);
+  end
+end
 
 % save what weight was used
 CRF.weight = weight;
