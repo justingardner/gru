@@ -567,7 +567,8 @@ for iCond = 1:m.numConditions
     end
   end
   % create vector containing whether each location is cued or not
-  cuedUncued = zeros(1,m.nStimuli);
+  nStimuli = thisCDF.nCued + thisCDF.nDistractors;
+  cuedUncued = zeros(1,nStimuli);
   for iTarg = 1:thisCDF.nCued
     cuedUncued(iTarg) = 1;
   end
@@ -698,29 +699,26 @@ else
 %   r(1,2,1:m.n) = getResponse(s,m,params,CRFs{1},contrasts(1)-deltaC,true);
   r(1,1,1:m.n) = getResponse(s,m,params,CRFs{1},contrasts(1)-deltaC,true);
   r(1,2,1:m.n) = getResponse(s,m,params,CRFs{1},contrasts(1),true);
-  % JG: FIX, FIX, FIX - why does this have hard-coded contrast values?
-  pedNum = find(contrasts(1) == [0.07 0.14 0.28 0.56]); 
-  for i = 2:m.nStimuli %length(contrasts)
+
+  % get which distributions to use (these are precomputed, so that the code
+  % can get rid of some of the randomness of the simulation and return the
+  % same value every time it is called)
+  distNum = find(m.nStimuli == m.numTargets(condNum));
+  pedNum = find(contrasts(1) == m.pedestals{condNum});
+
+  % now select distractors for each simulated trial
+  for i = 2:m.numTargets(condNum)
     % get a random contrast for one of the distractors
-%     r(i,1,:) = getResponse(s,m,params,CRFs{i},contrasts(m.randDistractorsDist(i-1,:)),true)';
-    
-    if any(pedNum == [1 4])
-        nDistractorContrastPool = 3;
-    else
-        nDistractorContrastPool = 4;
-    end
-    thisRandomContrast = repmat(randi(nDistractorContrastPool),1,m.n) + 1;
-%     r(i,1,:) = getResponse(s,m,params,CRFs{i},contrasts(m.randDistractorsDist.ped{pedNum}(i-1,:)),true)';
-    r(i,1,:) = getResponse(s,m,params,CRFs{i},contrasts(thisRandomContrast),true)';
+    r(i,1,:) = getResponse(s,m,params,CRFs{i},contrasts(m.randDistractorsDist{distNum}.ped{pedNum}(i-1,:)),true)';
     % the second interval is the same as the first interval
     r(i,2,:) = r(i,1,:);
   end
-  for i = 1:m.nStimuli
+  for i = 1:m.numTargets(condNum)
     % Get sigma that we are using
     sigma = getSigma(m,params,condNum,cuedUncued(i));
     % compute the distributions
-    rdist{1,i} = m.r{1,i}*sigma+squeeze(r(i,1,:))';
-    rdist{2,i} = m.r{2,i}*sigma+squeeze(r(i,2,:))';
+    rdist{1,i} = m.r{distNum}{1,i}*sigma+squeeze(r(i,1,:))';
+    rdist{2,i} = m.r{distNum}{2,i}*sigma+squeeze(r(i,2,:))';
   end
 end
 
@@ -2836,6 +2834,14 @@ for i = 1:m.numConditions
   m.numPeds_cdf(i) = length(CDF.(m.conditions{i}).data.d);
 end
 
+% check how many targest are in each condition
+for iCond = 1:m.numConditions
+  % num pedestals
+  m.numPedestals(iCond) = length(CDF.(m.conditions{iCond}).data.c);
+  m.numTargets(iCond) = CDF.(m.conditions{iCond}).data.nCued + CDF.(m.conditions{iCond}).data.nDistractors;
+  m.pedestals{iCond} = CDF.(m.conditions{iCond}).data.c;
+end
+
 % check for empty CRF. No error if empty, since that means that
 % we are fitting with an uncosntrained CRF
 if ~m.weightCRFs
@@ -2932,26 +2938,34 @@ function m = makeFixedRandDistributions(m)
 % set the random distributions for the distractors if necessary
 m.randDistractorsDist = [];
 if m.randDistractors
-%   m.randDistractorsDist = ceil(rand(m.nStimuli-1,m.n)*(m.nStimuli-1))+1;
-    if m.nStimuli ==4
-        m.randDistractorsDist.ped{1} = ceil(rand(4-1,m.n)*(4-1))+1;
-        m.randDistractorsDist.ped{4} = ceil(rand(4-1,m.n)*(4-1))+1;
-        m.randDistractorsDist.ped{2} = ceil(rand(4-1,m.n)*(5-1))+1;
-        m.randDistractorsDist.ped{3} = ceil(rand(4-1,m.n)*(5-1))+1;
-    elseif m.nStimuli ==2                                                          
-        m.randDistractorsDist.ped{1} = ceil(rand(2-1,m.n)*(4-1))+1;
-        m.randDistractorsDist.ped{4} = ceil(rand(2-1,m.n)*(4-1))+1;
-        m.randDistractorsDist.ped{2} = ceil(rand(2-1,m.n)*(5-1))+1;
-        m.randDistractorsDist.ped{3} = ceil(rand(2-1,m.n)*(5-1))+1;
+  for iStimuli = 1:length(m.nStimuli)
+    % JG: FIX, FIX, FIX this has been hard coded below to the pedestals in
+    % the EEG experiment - in particular, that athere are 4 pedestals
+    % and that the 1st and 4th ones have different numbers of distractor
+    % states - this should really be passed in somehow.
+    %   m.randDistractorsDist = ceil(rand(m.nStimuli-1,m.n)*(m.nStimuli-1))+1;
+    if m.nStimuli(iStimuli) == 4
+      m.randDistractorsDist{iStimuli}.ped{1} = ceil(rand(4-1,m.n)*(4-1))+1;
+      m.randDistractorsDist{iStimuli}.ped{4} = ceil(rand(4-1,m.n)*(4-1))+1;
+      m.randDistractorsDist{iStimuli}.ped{2} = ceil(rand(4-1,m.n)*(5-1))+1;
+      m.randDistractorsDist{iStimuli}.ped{3} = ceil(rand(4-1,m.n)*(5-1))+1;
+    elseif m.nStimuli(iStimuli) == 2                                                          
+      m.randDistractorsDist{iStimuli}.ped{1} = ceil(rand(2-1,m.n)*(4-1))+1;
+      m.randDistractorsDist{iStimuli}.ped{4} = ceil(rand(2-1,m.n)*(4-1))+1;
+      m.randDistractorsDist{iStimuli}.ped{2} = ceil(rand(2-1,m.n)*(5-1))+1;
+      m.randDistractorsDist{iStimuli}.ped{3} = ceil(rand(2-1,m.n)*(5-1))+1;
     end
+  end
 end
 
 % create fixed random distributions
 % one for each interval
-for i = 1:2
-  % one for each location
-  for j = 1:m.nStimuli
-    m.r{i,j} = randgauss(0,1,m.n);
+for iInterval = 1:2
+  for iStimuli = 1:length(m.nStimuli)
+    % one for each location
+    for jLoc = 1:m.nStimuli(iStimuli)
+      m.r{iStimuli}{iInterval,jLoc} = randgauss(0,1,m.n);
+    end
   end
 end
 
