@@ -1804,6 +1804,10 @@ if ~isempty(params.sunetID) mglSetParam('sunetID',params.sunetID,1);end
 s.sunetID = params.sunetID;
 s.cniComputerName = params.cniComputerName;
   
+% copy gruDispData executable from another user directory (jlg) to your user directory
+doRemoteCommand(s.sunetID,s.cniComputerName,sprintf('mkdir /home/%s/bin/',s.sunetID));
+doRemoteCommand(s.sunetID,s.cniComputerName,sprintf('cp /home/jlg/bin/gruDispData /home/%s/bin/gruDispData',s.sunetID));
+
 % get the list of directoris that live on the cni computer
 result = doRemoteCommand(s.sunetID,s.cniComputerName,sprintf('/home/%s/bin/gruDispData -pi %s',s.sunetID,s.PI));
 if isempty(result),return,end
