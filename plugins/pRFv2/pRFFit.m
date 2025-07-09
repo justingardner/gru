@@ -252,10 +252,15 @@ end
 [fit.polarAngle fit.eccentricity] = cart2pol(fit.x,fit.y);
 
 % display
-if fitParams.verbose && strcmp(fitParams.rfType, 'gaussian-css')
-  disp(sprintf('%s[%2.f %2.f %2.f] r2=%0.2f polarAngle=%6.1f eccentricity=%6.1f rfHalfWidth=%6.1f exp=%f',fitParams.dispstr,x,y,z,fit.r2,r2d(fit.polarAngle),fit.eccentricity,fit.std, fit.css));
-elseif fitParams.verbose
-  disp(sprintf('%s[%2.f %2.f %2.f] r2=%0.2f polarAngle=%6.1f eccentricity=%6.1f rfHalfWidth=%6.1f', fitParams.dispstr,x,y,z,fit.r2,r2d(fit.polarAngle),fit.eccentricity,fit.std));
+if fitParams.verbose 
+    switch fitParams.rfType
+        case 'gaussian-css'
+            disp(sprintf('%s[%2.f %2.f %2.f] r2=%0.2f polarAngle=%6.1f eccentricity=%6.1f rfHalfWidth=%6.1f exp=%f',fitParams.dispstr,x,y,z,fit.r2,r2d(fit.polarAngle),fit.eccentricity,fit.std, fit.css));
+        case 'divNorm'
+            disp(sprintf('%s[%2.f %2.f %2.f] r2=%0.2f polarAngle=%6.1f eccentricity=%6.1f stdCenter=%6.1f stdSurround=%6.1f gainCenter=%6.1f gainSurround=%6.1f actC=%6.1f divC=%6.1f',fitParams.dispstr,x,y,z,fit.r2,r2d(fit.polarAngle),fit.eccentricity,fit.std,fit.stdSurround,fit.gainCenter,fit.gainSurround,fit.actConst,fit.divConst));
+        otherwise
+            disp(sprintf('%s[%2.f %2.f %2.f] r2=%0.2f polarAngle=%6.1f eccentricity=%6.1f rfHalfWidth=%6.1f', fitParams.dispstr,x,y,z,fit.r2,r2d(fit.polarAngle),fit.eccentricity,fit.std));
+    end
 end
 %keyboard
 
@@ -683,7 +688,7 @@ function rfModel = getRFModel(params,fitParams)
 rfModel = [];
 
 % now gernerate the rfModel
-if any(strcmp(fitParams.rfType,{'gaussian','gaussian-hdr', 'gaussian-css', 'gaussian-diffs', 'gaussian-divs', 'gaussian-DoG-CSS'}))
+if any(strcmp(fitParams.rfType,{'gaussian','gaussian-hdr', 'gaussian-css', 'gaussian-diffs', 'gaussian-divs', 'gaussian-DoG-CSS', 'divNorm'}))
   rfModel = makeRFGaussian(params,fitParams);
 else
   disp('');
@@ -710,7 +715,7 @@ switch (fitParams.rfType)
   case 'gaussian-css'
     output = pRF_css(varargin{:});
   otherwise % 'gaussian-DoG-CSS'
-    testModel = @pRF_DoG_CSS; %%% Only need to change this line to specify a new model.
+    testModel = @pRF_divNorm; %%% Only need to change this line to specify a new model.
     output = testModel(varargin{:});
 end
 
