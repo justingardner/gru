@@ -1,6 +1,9 @@
 %% FSL Combine EPIfiles and calfiles calibration scans (mux8 acquisitions)
+% 
+% Adapted for use in CNaP (Merriam lab, NIH) to apply topup distortion correction
+% Austin Kuo (6/30/25)
 % Based on code from Bob Dougherty (CNI)
-% Dan Birman (2015-05)
+% and written by Dan Birman (2015-05)
 % dbirman@stanford.edu
 %
 % Call: [str, unwarp] = fsl_pe0pe1('/path/to/your/directory')
@@ -100,9 +103,9 @@ if findFiles
             found_acq_params = 1;
         elseif strfind(fi.name,'uw_')
             % skip files that might have already been unwarped
-        elseif ~isempty(strfind(fi.name,'pe1')) || ~isempty(strfind(fi.name,'CAL'))
+        elseif contains(fi.name,{'pe1','CAL','rev'},'IgnoreCase',true)
             unwarp.calfiles{end+1} = fi.name;
-        elseif ~isempty(strfind(fi.name,'pe0')) || ~isempty(strfind(fi.name,'mux8'))
+        elseif contains(fi.name,{'pe0','mux8','run'},'IgnoreCase',true)
             if fi.bytes > 100000000 % 1 mega byte
                 unwarp.EPIfiles{end+1} = fi.name;
             else
@@ -118,8 +121,8 @@ if findFiles
 
     if ~found_acq_params
         acqFile = fullfile(folder,'acq_params.txt');
-        system(sprintf('echo ''0 1 0 1'' > %s',acqFile));
-        system(sprintf('echo ''0 -1 0 1'' >> %s',acqFile));
+        system(sprintf('echo ''0 1 0 0.05'' > %s',acqFile));
+        system(sprintf('echo ''0 -1 0 0.05'' >> %s',acqFile));
     end
 
     %% Check if we have multiple calfiles scans
@@ -142,8 +145,8 @@ else
 
     acqFile = fullfile(folder,'acq_params.txt');
     if ~isfile(acqFile)
-        system(sprintf('echo ''0 1 0 1'' > %s',acqFile));
-        system(sprintf('echo ''0 -1 0 1'' >> %s',acqFile));
+        system(sprintf('echo ''0 1 0 0.05'' > %s',acqFile));
+        system(sprintf('echo ''0 -1 0 0.05'' >> %s',acqFile));
     end
 end
 
@@ -207,7 +210,7 @@ end
 tufiles = cell(size(mergefiles));
 if parallel
     % disppercent(-inf,'Calculating topup...');
-    cores = mlrNumWorkers;
+    cores = mlrNumWorkers(feature('numcores')-2);
     if cores > 0
         disp(sprintf('Calculating topup... PARALLEL on %i cores',cores));
         parfor i = 1:length(mergefiles)
@@ -245,7 +248,7 @@ end
 finalfiles = cell(size(tufiles));
 if parallel
     % disppercent(-inf,'Applying topup...');
-    cores = mlrNumWorkers;
+    cores = mlrNumWorkers(feature('numcores')-2);
     if cores > 0
         disp(sprintf('Applying topup... PARALLEL on %i cores',cores));
         EPIf = unwarp.EPIfiles;
