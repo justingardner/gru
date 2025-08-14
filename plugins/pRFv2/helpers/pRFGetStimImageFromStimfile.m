@@ -1,6 +1,6 @@
 % pRFGetStimImageFromStimfile.m
 %
-%        $Id:$ 
+%        $Id:$
 %      usage: stim = pRFGetStimImageFromStimfile(stimfile,<timePoints>)
 %         by: justin gardner
 %       date: 10/17/11
@@ -15,7 +15,7 @@
 %
 %             Optionally arguments:
 %
-%             timePoints: array for which the stim image should be computed. 
+%             timePoints: array for which the stim image should be computed.
 %
 %             Note for developers - this function needs to keep up-to-date with
 %             any changes in the display loop of mglRetinotopy to interpret
@@ -93,16 +93,16 @@ if ~isfield(s,'pRFStimImage') || recomputeStimImage
   % if no timepoints, then get one for each volume
   if isempty(timePoints)
     timePoints = s.time(find(s.vol))-s.time(first(find(s.vol)));
-    
+
     % add timepoints for sense acceleration
     if ~isempty(volTrigRatio)
       framePeriod = median(diff(timePoints));
       accTimePoints = [];
       for i = 1:length(timePoints);
-	accTimePoints(end+1) = timePoints(i);
-	for j = 1:(volTrigRatio-1)
-	  accTimePoints(end+1) = timePoints(i)+framePeriod*j/volTrigRatio;
-	end
+      	accTimePoints(end+1) = timePoints(i);
+      	for j = 1:(volTrigRatio-1)
+      	  accTimePoints(end+1) = timePoints(i)+framePeriod*j/volTrigRatio;
+      	end
       end
       timePoints = accTimePoints;
     end
@@ -122,12 +122,14 @@ if ~isfield(s,'pRFStimImage') || recomputeStimImage
     screenWidth = round(screenHeight*s.myscreen.screenWidth/s.myscreen.screenHeight);
   elseif isempty(screenHeight)
     screenHeight = round(screenWidth*s.myscreen.screenHeight/s.myscreen.screenWidth);
-  end  
+  end
 
   % open the screen
-  if mglGetParam('displayNumber') ~= -1,mglClose;end
-  mglSetParam('offscreenContext',1);
+  % if mglGetParam('displayNumber') ~= -1,mglClose;end
+  % mglSetParam('offscreenContext',1);
   mglOpen(0,screenWidth,screenHeight);
+  mglFrameGrab('init');
+
   mglVisualAngleCoordinates(s.myscreen.displayDistance,s.myscreen.displaySize);
 
   % create stim.x and stim.y
@@ -145,28 +147,30 @@ if ~isfield(s,'pRFStimImage') || recomputeStimImage
       % and use that as a cutoff for asking the user if something drastically
       % wrong has occurred.
       if warnOnStimfileMissingInfo
-	if (1-iImage/length(stim.t)) > 0.05
-	  if askuser('Your stimfile is missing information for volume %i of %i. This might be because you have linked the wrong stimfile or that the stim program ended before the scan or that there is some other problem with the stimfile. It would be a good idea to try to fix this cause this may now be generating the wrong stimulus. Continue anyway?',0,1)
-	    warnOnStimfileMissingInfo = false;
-	  else
-	    % user did not agree to continue, bail out
+      	if (1-iImage/length(stim.t)) > 0.05
+      	  if askuser('Your stimfile is missing information for volume %i of %i. This might be because you have linked the wrong stimfile or that the stim program ended before the scan or that there is some other problem with the stimfile. It would be a good idea to try to fix this cause this may now be generating the wrong stimulus. Continue anyway?',0,1)
+      	    warnOnStimfileMissingInfo = false;
+      	  else
+      	    % user did not agree to continue, bail out
             stim=[];
-	    return
-	  end
-	end
+      	    return
+      	  end
+      	end
       end
       % just put up the warning
       disp(sprintf('(pRFGetStimImageFromStimfile) !!! Missing stimulus info for volume %i of %i. Setting to blank image. !!!',iImage,length(stim.t)));
       im = zeros(screenWidth,screenHeight);
     end
-    stim.im(1:screenWidth,1:screenHeight,iImage) = im;
+    stim.im(1:screenWidth,1:screenHeight,iImage) = im';
     if verbose,disppercent(iImage/length(stim.t));end
   end
+  mglFrameGrab('end');
+
   if verbose,disppercent(inf);end
 
   % close screen
-  mglSetParam('offscreenContext',0);
   mglClose;
+  
   % save stim back to stimFile if called for
   if saveStimImage
     saveStimImageToStimfile(stim,stimfile);
@@ -253,7 +257,7 @@ if isfield(s,'barAngle')
   co = cos(pi*barAngle/180);
   si = sin(pi*barAngle/180);
   stimulus.maskBarRotMatrix = [co si;-si co];
-  
+
   % see whether this is a blank
   if barAngle == -1,blank = true;else blank = false;end
 
@@ -278,12 +282,13 @@ if stimulus.currentMask == 0,blank = true;end
 
 % update bars only if this is not a blank frame
 if ~blank
-  updateRetinotopyStimulus(stimulus,s.myscreen);
+  updateRetinotopyStimulus2(stimulus,s.myscreen);
 else
   % clear screen
   mglClearScreen(0.5);
 end
 
+mglFlush;
 % grab the screen
 maskImage = mglFrameGrab;
 
@@ -291,6 +296,10 @@ maskImage = mglFrameGrab;
 maskImage((maskImage > 0.51) | (maskImage < 0.49)) = 1;
 maskImage((maskImage < 0.51) & (maskImage > 0.49)) = 0;
 maskImage = maskImage(:,:,1);
+
+if blank
+  maskImage = zeros(size(maskImage));
+end
 
 % DEBUG CODE - will draw each frame of the stimulus to a figure
 
@@ -303,7 +312,7 @@ maskImage = maskImage(:,:,1);
 % function to draw retinotopy stimulus to screen
 % this function has been taken out of mglRetinotopy
 % the only thing changed is that the mglQuad call has been
-% commented out so that the background pattern 
+% commented out so that the background pattern
 % does not draw
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function stimulus = updateRetinotopyStimulus(stimulus,myscreen)
@@ -320,7 +329,7 @@ if any(stimulus.stimulusType == [3 4])
   coords(3:4,:) = stimulus.elementRotMatrix*[x(2,:);y(2,:)];
   coords(5:6,:) = stimulus.elementRotMatrix*[x(3,:);y(3,:)];
   coords(7:8,:) = stimulus.elementRotMatrix*[x(4,:);y(4,:)];
-%  mglQuad(coords(1:2:8,:),coords(2:2:8,:),stimulus.cRect{stimulus.phaseNumRect},1);
+  %  mglQuad(coords(1:2:8,:),coords(2:2:8,:),stimulus.cRect{stimulus.phaseNumRect},1);
 
   % compute the center of the bar
   barCenter = repmat(stimulus.barCenter(stimulus.currentMask,:),size(stimulus.maskBarLeft,1),1);
@@ -336,8 +345,8 @@ else
   % update the phase of the sliding wedges
   stimulus.phaseNum = 1+mod(stimulus.phaseNum,stimulus.n);
   % draw the whole stimulus pattern
-%  mglQuad(stimulus.x{stimulus.phaseNum},stimulus.y{stimulus.phaseNum},stimulus.c{stimulus.phaseNum},1);
-  
+  %  mglQuad(stimulus.x{stimulus.phaseNum},stimulus.y{stimulus.phaseNum},stimulus.c{stimulus.phaseNum},1);
+
   % mask out to get a wedge
   if stimulus.stimulusType == 1
     mglPolygon(stimulus.maskWedgeX{stimulus.currentMask},stimulus.maskWedgeY{stimulus.currentMask},0.5);
@@ -347,6 +356,103 @@ else
     mglQuad(stimulus.maskOuterX{stimulus.currentMask},stimulus.maskOuterY{stimulus.currentMask},stimulus.maskOuterC{stimulus.currentMask});
   end
 end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% function to draw retinotopy stimulus to screen
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function stimulus = updateRetinotopyStimulus2(stimulus,myscreen)
+
+if any(stimulus.stimulusType == [3 4 5])
+
+  % if doing standard bars, then draw sliding elements
+  if stimulus.stimulusType == 3
+
+    % draw background, 1 is sliding wedges
+    if stimulus.backgroundType == 1
+      % update the phase of the sliding wedges
+      stimulus.phaseNumRect = 1+mod(stimulus.phaseNumRect,stimulus.nRect);
+
+      % draw the whole stimulus pattern, rotate to the element angle
+      x = stimulus.xRect{stimulus.phaseNumRect};
+      y = stimulus.yRect{stimulus.phaseNumRect};
+      coords(1:2,:) = stimulus.elementRotMatrix*[x(1,:);y(1,:)];
+      coords(3:4,:) = stimulus.elementRotMatrix*[x(2,:);y(2,:)];
+      coords(5:6,:) = stimulus.elementRotMatrix*[x(3,:);y(3,:)];
+      coords(7:8,:) = stimulus.elementRotMatrix*[x(4,:);y(4,:)];
+      %mglQuad(coords(1:2:8,:)+stimulus.xOffset,coords(2:2:8,:)+stimulus.yOffset,stimulus.cRect{stimulus.phaseNumRect},1);
+    elseif stimulus.backgroundType == 2
+      westheimer('do=update','stimulus',stimulus.westheimer,'frameNum',myscreen.tick);
+    end
+
+    % compute the center of the bar
+    barCenter = repmat(stimulus.barCenter(stimulus.currentMask,:),size(stimulus.maskBarLeft,1),1);
+    % compute the left and right masks (covering up everything except the bar)
+    % by shifting by the barCenter and rotating the coordinates for the angle we want
+    maskBarLeft = stimulus.maskBarRotMatrix*(barCenter+stimulus.maskBarLeft)';
+    maskBarRight = stimulus.maskBarRotMatrix*(barCenter+stimulus.maskBarRight)';
+
+    % draw the bar masks
+    mglPolygon(maskBarLeft(1,:)+stimulus.xOffset,maskBarLeft(2,:)+stimulus.yOffset,myscreen.backgroundColor);
+    mglPolygon(maskBarRight(1,:)+stimulus.xOffset,maskBarRight(2,:)+stimulus.yOffset,myscreen.backgroundColor);
+  elseif stimulus.stimulusType == 4
+    % doing dots task, so draw dots, first clear screen
+    mglClearScreen;
+    % draw the dots
+    xOffset = stimulus.xOffset+stimulus.barCenter(stimulus.currentMask,1);
+    yOffset = stimulus.yOffset+stimulus.barCenter(stimulus.currentMask,2);
+    drawDots(stimulus.dots.middle,stimulus.maskBarRotMatrix,xOffset,yOffset);
+    drawDots(stimulus.dots.upper,stimulus.maskBarRotMatrix,xOffset,yOffset);
+    drawDots(stimulus.dots.lower,stimulus.maskBarRotMatrix,xOffset,yOffset);
+    % update the dots
+    stimulus.dots.upper = updateDots(stimulus.dots.upper);
+    stimulus.dots.middle = updateDots(stimulus.dots.middle);
+    stimulus.dots.lower = updateDots(stimulus.dots.lower);
+    % draw the fixation cross
+    global fixStimulus;
+    mglGluDisk(fixStimulus.pos(1),fixStimulus.pos(2),fixStimulus.diskSize*[1 1],myscreen.background,60);
+    mglFixationCross(fixStimulus.fixWidth,fixStimulus.fixLineWidth,stimulus.fixColor,fixStimulus.pos);
+  elseif stimulus.stimulusType == 5
+       % doing dots task, so draw dots, first clear screen
+    mglClearScreen;
+    % draw the dots
+    xOffset = stimulus.xOffset+stimulus.barCenter(stimulus.currentMask,1);
+    yOffset = stimulus.yOffset+stimulus.barCenter(stimulus.currentMask,2);
+    drawDots(stimulus.dots.middle,stimulus.maskBarRotMatrix,xOffset,yOffset);
+    drawDots(stimulus.dots.upper,stimulus.maskBarRotMatrix,xOffset,yOffset);
+    drawDots(stimulus.dots.lower,stimulus.maskBarRotMatrix,xOffset,yOffset);
+    % update the dots
+    stimulus.dots.upper = updateDots(stimulus.dots.upper);
+    stimulus.dots.middle = updateDots(stimulus.dots.middle);
+    stimulus.dots.lower = updateDots(stimulus.dots.lower);
+      
+  end
+  
+else
+  % update the phase of the sliding wedges
+  stimulus.phaseNum = 1+mod(stimulus.phaseNum,stimulus.n);
+  % draw the whole stimulus pattern
+  %mglQuad(stimulus.x{stimulus.phaseNum}+stimulus.xOffset,stimulus.y{stimulus.phaseNum}+stimulus.yOffset,stimulus.c{stimulus.phaseNum},1);
+  
+  % mask out to get a wedge
+  if stimulus.stimulusType == 1
+    % For the mask is made of two overlapping semicircles.
+    topX = stimulus.maskWedgeX{stimulus.currentMask}{1};
+    topY = stimulus.maskWedgeY{stimulus.currentMask}{1};
+    mglPolygon(topX+stimulus.xOffset,topY+stimulus.yOffset,0.5);
+
+    bottomX = stimulus.maskWedgeX{stimulus.currentMask}{2};
+    bottomY = stimulus.maskWedgeY{stimulus.currentMask}{2};
+    mglPolygon(bottomX+stimulus.xOffset,bottomY+stimulus.yOffset,0.5);
+    % or mask out to get a ring
+  else
+    mglPolygon(stimulus.maskInnerX{stimulus.currentMask}+stimulus.xOffset,stimulus.maskInnerY{stimulus.currentMask}+stimulus.yOffset,0.5);
+    mglQuad(stimulus.maskOuterX{stimulus.currentMask}+stimulus.xOffset,stimulus.maskOuterY{stimulus.currentMask}+stimulus.yOffset,stimulus.maskOuterC{stimulus.currentMask});
+  end
+end
+
+
+
+
 
 %%%%%%%%%%%%%%%%%%%%%
 %    getStimfile    %
@@ -387,7 +493,7 @@ elseif isstruct(stimfile)
     end
     % set myscreen field
     s.myscreen = stimfile;
-  % else a variable with myscreen, task and stimulus or pRFStimImage
+    % else a variable with myscreen, task and stimulus or pRFStimImage
   elseif isfield(stimfile,'myscreen') || isfield(stimfile,'pRFStimImage')
     % copy fields over
     if isfield(stimfile,'myscreen')
@@ -413,7 +519,7 @@ if ~isfield(s,'pRFStimImage')
     if ~isfield(s,checkFields{i})
       stimfileName = '';
       if isfield(s,'myscreen') && isfield(s.myscreen,'stimfile')
-	stimfileName = getLastDir(s.myscreen.stimfile);
+      	stimfileName = getLastDir(s.myscreen.stimfile);
       end
       disp(sprintf('(pRFGetStimImageFromStimfile) !!! Missing variable: %s in stimfile %s !!!',checkFields{i},stimfileName));
       s = [];
@@ -452,7 +558,7 @@ for i = 1:length(s)
   taskNum = [];
   for iTask = 1:2
     % list of tasks which can be automatically analyzed by pRFFit.m
-    prfTaskNames = {'mglRetinotopy.m','gruRetinotopy.m','offsetRetinotopy.m','mglDoublebars.m'};
+    prfTaskNames = {'mglRetinotopy.m','gruRetinotopy.m','offsetRetinotopy.m','mglDoublebars.m', 'mglMetalRetinotopy.m'};
     fname = thiss.task{iTask}{1}.taskFilename;
     if (length(thiss.task) >= iTask) && any(cellfun(@(x) isequal(fname,x),prfTaskNames))
       taskNum = iTask;
@@ -495,7 +601,7 @@ for i = 1:length(s)
       return
     end
   end
-  
+
   % check for matching stimfiles
   if ~isempty(stimulusType) && (stimulusType ~= thiss.stimulusType)
     disp(sprintf('(pRFGetStimImageFromStimfile:checkStimfile) !!! Stimfile %s does not match previous one !!! Have you averaged together scans with different stimulus conditions?'));
