@@ -223,6 +223,8 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function svm = fisherLinearDiscriminantOld(x1,x2,svm)
 
+
+
 % get number of points
 n1 = size(x1,1);n2 = size(x2,1);n = n1+n2;
 % construct data matrix
@@ -270,7 +272,7 @@ ridge = std([x1(:) ; x2(:)])/2;
 % get number of points
 n1 = size(x1,1);n2 = size(x2,1);n = n1+n2;
 % get means
-m1 = mean(x1);m2 = mean(x2);
+m1 = mean(x1,1);m2 = mean(x2,1);
 % compute scatter matrix
 S1 = cov(x1);S2=cov(x2);
 % compute total scatter matrix
